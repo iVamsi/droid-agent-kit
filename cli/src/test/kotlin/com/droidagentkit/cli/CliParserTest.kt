@@ -52,4 +52,13 @@ class CliParserTest {
             command,
         )
     }
+
+    @Test
+    fun `project locator resolves gemini project dir env var`() {
+        val env = mapOf("GEMINI_PROJECT_DIR" to "/tmp/my-android-project")
+
+        val resolved = ProjectLocator.resolve("auto", environment = env)
+
+        assertEquals(java.nio.file.Path.of("/tmp/my-android-project").toAbsolutePath().normalize(), resolved)
+    }
 }
