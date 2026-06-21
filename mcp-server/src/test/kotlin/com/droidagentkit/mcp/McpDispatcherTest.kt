@@ -114,5 +114,7 @@ class McpDispatcherTest {
         assertTrue(content.contains("## Safe Commands"))
         assertTrue(content.contains(":app"))
         assertTrue(content.contains("Readiness:"))
+        assertTrue("report must include ## Key Versions section", content.contains("## Key Versions"))
+        assertTrue("report must include ## Warnings section", content.contains("## Warnings"))
     }
 }

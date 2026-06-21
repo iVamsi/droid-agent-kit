@@ -1,5 +1,6 @@
 package com.droidagentkit.mcp
 
+import com.droidagentkit.core.ArtifactType
 import com.droidagentkit.core.ArtifactWriter
 import com.droidagentkit.core.DroidAgentConfig
 import com.droidagentkit.core.Json
@@ -8,7 +9,6 @@ import com.droidagentkit.core.Redactor
 import com.droidagentkit.core.ResultStatus
 import com.droidagentkit.core.ToolResult
 import com.droidagentkit.inspector.AndroidProjectInspector
-import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.exists
 
@@ -251,40 +251,36 @@ class DroidAgentMcpDispatcher(
             appendLine("## Safe Commands")
             report.commandMatrix.forEach { cmd -> appendLine(cmd.command.joinToString(" ")) }
             appendLine()
+            appendLine("## Key Versions")
             if (report.versions.isNotEmpty()) {
-                appendLine("## Key Versions")
                 val interestingKeys = setOf("kotlin", "compose", "hilt", "room", "retrofit", "coroutines", "agp")
                 val keyVersions = report.versions.entries
                     .filter { (k, _) -> interestingKeys.any { k.contains(it, ignoreCase = true) } }
                     .take(8)
                 val display = keyVersions.ifEmpty { report.versions.entries.take(5) }
                 appendLine(display.joinToString("   ") { (k, v) -> "$k: $v" })
-                appendLine()
+            } else {
+                appendLine("_(none detected)_")
             }
+            appendLine()
+            appendLine("## Warnings")
             if (auditorReport.risks.isNotEmpty()) {
-                appendLine("## Warnings")
                 auditorReport.risks.forEach { risk ->
                     appendLine("[${risk.severity.wireName.uppercase()}] ${risk.id} — ${risk.title}")
                 }
+            } else {
+                appendLine("_(none detected)_")
             }
         }
 
-        val out = root.resolve(config.reports.outputDir).resolve("android-report.md")
-        Files.createDirectories(out.parent)
-        Files.writeString(out, markdown)
+        val writer = ArtifactWriter(root.resolve(config.reports.outputDir))
+        val ref = writer.writeText("android-report.md", markdown, ArtifactType.MARKDOWN, "Android project report")
 
         return resultMap(
             ToolResult(
                 status = ResultStatus.SUCCESS,
-                summary = "Wrote enriched report bundle to $out (${auditorReport.score}/100 ${auditorReport.level})",
-                artifacts = listOf(
-                    com.droidagentkit.core.ArtifactRef(
-                        com.droidagentkit.core.ArtifactType.MARKDOWN,
-                        out.toString(),
-                        "text/markdown",
-                        "Android report",
-                    ),
-                ),
+                summary = "Wrote enriched report bundle to ${ref.path} (${auditorReport.score}/100 ${auditorReport.level})",
+                artifacts = listOf(ref),
             ),
         )
     }
