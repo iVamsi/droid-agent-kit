@@ -63,4 +63,31 @@ class McpDispatcherTest {
         assertEquals("blocked", result["status"])
         assertTrue(result["summary"].toString().contains("deviceSerial"))
     }
+
+    @Test
+    fun `each tool exposes an input schema with type object and properties`() {
+        val dispatcher = DroidAgentMcpDispatcher(DroidAgentConfig.default())
+
+        val tools = dispatcher.listTools()
+
+        assertEquals(8, tools.size)
+        tools.forEach { tool ->
+            assertEquals("tool ${tool.name} missing type:object", "object", tool.inputSchema["type"])
+            assertTrue(
+                "tool ${tool.name} missing properties",
+                tool.inputSchema.containsKey("properties"),
+            )
+        }
+    }
+
+    @Test
+    fun `gradle run tool schema marks task as required`() {
+        val dispatcher = DroidAgentMcpDispatcher(DroidAgentConfig.default())
+
+        val gradleTool = dispatcher.listTools().first { it.name == "android_gradle_run" }
+
+        @Suppress("UNCHECKED_CAST")
+        val required = gradleTool.inputSchema["required"] as List<*>
+        assertTrue(required.contains("task"))
+    }
 }

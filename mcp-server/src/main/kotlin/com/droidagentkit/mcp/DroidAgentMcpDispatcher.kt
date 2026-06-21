@@ -15,6 +15,7 @@ import kotlin.io.path.exists
 data class McpTool(
     val name: String,
     val description: String,
+    val inputSchema: Map<String, Any>,
 )
 
 class DroidAgentMcpDispatcher(
@@ -22,14 +23,83 @@ class DroidAgentMcpDispatcher(
     private val inspector: AndroidProjectInspector = AndroidProjectInspector(),
 ) {
     fun listTools(): List<McpTool> = listOf(
-        McpTool("android_project_inspect", "Inspect Android Gradle modules, versions, manifests, and safe commands."),
-        McpTool("android_gradle_run", "Run a configured allowlisted Gradle task and capture redacted logs."),
-        McpTool("android_devices_list", "List adb devices and basic status."),
-        McpTool("android_app_install", "Install an APK when app install is enabled."),
-        McpTool("android_app_launch", "Launch an Android package/activity on an explicit device."),
-        McpTool("android_logcat_capture", "Capture redacted logcat output for a device or package."),
-        McpTool("android_screen_snapshot", "Capture screenshot and UIAutomator XML from an explicit device."),
-        McpTool("android_report_bundle", "Create an agent-readable Android diagnostic report bundle."),
+        McpTool(
+            name = "android_project_inspect",
+            description = "Inspect Android Gradle modules, versions, manifests, and safe commands.",
+            inputSchema = schema(props = mapOf("rootPath" to rootPathProp)),
+        ),
+        McpTool(
+            name = "android_gradle_run",
+            description = "Run a configured allowlisted Gradle task and capture redacted logs.",
+            inputSchema = schema(
+                "task",
+                props = mapOf(
+                    "rootPath" to rootPathProp,
+                    "task" to str("Gradle task to run (must match the configured allowlist)."),
+                    "arguments" to arrStr("Extra Gradle arguments to append."),
+                    "rerunTasks" to bool("Pass --rerun-tasks to Gradle."),
+                    "stacktrace" to bool("Pass --stacktrace to Gradle."),
+                    "timeoutSeconds" to num("Override command timeout in seconds."),
+                ),
+            ),
+        ),
+        McpTool(
+            name = "android_devices_list",
+            description = "List adb devices and basic status.",
+            inputSchema = schema(props = mapOf("rootPath" to rootPathProp)),
+        ),
+        McpTool(
+            name = "android_app_install",
+            description = "Install an APK when app install is enabled.",
+            inputSchema = schema(
+                "apkPath", "deviceSerial",
+                props = mapOf(
+                    "rootPath" to rootPathProp,
+                    "apkPath" to str("Absolute path to the APK file to install."),
+                    "deviceSerial" to deviceSerialProp,
+                    "reinstall" to bool("Pass -r to adb install to reinstall keeping data."),
+                ),
+            ),
+        ),
+        McpTool(
+            name = "android_app_launch",
+            description = "Launch an Android package/activity on an explicit device.",
+            inputSchema = schema(
+                "deviceSerial", "packageName",
+                props = mapOf(
+                    "deviceSerial" to deviceSerialProp,
+                    "packageName" to str("Android package name (e.g. com.example.app)."),
+                    "activityName" to str("Fully qualified activity name. Omit to use the default launcher."),
+                ),
+            ),
+        ),
+        McpTool(
+            name = "android_logcat_capture",
+            description = "Capture redacted logcat output for a device or package.",
+            inputSchema = schema(
+                "deviceSerial",
+                props = mapOf(
+                    "deviceSerial" to deviceSerialProp,
+                    "maxLines" to num("Maximum number of log lines to capture. Default: 500."),
+                ),
+            ),
+        ),
+        McpTool(
+            name = "android_screen_snapshot",
+            description = "Capture screenshot and UIAutomator XML from an explicit device.",
+            inputSchema = schema(
+                "deviceSerial",
+                props = mapOf(
+                    "deviceSerial" to deviceSerialProp,
+                    "outputName" to str("Base name for the output artifact. Optional."),
+                ),
+            ),
+        ),
+        McpTool(
+            name = "android_report_bundle",
+            description = "Create an agent-readable Android diagnostic report bundle.",
+            inputSchema = schema(props = mapOf("rootPath" to rootPathProp)),
+        ),
     )
 
     fun call(name: String, arguments: Map<String, Any?>): Map<String, Any> = when (name) {
@@ -188,4 +258,19 @@ class DroidAgentMcpDispatcher(
     private fun rootPath(arguments: Map<String, Any?>): Path = Path.of(arguments["rootPath"]?.toString() ?: ".").toAbsolutePath().normalize()
 
     private fun String.safeId(): String = replace(Regex("[^A-Za-z0-9._-]"), "-").trim('-').ifBlank { "task" }
+
+    private fun schema(vararg required: String, props: Map<String, Map<String, Any>>): Map<String, Any> {
+        val base: MutableMap<String, Any> = mutableMapOf("type" to "object", "properties" to props)
+        if (required.isNotEmpty()) base["required"] = required.toList()
+        return base
+    }
+
+    private fun str(desc: String): Map<String, Any> = mapOf("type" to "string", "description" to desc)
+    private fun bool(desc: String): Map<String, Any> = mapOf("type" to "boolean", "description" to desc)
+    private fun num(desc: String): Map<String, Any> = mapOf("type" to "number", "description" to desc)
+    private fun arrStr(desc: String): Map<String, Any> =
+        mapOf("type" to "array", "items" to mapOf("type" to "string"), "description" to desc)
+
+    private val rootPathProp get() = str("Absolute path to the Android project root. Defaults to cwd.")
+    private val deviceSerialProp get() = str("adb device serial from `adb devices`.")
 }
