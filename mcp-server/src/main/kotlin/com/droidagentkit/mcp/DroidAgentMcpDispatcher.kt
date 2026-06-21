@@ -228,17 +228,63 @@ class DroidAgentMcpDispatcher(
     private fun reportBundle(arguments: Map<String, Any?>): Map<String, Any> {
         val root = rootPath(arguments)
         val report = inspector.inspect(root)
+        val auditorReport = com.droidagentkit.auditor.ReadinessAuditor(inspector).audit(root)
+        val timestamp = java.time.Instant.now().toString()
+
+        val markdown = buildString {
+            appendLine("# Android Report — ${report.projectName}")
+            appendLine()
+            appendLine("Generated: $timestamp   Readiness: ${auditorReport.score}/100 (${auditorReport.level})")
+            appendLine()
+            appendLine("## Modules")
+            appendLine("| Path | Type | Namespace | Unit Tests | Android Tests | Compose |")
+            appendLine("|------|------|-----------|------------|---------------|---------|")
+            report.modules.forEach { mod ->
+                appendLine(
+                    "| `${mod.path}` | ${mod.type.name.lowercase()} | ${mod.namespace ?: "—"}" +
+                        " | ${if (mod.hasUnitTests) "yes" else "no"}" +
+                        " | ${if (mod.hasAndroidTests) "yes" else "no"}" +
+                        " | ${if (mod.usesCompose) "yes" else "no"} |",
+                )
+            }
+            appendLine()
+            appendLine("## Safe Commands")
+            report.commandMatrix.forEach { cmd -> appendLine(cmd.command.joinToString(" ")) }
+            appendLine()
+            if (report.versions.isNotEmpty()) {
+                appendLine("## Key Versions")
+                val interestingKeys = setOf("kotlin", "compose", "hilt", "room", "retrofit", "coroutines", "agp")
+                val keyVersions = report.versions.entries
+                    .filter { (k, _) -> interestingKeys.any { k.contains(it, ignoreCase = true) } }
+                    .take(8)
+                val display = keyVersions.ifEmpty { report.versions.entries.take(5) }
+                appendLine(display.joinToString("   ") { (k, v) -> "$k: $v" })
+                appendLine()
+            }
+            if (auditorReport.risks.isNotEmpty()) {
+                appendLine("## Warnings")
+                auditorReport.risks.forEach { risk ->
+                    appendLine("[${risk.severity.wireName.uppercase()}] ${risk.id} — ${risk.title}")
+                }
+            }
+        }
+
         val out = root.resolve(config.reports.outputDir).resolve("android-report.md")
         Files.createDirectories(out.parent)
-        Files.writeString(
-            out,
-            "# Android Report\n\nProject: ${report.projectName}\n\nModules:\n${report.modules.joinToString("\n") { "- `${it.path}` ${it.type}" }}\n",
-        )
+        Files.writeString(out, markdown)
+
         return resultMap(
             ToolResult(
                 status = ResultStatus.SUCCESS,
-                summary = "Wrote report bundle summary to $out",
-                artifacts = listOf(com.droidagentkit.core.ArtifactRef(com.droidagentkit.core.ArtifactType.MARKDOWN, out.toString(), "text/markdown", "Android report")),
+                summary = "Wrote enriched report bundle to $out (${auditorReport.score}/100 ${auditorReport.level})",
+                artifacts = listOf(
+                    com.droidagentkit.core.ArtifactRef(
+                        com.droidagentkit.core.ArtifactType.MARKDOWN,
+                        out.toString(),
+                        "text/markdown",
+                        "Android report",
+                    ),
+                ),
             ),
         )
     }

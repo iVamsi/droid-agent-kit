@@ -90,4 +90,29 @@ class McpDispatcherTest {
         val required = gradleTool.inputSchema["required"] as List<*>
         assertTrue(required.contains("task"))
     }
+
+    @Test
+    fun `report bundle writes structured markdown with modules table and safe commands`() {
+        val root = Files.createTempDirectory("dak-bundle")
+        Files.writeString(
+            root.resolve("settings.gradle.kts"),
+            "rootProject.name = \"BundleTest\"\ninclude(\":app\")",
+        )
+        Files.createDirectories(root.resolve("app/src/test/java"))
+        Files.writeString(
+            root.resolve("app/build.gradle.kts"),
+            "plugins { id(\"com.android.application\") }\nandroid { namespace = \"com.example.bundle\" }",
+        )
+        val dispatcher = DroidAgentMcpDispatcher(DroidAgentConfig.default())
+
+        val result = dispatcher.call("android_report_bundle", mapOf("rootPath" to root.toString()))
+
+        assertEquals("success", result["status"])
+        val artifact = (result["artifacts"] as List<*>).first() as Map<*, *>
+        val content = java.nio.file.Files.readString(java.nio.file.Path.of(artifact["path"].toString()))
+        assertTrue(content.contains("## Modules"))
+        assertTrue(content.contains("## Safe Commands"))
+        assertTrue(content.contains(":app"))
+        assertTrue(content.contains("Readiness:"))
+    }
 }
