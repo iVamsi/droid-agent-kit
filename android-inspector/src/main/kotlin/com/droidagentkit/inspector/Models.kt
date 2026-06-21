@@ -27,6 +27,8 @@ data class AndroidModuleSummary(
     val hasUnitTests: Boolean,
     val hasAndroidTests: Boolean,
     val moduleDependencies: List<String> = emptyList(),
+    val buildTypes: List<String> = emptyList(),
+    val productFlavors: List<String> = emptyList(),
 )
 
 data class AndroidProjectReport(

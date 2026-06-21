@@ -133,6 +133,8 @@ class DroidAgentMcpDispatcher(
                         "packageName" to (it.packageName ?: ""),
                         "launcherActivities" to it.launcherActivities,
                         "moduleDependencies" to it.moduleDependencies,
+                        "buildTypes" to it.buildTypes,
+                        "productFlavors" to it.productFlavors,
                     )
                 },
                 "commands" to report.commandMatrix.map { it.command.joinToString(" ") },

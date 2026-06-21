@@ -116,6 +116,43 @@ class AndroidInspectorTest {
     }
 
     @Test
+    fun `inspector extracts build types and product flavors from application module`() {
+        val root = Files.createTempDirectory("dak-variants")
+        Files.writeString(
+            root.resolve("settings.gradle.kts"),
+            "rootProject.name = \"Variants\"\ninclude(\":app\")",
+        )
+        Files.createDirectories(root.resolve("app"))
+        Files.writeString(
+            root.resolve("app/build.gradle.kts"),
+            """
+            plugins { id("com.android.application") }
+            android {
+                namespace = "com.example.variants"
+                buildTypes {
+                    release { minifyEnabled = true }
+                    staging { initWith(debug) }
+                }
+                productFlavors {
+                    demo { dimension = "tier" }
+                    full { dimension = "tier" }
+                }
+            }
+            """.trimIndent(),
+        )
+
+        val report = AndroidProjectInspector().inspect(root)
+
+        val app = report.modules.first()
+        assertTrue(app.buildTypes.contains("release"))
+        assertTrue(app.buildTypes.contains("staging"))
+        assertTrue(app.productFlavors.contains("demo"))
+        assertTrue(app.productFlavors.contains("full"))
+        // flavor-specific commands should be generated
+        assertTrue(report.commandMatrix.any { ":app:testDemoDebugUnitTest" in it.command })
+    }
+
+    @Test
     fun `inspector returns partial report for broken or non android projects`() {
         val root = Files.createTempDirectory("dak-broken-project")
         Files.writeString(root.resolve("README.md"), "not an Android project")

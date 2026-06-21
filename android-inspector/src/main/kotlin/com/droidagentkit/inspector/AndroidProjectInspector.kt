@@ -99,6 +99,8 @@ class AndroidProjectInspector {
             hasUnitTests = hasUnitTests,
             hasAndroidTests = hasAndroidTests,
             moduleDependencies = parseModuleDependencies(buildText),
+            buildTypes = parseBlockNames(buildText, "buildTypes"),
+            productFlavors = parseBlockNames(buildText, "productFlavors"),
         )
     }
 
@@ -109,6 +111,32 @@ class AndroidProjectInspector {
             .distinct()
             .sorted()
             .toList()
+
+    private fun parseBlockNames(buildText: String, sectionName: String): List<String> {
+        val sectionEnd = Regex("""(?m)^\s*$sectionName\s*\{""").find(buildText)?.range?.last
+            ?: return emptyList()
+        val body = StringBuilder()
+        var depth = 0
+        for (i in (sectionEnd + 1) until buildText.length) {
+            when (buildText[i]) {
+                '{' -> { body.append('{'); depth++ }
+                '}' -> {
+                    if (depth == 0) break
+                    depth--
+                    body.append('}')
+                }
+                else -> body.append(buildText[i])
+            }
+        }
+        val excluded = setOf("android", "kotlin", "dependencies", "buildTypes", "productFlavors",
+            "defaultConfig", "signingConfigs", "composeOptions", "lint", "packaging")
+        return Regex("""^\s*(\w+)\s*\{""", RegexOption.MULTILINE)
+            .findAll(body)
+            .map { it.groupValues[1] }
+            .filter { it !in excluded }
+            .distinct()
+            .toList()
+    }
 
     private fun parseLauncherActivities(manifestText: String, packageName: String?): List<String> {
         if (!manifestText.contains("android.intent.category.LAUNCHER")) return emptyList()
@@ -167,6 +195,19 @@ class AndroidProjectInspector {
                     requiresDevice = false,
                     timeoutSeconds = 600,
                 )
+            }
+            if (module.productFlavors.isNotEmpty()) {
+                module.productFlavors.forEach { flavor ->
+                    val cap = flavor.replaceFirstChar { it.uppercaseChar() }
+                    commands += CommandSpec(
+                        id = "$moduleName-test-$flavor-unit",
+                        command = listOf("./gradlew", "${module.path}:test${cap}DebugUnitTest"),
+                        workingDirectory = root.toString(),
+                        mutatesProject = false,
+                        requiresDevice = false,
+                        timeoutSeconds = 600,
+                    )
+                }
             }
         }
         return commands
