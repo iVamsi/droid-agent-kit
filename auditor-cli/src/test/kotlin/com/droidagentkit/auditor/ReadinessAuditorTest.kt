@@ -54,6 +54,26 @@ class ReadinessAuditorTest {
         assertFalse(report.risks.joinToString("\n") { it.evidence.joinToString() }.contains("AIzaSyA-ExampleSecret"))
     }
 
+    @Test
+    fun `secret scanner skips files inside build directories`() {
+        val root = Files.createTempDirectory("dak-scanner-skip")
+        Files.writeString(root.resolve("settings.gradle.kts"), "rootProject.name = \"Skip\"\n")
+        // Secret in build/ — should be ignored
+        val buildSecrets = root.resolve("build/outputs")
+        Files.createDirectories(buildSecrets)
+        Files.writeString(buildSecrets.resolve("secret.properties"), "STORE_PASSWORD=shouldbeskipped")
+        // Secret outside build/ — should be caught
+        Files.writeString(root.resolve("local.properties"), "STORE_PASSWORD=shouldbecaught")
+
+        val report = ReadinessAuditor(AndroidProjectInspector()).audit(root)
+
+        val evidence = report.risks.filter { it.id == "possible-secret" }
+            .flatMap { it.evidence }
+            .joinToString()
+        assertTrue(evidence.contains("local.properties"))
+        assertFalse(evidence.contains("build/outputs"))
+    }
+
     private fun sampleAndroidProject() = Files.createTempDirectory("dak-ready").also { root ->
         Files.writeString(root.resolve("settings.gradle.kts"), "rootProject.name = \"Ready\"\ninclude(\":app\")")
         Files.createDirectories(root.resolve("app/src/test/java"))

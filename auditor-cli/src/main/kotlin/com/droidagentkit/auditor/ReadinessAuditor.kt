@@ -81,6 +81,7 @@ class ReadinessAuditor(private val inspector: AndroidProjectInspector) {
     private fun hasVisualHooks(root: Path): Boolean =
         Files.walk(root).use { stream ->
             stream.filter { Files.isRegularFile(it) }
+                .filter { isScannable(it) }
                 .limit(500)
                 .anyMatch { path ->
                     val text = Files.readString(path)
@@ -93,6 +94,7 @@ class ReadinessAuditor(private val inspector: AndroidProjectInspector) {
         val evidence = mutableListOf<String>()
         Files.walk(root).use { stream ->
             stream.filter { Files.isRegularFile(it) }
+                .filter { isScannable(it) && Files.size(it) <= 1_048_576L }
                 .filter { it.fileName.toString() !in setOf("readiness-report.json", "readiness-report.md") }
                 .limit(1000)
                 .forEach { path ->
@@ -104,6 +106,23 @@ class ReadinessAuditor(private val inspector: AndroidProjectInspector) {
                 }
         }
         return evidence
+    }
+
+    private fun isScannable(path: Path): Boolean {
+        val str = path.toString().replace('\\', '/')
+        if (SKIP_DIRS.any { "/$it/" in str || str.endsWith("/$it") }) return false
+        val ext = path.fileName.toString().substringAfterLast('.', "").lowercase()
+        return ext !in BINARY_EXTENSIONS
+    }
+
+    companion object {
+        private val SKIP_DIRS = setOf("build", ".gradle", "node_modules", ".git", ".idea", ".cxx")
+        private val BINARY_EXTENSIONS = setOf(
+            "class", "jar", "aar", "so", "dylib", "dll",
+            "png", "jpg", "jpeg", "gif", "webp",
+            "keystore", "jks", "bks", "p12",
+            "zip", "apk", "aab", "apks",
+        )
     }
 }
 
