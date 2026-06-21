@@ -76,6 +76,38 @@ class AndroidInspectorTest {
     }
 
     @Test
+    fun `inspector captures inter-module project dependencies`() {
+        val root = Files.createTempDirectory("dak-deps")
+        Files.writeString(
+            root.resolve("settings.gradle.kts"),
+            "rootProject.name = \"Deps\"\ninclude(\":app\", \":core\")",
+        )
+        Files.createDirectories(root.resolve("app"))
+        Files.writeString(
+            root.resolve("app/build.gradle.kts"),
+            """
+            plugins { id("com.android.application") }
+            android { namespace = "com.example.app" }
+            dependencies {
+                implementation(project(":core"))
+            }
+            """.trimIndent(),
+        )
+        Files.createDirectories(root.resolve("core"))
+        Files.writeString(
+            root.resolve("core/build.gradle.kts"),
+            "plugins { id(\"com.android.library\") }\nandroid { namespace = \"com.example.core\" }",
+        )
+
+        val report = AndroidProjectInspector().inspect(root)
+
+        val appModule = report.modules.first { it.path == ":app" }
+        assertEquals(listOf(":core"), appModule.moduleDependencies)
+        val coreModule = report.modules.first { it.path == ":core" }
+        assertTrue(coreModule.moduleDependencies.isEmpty())
+    }
+
+    @Test
     fun `inspector returns partial report for broken or non android projects`() {
         val root = Files.createTempDirectory("dak-broken-project")
         Files.writeString(root.resolve("README.md"), "not an Android project")
