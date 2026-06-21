@@ -157,13 +157,49 @@ class AndroidProjectInspector {
     private fun parseVersions(root: Path): Map<String, String> {
         val catalog = root.resolve("gradle/libs.versions.toml")
         if (!catalog.exists()) return emptyMap()
-        val versions = linkedMapOf<String, String>()
-        Files.readAllLines(catalog).forEach { raw ->
+
+        val lines = Files.readAllLines(catalog)
+        val versionTable = linkedMapOf<String, String>()   // [versions] → raw string values
+        val result = linkedMapOf<String, String>()
+        var currentTable = ""
+
+        // First pass: collect [versions]
+        for (raw in lines) {
             val line = raw.trim()
-            val match = Regex("([A-Za-z0-9_.-]+)\\s*=\\s*\"([^\"]+)\"").find(line)
-            if (match != null) versions[match.groupValues[1]] = match.groupValues[2]
+            if (line.isBlank() || line.startsWith("#")) continue
+            if (line.startsWith("[") && line.endsWith("]")) {
+                currentTable = line.removeSurrounding("[", "]").trim()
+                continue
+            }
+            if (currentTable == "versions") {
+                val m = Regex("""([A-Za-z0-9_.-]+)\s*=\s*"([^"]+)"""").find(line) ?: continue
+                versionTable[m.groupValues[1]] = m.groupValues[2]
+                result[m.groupValues[1]] = m.groupValues[2]
+            }
         }
-        return versions
+
+        // Second pass: resolve [libraries] and [plugins]
+        currentTable = ""
+        for (raw in lines) {
+            val line = raw.trim()
+            if (line.isBlank() || line.startsWith("#")) continue
+            if (line.startsWith("[") && line.endsWith("]")) {
+                currentTable = line.removeSurrounding("[", "]").trim()
+                continue
+            }
+            if (currentTable != "libraries" && currentTable != "plugins") continue
+            val alias = line.substringBefore("=").trim().takeIf { it.isNotBlank() } ?: continue
+            val versionRef = Regex("""version\.ref\s*=\s*"([^"]+)"""").find(line)?.groupValues?.get(1)
+            val versionDirect = Regex(""",?\s*version\s*=\s*"([^"]+)"""").find(line)?.groupValues?.get(1)
+            val resolved = when {
+                versionRef != null -> versionTable[versionRef]
+                versionDirect != null -> versionDirect
+                else -> null
+            } ?: continue
+            result.putIfAbsent(alias, resolved)
+        }
+
+        return result
     }
 
     private fun commandSpecsFor(root: Path, module: AndroidModuleSummary): List<CommandSpec> {

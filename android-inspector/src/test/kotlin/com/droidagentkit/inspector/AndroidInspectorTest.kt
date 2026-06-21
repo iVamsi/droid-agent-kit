@@ -153,6 +153,39 @@ class AndroidInspectorTest {
     }
 
     @Test
+    fun `inspector resolves library aliases from version catalog`() {
+        val root = Files.createTempDirectory("dak-catalog")
+        Files.writeString(
+            root.resolve("settings.gradle.kts"),
+            "rootProject.name = \"CatalogTest\"\n",
+        )
+        Files.createDirectories(root.resolve("gradle"))
+        Files.writeString(
+            root.resolve("gradle/libs.versions.toml"),
+            """
+            [versions]
+            kotlin = "2.1.0"
+            hilt = "2.54"
+
+            [libraries]
+            hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
+            kotlin-stdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib", version.ref = "kotlin" }
+
+            [plugins]
+            kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+            """.trimIndent(),
+        )
+
+        val report = AndroidProjectInspector().inspect(root)
+
+        assertEquals("2.1.0", report.versions["kotlin"])
+        assertEquals("2.54", report.versions["hilt"])
+        assertEquals("2.54", report.versions["hilt-android"])
+        assertEquals("2.1.0", report.versions["kotlin-stdlib"])
+        assertEquals("2.1.0", report.versions["kotlin-android"])
+    }
+
+    @Test
     fun `inspector returns partial report for broken or non android projects`() {
         val root = Files.createTempDirectory("dak-broken-project")
         Files.writeString(root.resolve("README.md"), "not an Android project")
