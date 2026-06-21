@@ -98,8 +98,16 @@ class AndroidProjectInspector {
             usesCompose = usesCompose,
             hasUnitTests = hasUnitTests,
             hasAndroidTests = hasAndroidTests,
+            moduleDependencies = parseModuleDependencies(buildText),
         )
     }
+
+    private fun parseModuleDependencies(buildText: String): List<String> =
+        Regex("""(?:implementation|api|runtimeOnly|compileOnly)\s*\(\s*project\s*\(\s*["'](:[^"']+)["']\s*\)\s*\)""")
+            .findAll(buildText)
+            .map { it.groupValues[1] }
+            .distinct()
+            .toList()
 
     private fun parseLauncherActivities(manifestText: String, packageName: String?): List<String> {
         if (!manifestText.contains("android.intent.category.LAUNCHER")) return emptyList()
