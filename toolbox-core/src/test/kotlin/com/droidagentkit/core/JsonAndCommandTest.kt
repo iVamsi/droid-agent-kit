@@ -50,6 +50,36 @@ class JsonAndCommandTest {
     }
 
     @Test
+    fun `process runner preserves binary output without text corruption`() {
+        val outputDir = Files.createTempDirectory("dak-binary")
+        val runner = ProcessRunner(
+            redactor = Redactor(DroidAgentConfig.default().redaction),
+            artifactWriter = ArtifactWriter(outputDir),
+        )
+        // PNG magic bytes — would be corrupted if decoded as UTF-8
+        val tmpFile = outputDir.resolve("test.bin")
+        val expectedBytes = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
+        java.nio.file.Files.write(tmpFile, expectedBytes)
+
+        val result = runner.run(
+            CommandSpec(
+                id = "binary-cat",
+                command = listOf("/bin/sh", "-c", "cat ${tmpFile.toAbsolutePath()}"),
+                workingDirectory = outputDir.toString(),
+                mutatesProject = false,
+                requiresDevice = false,
+                timeoutSeconds = 10,
+                outputMode = OutputMode.BINARY,
+            ),
+        )
+
+        assertEquals(ResultStatus.SUCCESS, result.status)
+        assertEquals(1, result.artifacts.size)
+        val written = java.nio.file.Files.readAllBytes(java.nio.file.Path.of(result.artifacts[0].path))
+        org.junit.Assert.assertArrayEquals(expectedBytes, written)
+    }
+
+    @Test
     fun `json map serialization uses stable alphabetical key order`() {
         val map = mapOf("z" to "last", "a" to "first", "m" to "middle")
 

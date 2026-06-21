@@ -25,12 +25,28 @@ class ProcessRunner(
         }
 
         val completed = process.waitFor(spec.timeoutSeconds, TimeUnit.SECONDS)
-        val rawOutput = process.inputStream.bufferedReader().readText()
-        if (!completed) {
-            process.destroyForcibly()
-        }
-        val redacted = redactor.redact(rawOutput)
         val durationMs = Duration.between(started, Instant.now()).toMillis()
+
+        if (spec.outputMode == OutputMode.BINARY) {
+            val bytes = process.inputStream.readBytes()
+            if (!completed) process.destroyForcibly()
+            val artifact = artifactWriter.writeBytes("${spec.id}.bin", bytes, ArtifactType.SCREENSHOT, "${spec.id} binary capture")
+            val status = when {
+                !completed -> ResultStatus.PARTIAL
+                process.exitValue() == 0 -> ResultStatus.SUCCESS
+                else -> ResultStatus.FAILED
+            }
+            return ToolResult(
+                status = status,
+                summary = "${spec.id} captured ${bytes.size} bytes in ${durationMs}ms",
+                artifacts = listOf(artifact),
+                warnings = if (completed) emptyList() else listOf("command-timeout"),
+            )
+        }
+
+        val rawOutput = process.inputStream.bufferedReader().readText()
+        if (!completed) process.destroyForcibly()
+        val redacted = redactor.redact(rawOutput)
         val artifact = artifactWriter.writeText("${spec.id}.log", redacted.text)
         val status = when {
             !completed -> ResultStatus.PARTIAL

@@ -1,5 +1,7 @@
 package com.droidagentkit.core
 
+enum class OutputMode { TEXT, BINARY }
+
 enum class ArtifactType(val wireName: String) {
     LOG("log"),
     REPORT("report"),
@@ -41,6 +43,7 @@ data class CommandSpec(
     val mutatesProject: Boolean,
     val requiresDevice: Boolean,
     val timeoutSeconds: Long,
+    val outputMode: OutputMode = OutputMode.TEXT,
 )
 
 data class ToolResult(
