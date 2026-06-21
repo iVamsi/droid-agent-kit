@@ -80,7 +80,7 @@ class AndroidInspectorTest {
         val root = Files.createTempDirectory("dak-deps")
         Files.writeString(
             root.resolve("settings.gradle.kts"),
-            "rootProject.name = \"Deps\"\ninclude(\":app\", \":core\")",
+            "rootProject.name = \"Deps\"\ninclude(\":app\", \":core\", \":ui\")",
         )
         Files.createDirectories(root.resolve("app"))
         Files.writeString(
@@ -89,6 +89,7 @@ class AndroidInspectorTest {
             plugins { id("com.android.application") }
             android { namespace = "com.example.app" }
             dependencies {
+                implementation(project(":ui"))
                 implementation(project(":core"))
             }
             """.trimIndent(),
@@ -98,13 +99,20 @@ class AndroidInspectorTest {
             root.resolve("core/build.gradle.kts"),
             "plugins { id(\"com.android.library\") }\nandroid { namespace = \"com.example.core\" }",
         )
+        Files.createDirectories(root.resolve("ui"))
+        Files.writeString(
+            root.resolve("ui/build.gradle.kts"),
+            "plugins { id(\"com.android.library\") }\nandroid { namespace = \"com.example.ui\" }",
+        )
 
         val report = AndroidProjectInspector().inspect(root)
 
         val appModule = report.modules.first { it.path == ":app" }
-        assertEquals(listOf(":core"), appModule.moduleDependencies)
+        assertEquals(listOf(":core", ":ui"), appModule.moduleDependencies)
         val coreModule = report.modules.first { it.path == ":core" }
         assertTrue(coreModule.moduleDependencies.isEmpty())
+        val uiModule = report.modules.first { it.path == ":ui" }
+        assertTrue(uiModule.moduleDependencies.isEmpty())
     }
 
     @Test

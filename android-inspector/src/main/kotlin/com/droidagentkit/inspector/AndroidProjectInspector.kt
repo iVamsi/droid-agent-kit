@@ -107,6 +107,7 @@ class AndroidProjectInspector {
             .findAll(buildText)
             .map { it.groupValues[1] }
             .distinct()
+            .sorted()
             .toList()
 
     private fun parseLauncherActivities(manifestText: String, packageName: String?): List<String> {
