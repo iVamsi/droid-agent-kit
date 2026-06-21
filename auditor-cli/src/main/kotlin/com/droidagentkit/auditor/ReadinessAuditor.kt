@@ -44,7 +44,51 @@ class ReadinessAuditor(private val inspector: AndroidProjectInspector) {
         )
 
         if (hasVisualHooks(root)) score += 5
+
+        // Version catalog (previously implicit, now named)
         if (root.resolve("gradle/libs.versions.toml").exists()) score += 5
+        else risks += risk(
+            "missing-version-catalog", Severity.INFO, "No Gradle version catalog detected",
+            "No gradle/libs.versions.toml found.",
+            "Add a version catalog to centralise dependency versions.",
+        )
+
+        // Static analysis config
+        val hasStaticAnalysis = root.resolve("detekt.yml").exists() ||
+            root.resolve(".detekt/config.yml").exists() ||
+            project.modules.any { mod ->
+                val buildFile = java.nio.file.Path.of(mod.directory).resolve("build.gradle.kts")
+                buildFile.exists() && Files.readString(buildFile).contains("ktlint", ignoreCase = true)
+            }
+        if (hasStaticAnalysis) score += 5
+        else risks += risk(
+            "missing-static-analysis", Severity.WARNING, "No static analysis config detected",
+            "No detekt.yml, .detekt/config.yml, or ktlint reference in any build file.",
+            "Add Detekt or ktlint to catch style and quality issues automatically.",
+        )
+
+        // ProGuard rules
+        val hasProguard = project.modules.any { mod ->
+            java.nio.file.Path.of(mod.directory).resolve("proguard-rules.pro").exists()
+        }
+        if (hasProguard) score += 5
+        else risks += risk(
+            "missing-proguard", Severity.WARNING, "No ProGuard rules file detected",
+            "No proguard-rules.pro found in any module directory.",
+            "Add proguard-rules.pro and enable R8 minification in release builds.",
+        )
+
+        // Baseline Profile
+        val hasBaselineProfile = project.modules.any { mod ->
+            val buildFile = java.nio.file.Path.of(mod.directory).resolve("build.gradle.kts")
+            buildFile.exists() && Files.readString(buildFile).contains("baselineProfile", ignoreCase = true)
+        }
+        if (hasBaselineProfile) score += 5
+        else risks += risk(
+            "missing-baseline-profile", Severity.INFO, "No Baseline Profile configuration detected",
+            "No baselineProfile keyword found in any module's build.gradle.kts.",
+            "Add a Baseline Profile to improve startup performance.",
+        )
 
         val level = when {
             score >= 90 -> ReadinessLevel.AGENT_READY
