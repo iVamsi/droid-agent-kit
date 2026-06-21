@@ -24,7 +24,7 @@ object Json {
         is String -> "\"" + value.escapeJson() + "\""
         is Number, is Boolean -> value.toString()
         is Enum<*> -> write(value.name.lowercase())
-        is Map<*, *> -> value.entries.joinToString(prefix = "{", postfix = "}") { (key, item) ->
+        is Map<*, *> -> value.entries.sortedBy { it.key.toString() }.joinToString(prefix = "{", postfix = "}") { (key, item) ->
             write(key.toString()) + ":" + write(item)
         }
         is Iterable<*> -> value.joinToString(prefix = "[", postfix = "]") { write(it) }

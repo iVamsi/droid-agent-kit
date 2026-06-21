@@ -48,4 +48,17 @@ class JsonAndCommandTest {
         assertEquals(1, result.artifacts.size)
         assertTrue(Files.exists(outputDir.resolve("echo-secret.log")))
     }
+
+    @Test
+    fun `json map serialization uses stable alphabetical key order`() {
+        val map = mapOf("z" to "last", "a" to "first", "m" to "middle")
+
+        val json = Json.write(map)
+
+        val indexA = json.indexOf("\"a\"")
+        val indexM = json.indexOf("\"m\"")
+        val indexZ = json.indexOf("\"z\"")
+        assertTrue(indexA < indexM)
+        assertTrue(indexM < indexZ)
+    }
 }
