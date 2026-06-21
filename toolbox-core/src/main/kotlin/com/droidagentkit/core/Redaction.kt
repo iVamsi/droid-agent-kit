@@ -25,8 +25,38 @@ class Redactor(private val config: RedactionConfig) {
             "$1[REDACTED]",
         ),
         Rule(
+            "aws-access-key",
+            Regex("AKIA[0-9A-Z]{16}"),
+            "[REDACTED]",
+        ),
+        Rule(
+            "github-classic-token",
+            Regex("ghp_[A-Za-z0-9]{36}"),
+            "[REDACTED]",
+        ),
+        Rule(
+            "github-fine-grained-token",
+            Regex("github_pat_[A-Za-z0-9_]{82}"),
+            "[REDACTED]",
+        ),
+        Rule(
+            "firebase-private-key",
+            Regex("\"private_key\"\\s*:\\s*\"-----BEGIN"),
+            "\"private_key\":\"[REDACTED]",
+        ),
+        Rule(
+            "pem-private-key",
+            Regex("-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
+            "[REDACTED-PEM]",
+        ),
+        Rule(
             "token-assignment",
             Regex("(?i)([A-Z0-9_]*(TOKEN|SECRET)[A-Z0-9_]*\\s*[:=]\\s*)[^\\s\\n]+"),
+            "$1[REDACTED]",
+        ),
+        Rule(
+            "generic-secret-assignment",
+            Regex("""(?i)([A-Z0-9_]*(?:KEY|SECRET|CREDENTIAL)[A-Z0-9_]*\s*[:=]\s*)(?!"?\[)([^\s\n]{8,})"""),
             "$1[REDACTED]",
         ),
     )

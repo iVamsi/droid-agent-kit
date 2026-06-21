@@ -74,4 +74,68 @@ class ConfigAndSafetyTest {
         assertTrue(result.applied.contains("google-api-key"))
         assertTrue(result.applied.contains("password-assignment"))
     }
+
+    @Test
+    fun `redactor hides aws access key ids`() {
+        val redactor = Redactor(DroidAgentConfig.default().redaction)
+
+        val result = redactor.redact("aws_access_key_id=AKIAIOSFODNN7EXAMPLEOK")
+
+        assertFalse(result.text.contains("AKIAIOSFODNN7EXAMPLEOK"))
+        assertTrue(result.applied.contains("aws-access-key"))
+    }
+
+    @Test
+    fun `redactor hides github classic personal access tokens`() {
+        val redactor = Redactor(DroidAgentConfig.default().redaction)
+        val token = "ghp_" + "A".repeat(36)
+
+        val result = redactor.redact("GH_TOKEN=$token")
+
+        assertFalse(result.text.contains(token))
+        assertTrue(result.applied.contains("github-classic-token"))
+    }
+
+    @Test
+    fun `redactor hides github fine grained tokens`() {
+        val redactor = Redactor(DroidAgentConfig.default().redaction)
+        val token = "github_pat_" + "B".repeat(82)
+
+        val result = redactor.redact("token=$token")
+
+        assertFalse(result.text.contains(token))
+        assertTrue(result.applied.contains("github-fine-grained-token"))
+    }
+
+    @Test
+    fun `redactor hides pem private key headers`() {
+        val redactor = Redactor(DroidAgentConfig.default().redaction)
+
+        val result = redactor.redact("-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA...")
+
+        assertFalse(result.text.contains("BEGIN RSA PRIVATE KEY"))
+        assertTrue(result.applied.contains("pem-private-key"))
+    }
+
+    @Test
+    fun `redactor hides firebase private key json fragment`() {
+        val redactor = Redactor(DroidAgentConfig.default().redaction)
+        val input = """{"type":"service_account","private_key":"-----BEGIN PRIVATE KEY-----\nMIIEvAIBADA"}"""
+
+        val result = redactor.redact(input)
+
+        assertFalse(result.text.contains("-----BEGIN PRIVATE KEY"))
+        assertTrue(result.applied.contains("firebase-private-key"))
+    }
+
+    @Test
+    fun `redactor hides generic key and secret assignments with at least 8 char values`() {
+        val redactor = Redactor(DroidAgentConfig.default().redaction)
+
+        val hit = redactor.redact("MY_API_KEY=supersecret123")
+        val miss = redactor.redact("MY_KEY=short")  // 5 chars — under threshold
+
+        assertTrue(hit.applied.contains("generic-secret-assignment"))
+        assertFalse(miss.applied.contains("generic-secret-assignment"))
+    }
 }
