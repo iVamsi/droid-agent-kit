@@ -1,0 +1,65 @@
+package com.droidagentkit.auditor
+
+import com.droidagentkit.inspector.AndroidProjectInspector
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import java.nio.file.Files
+
+class ReadinessAuditorTest {
+    @Test
+    fun `auditor scores agent-ready repo and generates AGENTS content`() {
+        val root = sampleAndroidProject()
+        Files.writeString(root.resolve("AGENTS.md"), "# Existing human instructions\n\nRun tests before changing code.\n")
+        Files.createDirectories(root.resolve(".github/workflows"))
+        Files.writeString(root.resolve(".github/workflows/ci.yml"), "name: CI\nrun: ./gradlew :app:testDebugUnitTest\n")
+
+        val report = ReadinessAuditor(AndroidProjectInspector()).audit(root)
+        val agents = AgentsDocumentGenerator().generate(report)
+
+        assertTrue(report.score >= 75)
+        assertEquals(ReadinessLevel.USABLE_WITH_REVIEW, report.level)
+        assertTrue(agents.contains("Safe Commands"))
+        assertTrue(agents.contains(":app:testDebugUnitTest"))
+        assertTrue(report.risks.none { it.id == "missing-agent-instructions" })
+    }
+
+    @Test
+    fun `writer does not overwrite existing AGENTS by default`() {
+        val root = sampleAndroidProject()
+        Files.writeString(root.resolve("AGENTS.md"), "# Keep me\n")
+        val report = ReadinessAuditor(AndroidProjectInspector()).audit(root)
+
+        val written = AgentDocumentWriter().write(root, report, mergeAgents = false)
+
+        assertTrue(Files.exists(root.resolve("AGENTS.generated.md")))
+        assertEquals("# Keep me\n", Files.readString(root.resolve("AGENTS.md")))
+        assertTrue(written.any { it.path.endsWith("AGENTS.generated.md") })
+    }
+
+    @Test
+    fun `auditor flags missing tests and secrets`() {
+        val root = Files.createTempDirectory("dak-risky")
+        Files.writeString(root.resolve("settings.gradle.kts"), "rootProject.name = \"Risky\"\ninclude(\":app\")")
+        Files.createDirectories(root.resolve("app"))
+        Files.writeString(root.resolve("app/build.gradle.kts"), "plugins { id(\"com.android.application\") }")
+        Files.writeString(root.resolve("local.properties"), "apiKey=AIzaSyA-ExampleSecret")
+
+        val report = ReadinessAuditor(AndroidProjectInspector()).audit(root)
+
+        assertTrue(report.score < 75)
+        assertTrue(report.risks.any { it.id == "missing-agent-instructions" })
+        assertTrue(report.risks.any { it.id == "possible-secret" })
+        assertFalse(report.risks.joinToString("\n") { it.evidence.joinToString() }.contains("AIzaSyA-ExampleSecret"))
+    }
+
+    private fun sampleAndroidProject() = Files.createTempDirectory("dak-ready").also { root ->
+        Files.writeString(root.resolve("settings.gradle.kts"), "rootProject.name = \"Ready\"\ninclude(\":app\")")
+        Files.createDirectories(root.resolve("app/src/test/java"))
+        Files.writeString(
+            root.resolve("app/build.gradle.kts"),
+            "plugins { id(\"com.android.application\") }\nandroid { namespace = \"com.example.ready\" }",
+        )
+    }
+}

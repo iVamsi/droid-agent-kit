@@ -1,0 +1,10 @@
+.gradle/
+build/
+**/build/
+.idea/
+*.iml
+local.properties
+.DS_Store
+
+# DroidAgentKit local artifacts
+**/build/droidagentkit/

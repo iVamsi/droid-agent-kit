@@ -1,0 +1,171 @@
+package com.droidagentkit.cli
+
+import com.droidagentkit.auditor.AgentDocumentWriter
+import com.droidagentkit.auditor.AgentsDocumentGenerator
+import com.droidagentkit.auditor.ReadinessAuditor
+import com.droidagentkit.core.DroidAgentConfigLoader
+import com.droidagentkit.core.Json
+import com.droidagentkit.inspector.AndroidProjectInspector
+import com.droidagentkit.mcp.DroidAgentMcpDispatcher
+import com.droidagentkit.mcp.DroidAgentMcpHttpServer
+import com.droidagentkit.mcp.DroidAgentStdioServer
+import java.nio.file.Files
+import java.nio.file.Path
+
+fun main(args: Array<String>) {
+    val exitCode = DroidAgentCli().run(args)
+    if (exitCode != 0) kotlin.system.exitProcess(exitCode)
+}
+
+class DroidAgentCli(
+    private val parser: DroidAgentCliParser = DroidAgentCliParser(),
+) {
+    fun run(args: Array<String>): Int {
+        return when (val command = parser.parse(args)) {
+            is CliCommand.Help -> {
+                println(help())
+                0
+            }
+            is CliCommand.Inspect -> inspect(command)
+            is CliCommand.Audit -> audit(command)
+            is CliCommand.ServeMcp -> serveMcp(command)
+            is CliCommand.Gradle -> mcpCall(command.project, "android_gradle_run", mapOf("task" to command.task))
+            is CliCommand.Devices -> mcpCall(command.project, "android_devices_list", emptyMap())
+            is CliCommand.Snapshot -> mcpCall(".", "android_screen_snapshot", mapOf("deviceSerial" to command.device, "outputName" to command.output))
+            is CliCommand.Visuals -> visuals(command)
+            is CliCommand.InstallMcp -> installMcp(command)
+        }
+    }
+
+    private fun inspect(command: CliCommand.Inspect): Int {
+        val root = Path.of(command.project).toAbsolutePath().normalize()
+        val report = AndroidProjectInspector().inspect(root)
+        val output = if (command.format == "json") {
+            Json.write(
+                mapOf(
+                    "projectName" to report.projectName,
+                    "support" to report.support.name.lowercase(),
+                    "modules" to report.modules.map { it.path },
+                    "warnings" to report.warnings,
+                ),
+            )
+        } else {
+            buildString {
+                appendLine("# DroidAgentKit Project Inspection")
+                appendLine()
+                appendLine("Project: ${report.projectName}")
+                appendLine("Support: ${report.support}")
+                appendLine()
+                appendLine("## Modules")
+                report.modules.forEach { appendLine("- `${it.path}` ${it.type} namespace=${it.namespace ?: "unknown"}") }
+                appendLine()
+                appendLine("## Safe Commands")
+                report.commandMatrix.forEach { appendLine("- `${it.command.joinToString(" ")}`") }
+            }
+        }
+        writeOrPrint(command.output, output)
+        return 0
+    }
+
+    private fun audit(command: CliCommand.Audit): Int {
+        val root = Path.of(command.project).toAbsolutePath().normalize()
+        val report = ReadinessAuditor(AndroidProjectInspector()).audit(root, command.redactPublic)
+        if (command.writeAgents) AgentDocumentWriter().write(root, report, mergeAgents = false)
+        val markdown = AgentsDocumentGenerator().generate(report)
+        val outDir = root.resolve("build/droidagentkit/audit")
+        Files.createDirectories(outDir)
+        Files.writeString(outDir.resolve("readiness-report.md"), markdown)
+        Files.writeString(
+            outDir.resolve("readiness-report.json"),
+            Json.write(mapOf("score" to report.score, "level" to report.level.name.lowercase(), "risks" to report.risks.map { it.id })),
+        )
+        println("Readiness ${report.score}/100 (${report.level})")
+        return if (command.failUnder != null && report.score < command.failUnder) 2 else 0
+    }
+
+    private fun serveMcp(command: CliCommand.ServeMcp): Int {
+        val projectRoot = ProjectLocator.resolve(command.project)
+        val config = DroidAgentConfigLoader.load(projectRoot)
+        val dispatcher = DroidAgentMcpDispatcher(config)
+        if (command.transport == "stdio") {
+            val stdio = DroidAgentStdioServer(dispatcher)
+            generateSequence(::readLine).forEach { println(stdio.runOnce(it)) }
+        } else {
+            val server = DroidAgentMcpHttpServer(dispatcher, command.host, command.port)
+            server.start()
+            println("DroidAgentKit MCP server listening at http://${command.host}:${command.port}/mcp")
+            Thread.currentThread().join()
+        }
+        return 0
+    }
+
+    private fun mcpCall(project: String, tool: String, args: Map<String, Any>): Int {
+        val root = ProjectLocator.resolve(project)
+        val config = DroidAgentConfigLoader.load(root)
+        val result = DroidAgentMcpDispatcher(config).call(tool, args + ("rootPath" to root.toString()))
+        println(Json.write(result))
+        return if (result["status"] == "failed" || result["status"] == "blocked") 2 else 0
+    }
+
+    private fun visuals(command: CliCommand.Visuals): Int {
+        val project = command.options["project"] ?: "."
+        val root = Path.of(project).toAbsolutePath().normalize()
+        val report = root.resolve("build/droidagentkit/visuals/visual-report.md")
+        Files.createDirectories(report.parent)
+        Files.writeString(
+            report,
+            "# DroidAgentKit Visuals\n\nAction `${command.action}` requested. Use the Gradle plugin to collect visual artifacts.\n",
+        )
+        println(report)
+        return 0
+    }
+
+    private fun installMcp(command: CliCommand.InstallMcp): Int {
+        val binPath = command.binPath?.let(Path::of) ?: defaultDroidAgentBin()
+        val options = McpInstallOptions(
+            targets = McpInstallTargets.parse(command.targets),
+            binPath = binPath.toAbsolutePath().normalize(),
+            dryRun = command.dryRun,
+            applyClaude = command.applyClaude,
+        )
+        val result = McpInstaller().install(options)
+        result.messages.forEach(::println)
+        if (result.changedFiles.isNotEmpty()) {
+            println("Changed files:")
+            result.changedFiles.forEach { println("- $it") }
+        }
+        return 0
+    }
+
+    private fun defaultDroidAgentBin(): Path {
+        System.getenv("DROIDAGENT_BIN")?.takeIf { it.isNotBlank() }?.let { return Path.of(it) }
+        val localDist = Path.of("cli/build/install/droidagent/bin/droidagent").toAbsolutePath().normalize()
+        if (Files.exists(localDist)) return localDist
+        return Path.of("droidagent")
+    }
+
+    private fun writeOrPrint(outputPath: String?, content: String) {
+        if (outputPath == null) {
+            println(content)
+        } else {
+            val path = Path.of(outputPath)
+            path.parent?.let(Files::createDirectories)
+            Files.writeString(path, content)
+        }
+    }
+
+    private fun help(): String =
+        """
+        DroidAgentKit alpha
+
+        Commands:
+          serve-mcp --project . --transport http --host 127.0.0.1 --port 8765
+          inspect --project . --format markdown --output build/droidagentkit/project.md
+          audit --project . --write-agents --fail-under 80
+          gradle --project . --task :app:testDebugUnitTest
+          devices --project . --format json
+          snapshot --device SERIAL --output build/droidagentkit/snapshot
+          visuals report --project .
+          install-mcp --targets all
+        """.trimIndent()
+}
