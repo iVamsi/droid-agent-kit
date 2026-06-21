@@ -52,4 +52,15 @@ class McpDispatcherTest {
         assertEquals("success", result["status"])
         assertTrue(result["summary"].toString().contains("McpDemo"))
     }
+
+    @Test
+    fun `snapshot is blocked when device serial is missing`() {
+        val root = Files.createTempDirectory("dak-snapshot")
+        val dispatcher = DroidAgentMcpDispatcher(DroidAgentConfig.default())
+
+        val result = dispatcher.call("android_screen_snapshot", mapOf("rootPath" to root.toString()))
+
+        assertEquals("blocked", result["status"])
+        assertTrue(result["summary"].toString().contains("deviceSerial"))
+    }
 }

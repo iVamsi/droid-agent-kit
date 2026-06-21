@@ -136,7 +136,20 @@ class DroidAgentMcpDispatcher(
     private fun snapshot(arguments: Map<String, Any?>): Map<String, Any> {
         val serial = arguments["deviceSerial"]?.toString()
             ?: return resultMap(ToolResult(status = ResultStatus.BLOCKED, summary = "deviceSerial is required for screenshots.", warnings = listOf("missing-device-serial")))
-        return runAdb(listOf("-s", serial, "exec-out", "screencap", "-p"), "adb-screenshot", rootPath(arguments))
+        val root = rootPath(arguments)
+        return resultMap(
+            runner(root).run(
+                com.droidagentkit.core.CommandSpec(
+                    id = "adb-screenshot",
+                    command = listOf("adb", "-s", serial, "exec-out", "screencap", "-p"),
+                    workingDirectory = root.toString(),
+                    mutatesProject = false,
+                    requiresDevice = true,
+                    timeoutSeconds = 60,
+                    outputMode = com.droidagentkit.core.OutputMode.BINARY,
+                ),
+            ),
+        )
     }
 
     private fun reportBundle(arguments: Map<String, Any?>): Map<String, Any> {
