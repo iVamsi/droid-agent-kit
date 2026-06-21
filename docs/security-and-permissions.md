@@ -41,3 +41,24 @@ Built-in redaction covers:
 - token and secret assignments
 
 Extra project-specific regexes can be added under `redaction.extraPatterns`.
+
+## Readiness Score Breakdown
+
+Maximum score: 100 (capped via `coerceIn`).
+
+| Points | Check |
+|--------|-------|
+| 20 | Build and test commands are discoverable (`testDebugUnitTest`, `assembleDebug`) |
+| 15 | At least one module has unit tests (`src/test`) or Android tests (`src/androidTest`) |
+| 15 | At least one Gradle module is detected |
+| 10 | Agent instructions file exists (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, etc.) |
+| 10 | CI workflow file detected (`.github/workflows`, `.gitlab-ci.yml`, etc.) |
+| 10 | Device/emulator expectations documented in `AGENTS.md` or `README.md` |
+| 10 | No likely secrets detected in tracked files |
+| 5  | Visual testing hooks detected (`droidAgentVisuals`, Paparazzi, or Roborazzi) |
+| 5  | `gradle/libs.versions.toml` version catalog present |
+| 5  | Static analysis config detected (`detekt.yml`, `.detekt/`, or ktlint in build files) |
+| 5  | `proguard-rules.pro` present in at least one module |
+| 5  | Baseline Profile configured in at least one module's build file |
+
+`ReadinessLevel` thresholds: ≥ 90 → AGENT_READY, ≥ 75 → USABLE_WITH_REVIEW, ≥ 50 → SMALL_TASKS_ONLY, < 50 → UNSAFE_FOR_AUTONOMY.

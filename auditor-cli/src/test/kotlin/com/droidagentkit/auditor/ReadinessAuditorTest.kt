@@ -74,6 +74,41 @@ class ReadinessAuditorTest {
         assertFalse(evidence.contains("build/outputs"))
     }
 
+    @Test
+    fun `auditor awards points and skips risk for static analysis config`() {
+        val root = sampleAndroidProject()
+        Files.writeString(root.resolve("detekt.yml"), "build:\n  maxIssues: 0\n")
+
+        val withDetekt = ReadinessAuditor(AndroidProjectInspector()).audit(root)
+        val withoutDetekt = ReadinessAuditor(AndroidProjectInspector()).audit(sampleAndroidProject())
+
+        assertTrue(withDetekt.score > withoutDetekt.score)
+        assertTrue(withDetekt.risks.none { it.id == "missing-static-analysis" })
+        assertTrue(withoutDetekt.risks.any { it.id == "missing-static-analysis" })
+    }
+
+    @Test
+    fun `auditor awards points for proguard rules presence`() {
+        val root = sampleAndroidProject()
+        Files.writeString(root.resolve("app/proguard-rules.pro"), "-keep class * { *; }\n")
+
+        val report = ReadinessAuditor(AndroidProjectInspector()).audit(root)
+
+        assertTrue(report.risks.none { it.id == "missing-proguard" })
+    }
+
+    @Test
+    fun `auditor surfaces missing version catalog as named risk`() {
+        val root = Files.createTempDirectory("dak-no-catalog")
+        Files.writeString(root.resolve("settings.gradle.kts"), "rootProject.name = \"NoCatalog\"\ninclude(\":app\")")
+        Files.createDirectories(root.resolve("app"))
+        Files.writeString(root.resolve("app/build.gradle.kts"), "plugins { id(\"com.android.application\") }")
+
+        val report = ReadinessAuditor(AndroidProjectInspector()).audit(root)
+
+        assertTrue(report.risks.any { it.id == "missing-version-catalog" })
+    }
+
     private fun sampleAndroidProject() = Files.createTempDirectory("dak-ready").also { root ->
         Files.writeString(root.resolve("settings.gradle.kts"), "rootProject.name = \"Ready\"\ninclude(\":app\")")
         Files.createDirectories(root.resolve("app/src/test/java"))
