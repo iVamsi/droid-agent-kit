@@ -25,7 +25,9 @@ class DroidAgentMcpHttpServer(
                 return@createContext
             }
             val response = if (exchange.requestMethod.equals("GET", ignoreCase = true)) {
-                Json.write(mapOf("tools" to dispatcher.listTools().map { mapOf("name" to it.name, "description" to it.description) }))
+                Json.write(mapOf("tools" to dispatcher.listTools().map {
+                    mapOf("name" to it.name, "description" to it.description, "inputSchema" to it.inputSchema)
+                }))
             } else {
                 val body = exchange.requestBody.readAllBytes().toString(StandardCharsets.UTF_8)
                 val name = Regex("\"name\"\\s*:\\s*\"([^\"]+)\"").find(body)?.groupValues?.get(1)
