@@ -13,6 +13,8 @@ object ProjectLocator {
             "CLAUDE_PROJECT_DIR",
             "CODEX_WORKSPACE",
             "CODEX_PROJECT_DIR",
+            "GEMINI_PROJECT_DIR",
+            "GEMINI_WORKSPACE",
             "PWD",
         ).firstNotNullOfOrNull { key ->
             environment[key]?.takeIf { it.isNotBlank() }?.let(Path::of)
