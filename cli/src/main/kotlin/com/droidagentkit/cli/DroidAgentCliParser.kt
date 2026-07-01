@@ -2,10 +2,27 @@ package com.droidagentkit.cli
 
 class DroidAgentCliParser {
     fun parse(args: Array<String>): CliCommand {
-        if (args.isEmpty()) return CliCommand.Help
-        val command = args.first()
-        val options = parseOptions(args.drop(1))
-        return when (command) {
+        if (args.isEmpty() || args.first() == "-h" || args.first() == "--help") return CliCommand.Help()
+
+        val commandName = args.first()
+        val spec = CliCommandRegistry.all.find { it.name == commandName }
+            ?: return CliCommand.Help(error = "Unknown command '$commandName'. Run 'droidagent --help' to see available commands.")
+
+        val rest = args.drop(1)
+        if (rest.any { it == "-h" || it == "--help" }) return CliCommand.Help(commandName = commandName)
+
+        val options = parseOptions(rest)
+
+        if (!spec.freeformOptions) {
+            val allowedFlags = spec.options.map { it.flag }.toSet()
+            val errors = mutableListOf<String>()
+            options.keys.filter { "--$it" !in allowedFlags }.forEach { errors += "Unknown flag '--$it' for command '$commandName'." }
+            spec.options.filter { it.required && it.flag.removePrefix("--") !in options }
+                .forEach { errors += "${it.flag} is required for command '$commandName'." }
+            if (errors.isNotEmpty()) return CliCommand.Help(error = errors.joinToString(" "))
+        }
+
+        return when (commandName) {
             "serve-mcp" -> CliCommand.ServeMcp(
                 project = options["project"] ?: ".",
                 transport = options["transport"] ?: "http",
@@ -19,14 +36,14 @@ class DroidAgentCliParser {
             )
             "gradle" -> CliCommand.Gradle(
                 project = options["project"] ?: ".",
-                task = options["task"] ?: error("--task is required"),
+                task = options.getValue("task"),
             )
             "devices" -> CliCommand.Devices(
                 project = options["project"] ?: ".",
                 format = options["format"] ?: "json",
             )
             "snapshot" -> CliCommand.Snapshot(
-                device = options["device"] ?: error("--device is required"),
+                device = options.getValue("device"),
                 output = options["output"] ?: "build/droidagentkit/snapshot",
             )
             "audit" -> CliCommand.Audit(
@@ -49,7 +66,7 @@ class DroidAgentCliParser {
                 dryRun = options.containsKey("dry-run"),
                 applyClaude = !options.containsKey("dry-run") && !options.containsKey("no-claude-apply"),
             )
-            else -> CliCommand.Help
+            else -> CliCommand.Help(error = "Unknown command '$commandName'.")
         }
     }
 
