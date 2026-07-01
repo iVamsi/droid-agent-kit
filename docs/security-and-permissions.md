@@ -62,3 +62,16 @@ Maximum score: 100 (capped via `coerceIn`).
 | 5  | Baseline Profile configured in at least one module's build file |
 
 `ReadinessLevel` thresholds: ≥ 90 → AGENT_READY, ≥ 75 → USABLE_WITH_REVIEW, ≥ 50 → SMALL_TASKS_ONLY, < 50 → UNSAFE_FOR_AUTONOMY.
+
+## Config Validation
+
+`droidagent` validates `.droidagentkit/config.yaml` before using it:
+
+- `schemaVersion` must be `1` (or omitted, which defaults to `1`). Any other value is rejected.
+- Boolean fields (`allowAdbInput`, `allowAppInstall`, `allowEmulatorStart`, `redaction.enabled`) must be
+  literal `true`/`false`.
+- `safety.maxCommandSeconds` must be a whole number.
+- Unrecognized sections or keys produce a warning (printed to stderr) but do not fail the load.
+
+When validation fails, the CLI prints every error and exits non-zero. The MCP server logs the errors
+and falls back to default configuration rather than crashing a long-running process.
