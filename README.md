@@ -51,3 +51,5 @@ After installation, open any Android project in Codex or Claude Code and ask for
 ./cli/build/install/droidagent/bin/droidagent audit --project /path/to/android/project --write-agents
 ./cli/build/install/droidagent/bin/droidagent serve-mcp --transport stdio --project auto
 ```
+
+Run any subcommand with `--help` to see its flags, e.g. `droidagent gradle --help`.
