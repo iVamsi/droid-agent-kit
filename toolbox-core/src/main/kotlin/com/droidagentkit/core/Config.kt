@@ -59,12 +59,48 @@ data class RedactionConfig(
     val extraPatterns: List<String> = emptyList(),
 )
 
+data class ConfigError(val line: Int, val key: String, val message: String)
+
+sealed interface ConfigLoadResult {
+    data class Loaded(val config: DroidAgentConfig, val warnings: List<String> = emptyList()) : ConfigLoadResult
+    data class Invalid(val errors: List<ConfigError>) : ConfigLoadResult
+}
+
 object DroidAgentConfigLoader {
-    fun load(projectRoot: Path): DroidAgentConfig {
+    private val knownSections = setOf("project", "safety", "reports", "redaction")
+    private val knownKeys = setOf(
+        "project.name", "safety.allowGradleTasks", "safety.allowAdbInput", "safety.allowAppInstall",
+        "safety.allowEmulatorStart", "safety.maxCommandSeconds", "reports.outputDir",
+        "redaction.enabled", "redaction.extraPatterns",
+    )
+
+    fun load(projectRoot: Path): ConfigLoadResult {
         val path = projectRoot.resolve(".droidagentkit/config.yaml")
-        if (!path.exists()) return DroidAgentConfig.default()
+        if (!path.exists()) return ConfigLoadResult.Loaded(DroidAgentConfig.default())
 
         val lines = Files.readAllLines(path)
+
+        for ((index, rawLine) in lines.withIndex()) {
+            val line = rawLine.trim()
+            if (!line.startsWith("schemaVersion")) continue
+            val rawValue = line.substringAfter(":", missingDelimiterValue = "").trim().unquote()
+            val version = rawValue.toIntOrNull()
+            if (version == null || version != 1) {
+                return ConfigLoadResult.Invalid(
+                    listOf(
+                        ConfigError(
+                            index + 1,
+                            "schemaVersion",
+                            "unsupported schema version '$rawValue'; this build supports schemaVersion 1",
+                        ),
+                    ),
+                )
+            }
+            break
+        }
+
+        val errors = mutableListOf<ConfigError>()
+        val warnings = mutableListOf<String>()
         var section = ""
         var projectName = "inferred"
         val allowGradleTasks = mutableListOf<String>()
@@ -77,12 +113,14 @@ object DroidAgentConfigLoader {
         val extraPatterns = mutableListOf<String>()
         var listTarget = ""
 
-        for (rawLine in lines) {
+        for ((index, rawLine) in lines.withIndex()) {
+            val lineNumber = index + 1
             val line = rawLine.trim()
-            if (line.isBlank() || line.startsWith("#")) continue
+            if (line.isBlank() || line.startsWith("#") || line.startsWith("schemaVersion")) continue
             if (!rawLine.startsWith(" ") && line.endsWith(":")) {
                 section = line.removeSuffix(":")
                 listTarget = ""
+                if (section !in knownSections) warnings += "line $lineNumber: unknown section '$section' — ignored"
                 continue
             }
             if (line.endsWith(":")) {
@@ -99,16 +137,20 @@ object DroidAgentConfigLoader {
             }
             val key = line.substringBefore(":", missingDelimiterValue = "").trim()
             val value = line.substringAfter(":", missingDelimiterValue = "").trim().unquote()
-            when ("$section.$key") {
+            val fullKey = "$section.$key"
+            when (fullKey) {
                 "project.name" -> projectName = value
-                "safety.allowAdbInput" -> allowAdbInput = value.toBoolean()
-                "safety.allowAppInstall" -> allowAppInstall = value.toBoolean()
-                "safety.allowEmulatorStart" -> allowEmulatorStart = value.toBoolean()
-                "safety.maxCommandSeconds" -> maxCommandSeconds = value.toLong()
+                "safety.allowAdbInput" -> allowAdbInput = value.toStrictBooleanOrError(lineNumber, fullKey, errors) ?: allowAdbInput
+                "safety.allowAppInstall" -> allowAppInstall = value.toStrictBooleanOrError(lineNumber, fullKey, errors) ?: allowAppInstall
+                "safety.allowEmulatorStart" -> allowEmulatorStart = value.toStrictBooleanOrError(lineNumber, fullKey, errors) ?: allowEmulatorStart
+                "safety.maxCommandSeconds" -> maxCommandSeconds = value.toLongOrError(lineNumber, fullKey, errors) ?: maxCommandSeconds
                 "reports.outputDir" -> outputDir = value
-                "redaction.enabled" -> redactionEnabled = value.toBoolean()
+                "redaction.enabled" -> redactionEnabled = value.toStrictBooleanOrError(lineNumber, fullKey, errors) ?: redactionEnabled
+                else -> if (fullKey !in knownKeys) warnings += "line $lineNumber: unknown key '$fullKey' — ignored"
             }
         }
+
+        if (errors.isNotEmpty()) return ConfigLoadResult.Invalid(errors)
 
         val safety = SafetyConfig(
             allowGradleTasks = allowGradleTasks.ifEmpty { SafetyConfig().allowGradleTasks },
@@ -117,13 +159,32 @@ object DroidAgentConfigLoader {
             allowEmulatorStart = allowEmulatorStart,
             maxCommandSeconds = maxCommandSeconds,
         )
-        return DroidAgentConfig(
-            project = ProjectConfig(projectName),
-            safety = safety,
-            reports = ReportsConfig(outputDir),
-            redaction = RedactionConfig(redactionEnabled, extraPatterns),
+        return ConfigLoadResult.Loaded(
+            DroidAgentConfig(
+                project = ProjectConfig(projectName),
+                safety = safety,
+                reports = ReportsConfig(outputDir),
+                redaction = RedactionConfig(redactionEnabled, extraPatterns),
+            ),
+            warnings = warnings,
         )
     }
 
     private fun String.unquote(): String = trim().removeSurrounding("\"").removeSurrounding("'")
+
+    private fun String.toStrictBooleanOrError(line: Int, key: String, errors: MutableList<ConfigError>): Boolean? =
+        when (this) {
+            "true" -> true
+            "false" -> false
+            else -> {
+                errors += ConfigError(line, key, "expected true or false, got '$this'")
+                null
+            }
+        }
+
+    private fun String.toLongOrError(line: Int, key: String, errors: MutableList<ConfigError>): Long? =
+        toLongOrNull() ?: run {
+            errors += ConfigError(line, key, "expected a number, got '$this'")
+            null
+        }
 }

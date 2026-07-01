@@ -3,6 +3,8 @@ package com.droidagentkit.cli
 import com.droidagentkit.auditor.AgentDocumentWriter
 import com.droidagentkit.auditor.AgentsDocumentGenerator
 import com.droidagentkit.auditor.ReadinessAuditor
+import com.droidagentkit.core.ConfigLoadResult
+import com.droidagentkit.core.DroidAgentConfig
 import com.droidagentkit.core.DroidAgentConfigLoader
 import com.droidagentkit.core.Json
 import com.droidagentkit.inspector.AndroidProjectInspector
@@ -11,6 +13,20 @@ import com.droidagentkit.mcp.DroidAgentMcpHttpServer
 import com.droidagentkit.mcp.DroidAgentStdioServer
 import java.nio.file.Files
 import java.nio.file.Path
+
+internal fun resolveServerConfig(configResult: ConfigLoadResult, onMessage: (String) -> Unit): DroidAgentConfig =
+    when (configResult) {
+        is ConfigLoadResult.Loaded -> {
+            configResult.warnings.forEach { onMessage("droidagentkit config warning: $it") }
+            configResult.config
+        }
+        is ConfigLoadResult.Invalid -> {
+            configResult.errors.forEach {
+                onMessage("droidagentkit config warning: line ${it.line}: ${it.key} — ${it.message} (using defaults)")
+            }
+            DroidAgentConfig.default()
+        }
+    }
 
 fun main(args: Array<String>) {
     val exitCode = DroidAgentCli().run(args)
@@ -85,7 +101,7 @@ class DroidAgentCli(
 
     private fun serveMcp(command: CliCommand.ServeMcp): Int {
         val projectRoot = ProjectLocator.resolve(command.project)
-        val config = DroidAgentConfigLoader.load(projectRoot)
+        val config = resolveServerConfig(DroidAgentConfigLoader.load(projectRoot)) { System.err.println(it) }
         val dispatcher = DroidAgentMcpDispatcher(config)
         if (command.transport == "stdio") {
             val stdio = DroidAgentStdioServer(dispatcher)
@@ -101,7 +117,18 @@ class DroidAgentCli(
 
     private fun mcpCall(project: String, tool: String, args: Map<String, Any>): Int {
         val root = ProjectLocator.resolve(project)
-        val config = DroidAgentConfigLoader.load(root)
+        val config = when (val configResult = DroidAgentConfigLoader.load(root)) {
+            is ConfigLoadResult.Loaded -> {
+                configResult.warnings.forEach { System.err.println("droidagentkit config warning: $it") }
+                configResult.config
+            }
+            is ConfigLoadResult.Invalid -> {
+                configResult.errors.forEach {
+                    System.err.println("droidagentkit config error: line ${it.line}: ${it.key} — ${it.message}")
+                }
+                return 1
+            }
+        }
         val result = DroidAgentMcpDispatcher(config).call(tool, args + ("rootPath" to root.toString()))
         println(Json.write(result))
         return if (result["status"] == "failed" || result["status"] == "blocked") 2 else 0
