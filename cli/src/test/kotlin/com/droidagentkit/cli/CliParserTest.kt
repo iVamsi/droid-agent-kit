@@ -61,4 +61,52 @@ class CliParserTest {
 
         assertEquals(java.nio.file.Path.of("/tmp/my-android-project").toAbsolutePath().normalize(), resolved)
     }
+
+    @Test
+    fun `parser shows global help for no args`() {
+        val command = DroidAgentCliParser().parse(emptyArray())
+
+        assertEquals(CliCommand.Help(), command)
+    }
+
+    @Test
+    fun `parser shows command help for gradle --help`() {
+        val command = DroidAgentCliParser().parse(arrayOf("gradle", "--help"))
+
+        assertEquals(CliCommand.Help(commandName = "gradle"), command)
+    }
+
+    @Test
+    fun `parser rejects unknown command with an error`() {
+        val command = DroidAgentCliParser().parse(arrayOf("frobnicate"))
+
+        assertTrue(command is CliCommand.Help)
+        assertTrue((command as CliCommand.Help).error!!.contains("Unknown command 'frobnicate'"))
+    }
+
+    @Test
+    fun `parser rejects unknown flag on gradle`() {
+        val command = DroidAgentCliParser().parse(arrayOf("gradle", "--tsak", ":app:testDebugUnitTest"))
+
+        assertTrue(command is CliCommand.Help)
+        assertTrue((command as CliCommand.Help).error!!.contains("--tsak"))
+    }
+
+    @Test
+    fun `parser rejects missing required task flag on gradle`() {
+        val command = DroidAgentCliParser().parse(arrayOf("gradle", "--project", "."))
+
+        assertTrue(command is CliCommand.Help)
+        assertTrue((command as CliCommand.Help).error!!.contains("--task"))
+    }
+
+    @Test
+    fun `parser still accepts freeform visuals flags`() {
+        val command = DroidAgentCliParser().parse(arrayOf("visuals", "compare", "--some-freeform-flag", "value"))
+
+        assertTrue(command is CliCommand.Visuals)
+        val visuals = command as CliCommand.Visuals
+        assertEquals("compare", visuals.action)
+        assertEquals("value", visuals.options["some-freeform-flag"])
+    }
 }

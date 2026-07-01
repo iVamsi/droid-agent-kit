@@ -38,9 +38,19 @@ class DroidAgentCli(
 ) {
     fun run(args: Array<String>): Int {
         return when (val command = parser.parse(args)) {
-            is CliCommand.Help -> {
-                println(help())
-                0
+            is CliCommand.Help -> when {
+                command.error != null -> {
+                    System.err.println(command.error)
+                    1
+                }
+                command.commandName != null -> {
+                    println(usageFor(command.commandName))
+                    0
+                }
+                else -> {
+                    println(help())
+                    0
+                }
             }
             is CliCommand.Inspect -> inspect(command)
             is CliCommand.Audit -> audit(command)
@@ -181,18 +191,27 @@ class DroidAgentCli(
         }
     }
 
-    private fun help(): String =
-        """
-        DroidAgentKit alpha
+    private fun help(): String = buildString {
+        appendLine("DroidAgentKit alpha")
+        appendLine()
+        appendLine("Commands:")
+        CliCommandRegistry.all.forEach { spec -> appendLine("  ${spec.name} — ${spec.description}") }
+        appendLine()
+        appendLine("Run 'droidagent <command> --help' for command-specific flags.")
+    }
 
-        Commands:
-          serve-mcp --project . --transport http --host 127.0.0.1 --port 8765
-          inspect --project . --format markdown --output build/droidagentkit/project.md
-          audit --project . --write-agents --fail-under 80
-          gradle --project . --task :app:testDebugUnitTest
-          devices --project . --format json
-          snapshot --device SERIAL --output build/droidagentkit/snapshot
-          visuals report --project .
-          install-mcp --targets all
-        """.trimIndent()
+    private fun usageFor(commandName: String): String {
+        val spec = CliCommandRegistry.all.first { it.name == commandName }
+        return buildString {
+            appendLine("${spec.name} — ${spec.description}")
+            if (spec.options.isNotEmpty()) {
+                appendLine()
+                appendLine("Flags:")
+                spec.options.forEach { option ->
+                    val marker = if (option.required) " (required)" else ""
+                    appendLine("  ${option.flag}$marker — ${option.description}")
+                }
+            }
+        }
+    }
 }
