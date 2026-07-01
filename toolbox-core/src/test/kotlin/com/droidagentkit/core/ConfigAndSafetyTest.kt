@@ -43,8 +43,10 @@ class ConfigAndSafetyTest {
             """.trimIndent(),
         )
 
-        val loaded = DroidAgentConfigLoader.load(dir)
+        val result = DroidAgentConfigLoader.load(dir)
 
+        assertTrue(result is ConfigLoadResult.Loaded)
+        val loaded = (result as ConfigLoadResult.Loaded).config
         assertEquals("demo", loaded.project.name)
         assertTrue(loaded.safety.isGradleTaskAllowed(":app:connectedDebugAndroidTest"))
         assertFalse(loaded.safety.allowAppInstall)
@@ -52,6 +54,74 @@ class ConfigAndSafetyTest {
         assertEquals("out/reports", loaded.reports.outputDir)
         assertFalse(loaded.redaction.enabled)
         assertEquals(listOf("PRIVATE_[A-Z]+"), loaded.redaction.extraPatterns)
+        assertTrue(result.warnings.isEmpty())
+    }
+
+    @Test
+    fun `config loader returns invalid for unsupported schema version`() {
+        val dir = Files.createTempDirectory("dak-config-schema")
+        val config = dir.resolve(".droidagentkit/config.yaml")
+        Files.createDirectories(config.parent)
+        Files.writeString(config, "schemaVersion: 2\nproject:\n  name: demo\n")
+
+        val result = DroidAgentConfigLoader.load(dir)
+
+        assertTrue(result is ConfigLoadResult.Invalid)
+        val error = (result as ConfigLoadResult.Invalid).errors.single()
+        assertEquals(1, error.line)
+        assertEquals("schemaVersion", error.key)
+        assertTrue(error.message.contains("schemaVersion 1"))
+    }
+
+    @Test
+    fun `config loader returns invalid for non numeric schema version`() {
+        val dir = Files.createTempDirectory("dak-config-schema-nan")
+        val config = dir.resolve(".droidagentkit/config.yaml")
+        Files.createDirectories(config.parent)
+        Files.writeString(config, "schemaVersion: next\n")
+
+        val result = DroidAgentConfigLoader.load(dir)
+
+        assertTrue(result is ConfigLoadResult.Invalid)
+        assertEquals("schemaVersion", (result as ConfigLoadResult.Invalid).errors.single().key)
+    }
+
+    @Test
+    fun `config loader collects multiple value errors in one pass`() {
+        val dir = Files.createTempDirectory("dak-config-multi")
+        val config = dir.resolve(".droidagentkit/config.yaml")
+        Files.createDirectories(config.parent)
+        Files.writeString(
+            config,
+            """
+            schemaVersion: 1
+            safety:
+              allowAppInstall: maybe
+              maxCommandSeconds: soon
+            """.trimIndent(),
+        )
+
+        val result = DroidAgentConfigLoader.load(dir)
+
+        assertTrue(result is ConfigLoadResult.Invalid)
+        val errors = (result as ConfigLoadResult.Invalid).errors
+        assertEquals(2, errors.size)
+        assertTrue(errors.any { it.key == "safety.allowAppInstall" })
+        assertTrue(errors.any { it.key == "safety.maxCommandSeconds" })
+    }
+
+    @Test
+    fun `config loader warns but succeeds on unknown key`() {
+        val dir = Files.createTempDirectory("dak-config-unknown")
+        val config = dir.resolve(".droidagentkit/config.yaml")
+        Files.createDirectories(config.parent)
+        Files.writeString(config, "schemaVersion: 1\nsafety:\n  saftey: true\n")
+
+        val result = DroidAgentConfigLoader.load(dir)
+
+        assertTrue(result is ConfigLoadResult.Loaded)
+        val loaded = result as ConfigLoadResult.Loaded
+        assertTrue(loaded.warnings.any { it.contains("safety.saftey") })
     }
 
     @Test
