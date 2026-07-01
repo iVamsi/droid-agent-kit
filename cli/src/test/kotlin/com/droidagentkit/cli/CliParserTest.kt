@@ -109,4 +109,25 @@ class CliParserTest {
         assertEquals("compare", visuals.action)
         assertEquals("value", visuals.options["some-freeform-flag"])
     }
+
+    @Test
+    fun `parser understands gradle command`() {
+        val command = DroidAgentCliParser().parse(arrayOf("gradle", "--project", ".", "--task", ":app:testDebugUnitTest"))
+
+        assertEquals(CliCommand.Gradle(project = ".", task = ":app:testDebugUnitTest"), command)
+    }
+
+    @Test
+    fun `parser understands devices command`() {
+        val command = DroidAgentCliParser().parse(arrayOf("devices", "--project", ".", "--format", "json"))
+
+        assertEquals(CliCommand.Devices(project = ".", format = "json"), command)
+    }
+
+    @Test
+    fun `parser understands snapshot command`() {
+        val command = DroidAgentCliParser().parse(arrayOf("snapshot", "--device", "emulator-5554", "--output", "build/droidagentkit/snapshot"))
+
+        assertEquals(CliCommand.Snapshot(device = "emulator-5554", output = "build/droidagentkit/snapshot"), command)
+    }
 }
