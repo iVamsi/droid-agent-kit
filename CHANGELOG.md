@@ -13,3 +13,9 @@ development until a first tagged release.
 - CLI commands now reject unknown flags and print `--help` usage generated from a command registry.
   Previously, unrecognized flags were silently ignored. The `visuals` command still accepts arbitrary
   passthrough flags, since its option set varies by action.
+- Config boolean values now require the literal lowercase `true`/`false` and report a validation error
+  otherwise. Previously, values were parsed with Kotlin's `String.toBoolean()`, which silently accepted
+  any casing of `true` (e.g. `TRUE`) as `true` and silently treated everything else, including typos
+  like `Yes`, as `false`.
+- An unrecognized CLI command now prints an error and returns exit code 1. Previously it fell through
+  silently to the help output with exit code 0.
