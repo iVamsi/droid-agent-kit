@@ -11,6 +11,9 @@ import com.droidagentkit.inspector.AndroidProjectInspector
 import com.droidagentkit.mcp.DroidAgentMcpDispatcher
 import com.droidagentkit.mcp.DroidAgentMcpHttpServer
 import com.droidagentkit.mcp.DroidAgentStdioServer
+import com.droidagentkit.core.ResultStatus
+import com.droidagentkit.visuals.VisualCaptureEngine
+import com.droidagentkit.visuals.VisualTolerance
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -147,14 +150,31 @@ class DroidAgentCli(
     private fun visuals(command: CliCommand.Visuals): Int {
         val project = command.options["project"] ?: "."
         val root = Path.of(project).toAbsolutePath().normalize()
-        val report = root.resolve("build/droidagentkit/visuals/visual-report.md")
-        Files.createDirectories(report.parent)
-        Files.writeString(
-            report,
-            "# DroidAgentKit Visuals\n\nAction `${command.action}` requested. Use the Gradle plugin to collect visual artifacts.\n",
-        )
-        println(report)
-        return 0
+        val outputDir = command.options["output-dir"]
+            ?.let { Path.of(it).toAbsolutePath().normalize() }
+            ?: root.resolve("build/droidagentkit/visuals")
+        val goldensDir = command.options["goldens-dir"]
+            ?.let { Path.of(it).toAbsolutePath().normalize() }
+            ?: root.resolve("src/test/resources/droidagentkit/goldens")
+        return when (command.action) {
+            "report" -> {
+                val report = VisualCaptureEngine.generateReport(outputDir, goldensDir, VisualTolerance())
+                val file = outputDir.resolve("visual-report.md")
+                Files.createDirectories(file.parent)
+                Files.writeString(file, VisualCaptureEngine.renderMarkdown(report))
+                println(file)
+                if (report.status == ResultStatus.FAILED) 2 else 0
+            }
+            "update-goldens" -> {
+                val updated = VisualCaptureEngine.updateGoldens(outputDir, goldensDir)
+                println("Updated ${updated.size} golden image(s) in $goldensDir")
+                0
+            }
+            else -> {
+                System.err.println("Unknown visuals action '${command.action}'. Expected 'report' or 'update-goldens'.")
+                1
+            }
+        }
     }
 
     private fun installMcp(command: CliCommand.InstallMcp): Int {
