@@ -1,5 +1,9 @@
 package com.droidagentkit.visuals.android
 
+import com.droidagentkit.visuals.VisualCapture
+import com.droidagentkit.visuals.VisualCaptureEngine
+import java.nio.file.Path
+
 data class VisualMatrix(
     val devices: List<String>,
     val themes: List<String>,
@@ -16,13 +20,6 @@ data class VisualMatrix(
     }
 }
 
-data class VisualCapture<T>(
-    val caseName: String,
-    val environment: CaptureEnvironment,
-    val renderedValue: T,
-    val semanticsDump: String,
-)
-
 data class CaptureEnvironment(
     val device: String,
     val theme: String,
@@ -30,23 +27,27 @@ data class CaptureEnvironment(
     val locale: String,
 )
 
-class DroidAgentVisualRule {
-    fun <T> captureCompose(
+class DroidAgentVisualRule(private val outputDir: Path = Path.of("build/droidagentkit/visuals")) {
+    fun captureCompose(
         name: String,
         matrix: VisualMatrix = VisualMatrix.standard(),
         semantics: List<String> = emptyList(),
-        render: () -> T,
-    ): VisualCapture<T> {
+        render: () -> ByteArray,
+    ): VisualCapture {
         val environment = CaptureEnvironment(
             device = matrix.devices.firstOrNull() ?: "phone_412x915",
             theme = matrix.themes.firstOrNull() ?: "light",
             fontScale = matrix.fontScales.firstOrNull() ?: 1.0f,
             locale = matrix.locales.firstOrNull() ?: "en",
         )
-        return VisualCapture(
+        return VisualCaptureEngine.persistCapture(
+            outputDir = outputDir,
             caseName = name,
-            environment = environment,
-            renderedValue = render(),
+            device = environment.device,
+            theme = environment.theme,
+            fontScale = environment.fontScale,
+            locale = environment.locale,
+            pngBytes = render(),
             semanticsDump = semantics.joinToString(separator = "\n"),
         )
     }
