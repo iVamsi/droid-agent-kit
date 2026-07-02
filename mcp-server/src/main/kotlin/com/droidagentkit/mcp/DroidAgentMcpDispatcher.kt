@@ -10,6 +10,7 @@ import com.droidagentkit.core.Redactor
 import com.droidagentkit.core.ResultStatus
 import com.droidagentkit.core.ToolResult
 import com.droidagentkit.inspector.AndroidProjectInspector
+import com.droidagentkit.mcp.tools.CrashLogTriage
 import com.droidagentkit.mcp.tools.LintResultParser
 import java.nio.file.Files
 import java.nio.file.Path
@@ -115,6 +116,17 @@ class DroidAgentMcpDispatcher(
                 ),
             ),
         ),
+        McpTool(
+            name = "android_crash_triage",
+            description = "Capture logcat from a device and extract structured crash/ANR findings.",
+            inputSchema = schema(
+                "deviceSerial",
+                props = mapOf(
+                    "deviceSerial" to deviceSerialProp,
+                    "maxLines" to num("Maximum number of log lines to capture. Default: 500."),
+                ),
+            ),
+        ),
     )
 
     fun call(name: String, arguments: Map<String, Any?>): Map<String, Any> = when (name) {
@@ -127,6 +139,7 @@ class DroidAgentMcpDispatcher(
         "android_screen_snapshot" -> snapshot(arguments)
         "android_report_bundle" -> reportBundle(arguments)
         "android_lint_run" -> lintRun(arguments)
+        "android_crash_triage" -> crashTriage(arguments)
         else -> resultMap(ToolResult(status = ResultStatus.UNSUPPORTED, summary = "Unknown MCP tool: $name"))
     }
 
@@ -355,8 +368,27 @@ class DroidAgentMcpDispatcher(
         )
     }
 
-    private fun runAdb(args: List<String>, id: String, root: Path): Map<String, Any> =
-        resultMap(runner(root).run(com.droidagentkit.core.CommandSpec(id, listOf("adb") + args, root.toString(), false, true, 60)))
+    private fun runAdb(args: List<String>, id: String, root: Path): Map<String, Any> = resultMap(runAdbCommand(args, id, root))
+
+    private fun runAdbCommand(args: List<String>, id: String, root: Path): ToolResult =
+        runner(root).run(com.droidagentkit.core.CommandSpec(id, listOf("adb") + args, root.toString(), false, true, 60))
+
+    private fun crashTriage(arguments: Map<String, Any?>): Map<String, Any> {
+        val serial = arguments["deviceSerial"]?.toString()
+            ?: return resultMap(ToolResult(status = ResultStatus.BLOCKED, summary = "deviceSerial is required for crash triage.", warnings = listOf("missing-device-serial")))
+        val maxLines = arguments["maxLines"]?.toString()?.toIntOrNull() ?: 500
+        val root = rootPath(arguments)
+        val runResult = runAdbCommand(listOf("-s", serial, "logcat", "-d", "-t", maxLines.toString()), "adb-crash-triage", root)
+        val logArtifact = runResult.artifacts.firstOrNull() ?: return resultMap(runResult)
+        val logText = Files.readString(Path.of(logArtifact.path))
+        val findings = CrashLogTriage.triage(logText)
+        val summary = if (findings.isEmpty()) {
+            "No crashes or ANRs found in the captured logcat window."
+        } else {
+            "Found ${findings.size} crash/ANR finding(s) in the captured logcat window."
+        }
+        return resultMapWithFindings(runResult.copy(summary = summary), findings)
+    }
 
     private fun runner(root: Path): ProcessRunner =
         ProcessRunner(Redactor(config.redaction), ArtifactWriter(root.resolve(config.reports.outputDir)))

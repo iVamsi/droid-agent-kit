@@ -24,6 +24,7 @@ class McpDispatcherTest {
                 "android_screen_snapshot",
                 "android_report_bundle",
                 "android_lint_run",
+                "android_crash_triage",
             ),
             tools,
         )
@@ -71,7 +72,7 @@ class McpDispatcherTest {
 
         val tools = dispatcher.listTools()
 
-        assertEquals(9, tools.size)
+        assertEquals(10, tools.size)
         tools.forEach { tool ->
             assertEquals("tool ${tool.name} missing type:object", "object", tool.inputSchema["type"])
             assertTrue(
@@ -181,5 +182,16 @@ class McpDispatcherTest {
         val wrapper = root.resolve("gradlew")
         Files.writeString(wrapper, "#!/bin/sh\nexit 0\n")
         Files.setPosixFilePermissions(wrapper, java.nio.file.attribute.PosixFilePermissions.fromString("rwxr-xr-x"))
+    }
+
+    @Test
+    fun `crash triage is blocked when device serial is missing`() {
+        val root = Files.createTempDirectory("dak-crash-triage")
+        val dispatcher = DroidAgentMcpDispatcher(DroidAgentConfig.default())
+
+        val result = dispatcher.call("android_crash_triage", mapOf("rootPath" to root.toString()))
+
+        assertEquals("blocked", result["status"])
+        assertTrue(result["summary"].toString().contains("deviceSerial"))
     }
 }
