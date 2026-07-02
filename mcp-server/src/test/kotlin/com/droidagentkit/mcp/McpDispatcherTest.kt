@@ -25,6 +25,7 @@ class McpDispatcherTest {
                 "android_report_bundle",
                 "android_lint_run",
                 "android_crash_triage",
+                "android_dependency_check",
             ),
             tools,
         )
@@ -72,7 +73,7 @@ class McpDispatcherTest {
 
         val tools = dispatcher.listTools()
 
-        assertEquals(10, tools.size)
+        assertEquals(11, tools.size)
         tools.forEach { tool ->
             assertEquals("tool ${tool.name} missing type:object", "object", tool.inputSchema["type"])
             assertTrue(
@@ -193,5 +194,22 @@ class McpDispatcherTest {
 
         assertEquals("blocked", result["status"])
         assertTrue(result["summary"].toString().contains("deviceSerial"))
+    }
+
+    @Test
+    fun `dependency check flags version drift across modules`() {
+        val root = Files.createTempDirectory("dak-dispatch-dep")
+        Files.createDirectories(root.resolve("app"))
+        Files.createDirectories(root.resolve("core"))
+        Files.writeString(root.resolve("app/build.gradle.kts"), "implementation(\"com.squareup.okhttp3:okhttp:4.11.0\")")
+        Files.writeString(root.resolve("core/build.gradle.kts"), "implementation(\"com.squareup.okhttp3:okhttp:4.12.0\")")
+        val dispatcher = DroidAgentMcpDispatcher(DroidAgentConfig.default())
+
+        val result = dispatcher.call("android_dependency_check", mapOf("rootPath" to root.toString()))
+
+        assertEquals("success", result["status"])
+        @Suppress("UNCHECKED_CAST")
+        val findings = result["findings"] as List<Map<*, *>>
+        assertEquals(1, findings.size)
     }
 }
