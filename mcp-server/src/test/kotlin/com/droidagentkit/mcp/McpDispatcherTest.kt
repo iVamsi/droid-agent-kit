@@ -26,6 +26,7 @@ class McpDispatcherTest {
                 "android_lint_run",
                 "android_crash_triage",
                 "android_dependency_check",
+                "android_build_performance",
             ),
             tools,
         )
@@ -73,7 +74,7 @@ class McpDispatcherTest {
 
         val tools = dispatcher.listTools()
 
-        assertEquals(11, tools.size)
+        assertEquals(12, tools.size)
         tools.forEach { tool ->
             assertEquals("tool ${tool.name} missing type:object", "object", tool.inputSchema["type"])
             assertTrue(
@@ -211,5 +212,43 @@ class McpDispatcherTest {
         @Suppress("UNCHECKED_CAST")
         val findings = result["findings"] as List<Map<*, *>>
         assertEquals(1, findings.size)
+    }
+
+    @Test
+    fun `build performance parses slowest tasks from the profile report`() {
+        val root = Files.createTempDirectory("dak-build-perf")
+        val config = DroidAgentConfig.default().copy(
+            safety = DroidAgentConfig.default().safety.copy(allowGradleTasks = listOf(":app:assembleDebug")),
+        )
+        writeFakeGradlew(root)
+        val profileDir = root.resolve("build/reports/profile")
+        Files.createDirectories(profileDir)
+        Files.writeString(
+            profileDir.resolve("profile-test.html"),
+            """
+            <html><body>
+            <div class="tab" id="tab0">
+            <table>
+            <tr><td>Total Build Time</td><td class="numeric">0.487s</td></tr>
+            </table>
+            </div>
+            <div class="tab" id="tab4">
+            <table>
+            <tr><td>:toolbox-core</td><td class="numeric">0.021s</td><td>(total)</td></tr>
+            <tr><td class="indentPath">:toolbox-core:compileKotlin</td><td class="numeric">0.012s</td><td>UP-TO-DATE</td></tr>
+            </table>
+            </div>
+            </body></html>
+            """.trimIndent(),
+        )
+        val dispatcher = DroidAgentMcpDispatcher(config)
+
+        val result = dispatcher.call("android_build_performance", mapOf("rootPath" to root.toString(), "task" to ":app:assembleDebug"))
+
+        assertEquals("success", result["status"])
+        @Suppress("UNCHECKED_CAST")
+        val findings = result["findings"] as List<Map<*, *>>
+        assertEquals(1, findings.size)
+        assertEquals(":toolbox-core:compileKotlin", findings[0]["title"])
     }
 }
