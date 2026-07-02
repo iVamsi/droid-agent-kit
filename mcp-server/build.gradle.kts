@@ -1,10 +1,12 @@
 plugins {
     kotlin("jvm")
+    kotlin("plugin.serialization") version "2.3.20"
 }
 
 dependencies {
     implementation(project(":toolbox-core"))
     implementation(project(":android-inspector"))
     implementation(project(":auditor-cli"))
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
     testImplementation("junit:junit:4.13.2")
 }

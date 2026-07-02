@@ -36,6 +36,14 @@ data class ArtifactRef(
     val description: String,
 )
 
+data class DiagnosticFinding(
+    val category: String,
+    val severity: Severity,
+    val title: String,
+    val detail: String,
+    val location: String? = null,
+)
+
 data class CommandSpec(
     val id: String,
     val command: List<String>,
