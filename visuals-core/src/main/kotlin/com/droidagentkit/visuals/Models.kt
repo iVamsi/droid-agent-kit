@@ -2,6 +2,7 @@ package com.droidagentkit.visuals
 
 import com.droidagentkit.core.ArtifactRef
 import com.droidagentkit.core.ResultStatus
+import java.nio.file.Path
 
 data class VisualTolerance(
     val maxChangedPixelPercent: Double = 0.10,
@@ -22,6 +23,14 @@ data class VisualEnvironment(
     val device: String = "phone_412x915",
     val apiLevel: Int? = null,
     val density: Float? = null,
+)
+
+data class VisualCapture(
+    val caseName: String,
+    val environment: VisualEnvironment,
+    val pngPath: Path,
+    val semanticsPath: Path,
+    val capturedAt: String,
 )
 
 enum class VisualSeverity {
