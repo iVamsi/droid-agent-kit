@@ -1,14 +1,19 @@
 package com.droidagentkit.visuals.gradle
 
+import com.droidagentkit.core.ResultStatus
+import com.droidagentkit.visuals.VisualCaptureEngine
+import com.droidagentkit.visuals.VisualTolerance
+import org.gradle.api.DefaultTask
+import org.gradle.api.GradleException
 import org.gradle.api.Plugin
 import org.gradle.api.Project
+import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.TaskAction
-import org.gradle.api.DefaultTask
-import org.gradle.api.file.DirectoryProperty
 import javax.inject.Inject
 
 class DroidAgentVisualsPlugin : Plugin<Project> {
@@ -16,14 +21,19 @@ class DroidAgentVisualsPlugin : Plugin<Project> {
         val extension = project.extensions.create("droidAgentVisuals", DroidAgentVisualsExtension::class.java)
         project.tasks.register("droidAgentVisualsReport", DroidAgentVisualsReportTask::class.java) { task ->
             task.group = "verification"
-            task.description = "Writes a DroidAgentKit visual report placeholder for collected visual artifacts."
+            task.description = "Writes a DroidAgentKit visual report comparing captures against goldens."
             task.outputDir.set(extension.outputDir)
+            task.goldensDir.set(extension.goldensDir)
             task.packageName.set(extension.packageName)
+            task.maxChangedPixelPercent.set(extension.tolerance.maxChangedPixelPercent)
+            task.maxColorDistance.set(extension.tolerance.maxColorDistance)
+            task.failOnChangedGoldens.set(extension.failOnChangedGoldens)
         }
         project.tasks.register("droidAgentVisualsUpdateGoldens", DroidAgentVisualsUpdateGoldensTask::class.java) { task ->
             task.group = "verification"
             task.description = "Updates DroidAgentKit visual golden images explicitly."
             task.outputDir.set(extension.outputDir)
+            task.goldensDir.set(extension.goldensDir)
         }
     }
 }
@@ -31,6 +41,8 @@ class DroidAgentVisualsPlugin : Plugin<Project> {
 abstract class DroidAgentVisualsExtension @Inject constructor(project: Project) {
     val outputDir: DirectoryProperty = project.objects.directoryProperty()
         .convention(project.layout.buildDirectory.dir("droidagentkit/visuals"))
+    val goldensDir: DirectoryProperty = project.objects.directoryProperty()
+        .convention(project.layout.projectDirectory.dir("src/test/resources/droidagentkit/goldens"))
     val packageName: Property<String> = project.objects.property(String::class.java).convention("")
     val failOnChangedGoldens: Property<Boolean> = project.objects.property(Boolean::class.java).convention(true)
     val failOnAccessibilityWarnings: Property<Boolean> = project.objects.property(Boolean::class.java).convention(false)
@@ -62,33 +74,51 @@ abstract class DroidAgentVisualsReportTask : DefaultTask() {
     @get:OutputDirectory
     abstract val outputDir: DirectoryProperty
 
+    @get:Internal
+    abstract val goldensDir: DirectoryProperty
+
     @get:Input
     abstract val packageName: Property<String>
 
+    @get:Input
+    abstract val maxChangedPixelPercent: Property<Double>
+
+    @get:Input
+    abstract val maxColorDistance: Property<Int>
+
+    @get:Input
+    abstract val failOnChangedGoldens: Property<Boolean>
+
     @TaskAction
     fun writeReport() {
+        val tolerance = VisualTolerance(maxChangedPixelPercent.get(), maxColorDistance.get())
+        val report = VisualCaptureEngine.generateReport(
+            outputDir.get().asFile.toPath(),
+            goldensDir.get().asFile.toPath(),
+            tolerance,
+        )
         val file = outputDir.file("visual-report.md").get().asFile
         file.parentFile.mkdirs()
-        file.writeText(
-            """
-            # DroidAgentKit Visual Report
-
-            Package: ${packageName.orNull ?: "unknown"}
-
-            No visual cases were collected by this alpha task. Add DroidAgentVisualRule-based tests to produce case artifacts.
-            """.trimIndent(),
-        )
+        file.writeText(VisualCaptureEngine.renderMarkdown(report, packageName.orNull ?: "unknown"))
+        if (failOnChangedGoldens.get() && report.status == ResultStatus.FAILED) {
+            throw GradleException("DroidAgentKit visual regression detected: ${report.findings.size} finding(s). See $file")
+        }
     }
 }
 
 abstract class DroidAgentVisualsUpdateGoldensTask : DefaultTask() {
-    @get:OutputDirectory
+    @get:Internal
     abstract val outputDir: DirectoryProperty
 
+    @get:OutputDirectory
+    abstract val goldensDir: DirectoryProperty
+
     @TaskAction
-    fun writeUpdateMarker() {
-        val file = outputDir.file("goldens-updated.txt").get().asFile
-        file.parentFile.mkdirs()
-        file.writeText("Golden update requested explicitly.\n")
+    fun updateGoldens() {
+        val updated = VisualCaptureEngine.updateGoldens(
+            outputDir.get().asFile.toPath(),
+            goldensDir.get().asFile.toPath(),
+        )
+        logger.lifecycle("DroidAgentKit updated ${updated.size} golden image(s) in ${goldensDir.get().asFile}")
     }
 }

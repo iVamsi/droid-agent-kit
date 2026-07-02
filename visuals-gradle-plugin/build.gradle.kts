@@ -4,6 +4,7 @@ plugins {
 }
 
 dependencies {
+    implementation(project(":toolbox-core"))
     implementation(project(":visuals-core"))
     testImplementation("junit:junit:4.13.2")
 }
