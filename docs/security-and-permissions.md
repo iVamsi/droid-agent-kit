@@ -31,6 +31,23 @@ redaction:
   extraPatterns: []
 ```
 
+## MCP Tools
+
+| Tool | Description |
+|------|-------------|
+| `android_project_inspect` | Inspect Android Gradle modules, versions, manifests, and safe commands. |
+| `android_gradle_run` | Run a configured allowlisted Gradle task and capture redacted logs. |
+| `android_devices_list` | List adb devices and basic status. |
+| `android_app_install` | Install an APK when app install is enabled. |
+| `android_app_launch` | Launch an Android package/activity on an explicit device. |
+| `android_logcat_capture` | Capture redacted logcat output for a device or package. |
+| `android_screen_snapshot` | Capture screenshot and UIAutomator XML from an explicit device. |
+| `android_report_bundle` | Create an agent-readable Android diagnostic report bundle. |
+| `android_lint_run` | Run an allowlisted lint/detekt Gradle task and parse its XML/SARIF report into structured findings. |
+| `android_crash_triage` | Capture logcat from a device and extract structured crash/ANR findings. |
+| `android_dependency_check` | Check declared dependency versions for drift and orphaned version-catalog entries. Local-only, no network calls, no "latest version" data. |
+| `android_build_performance` | Run an allowlisted Gradle task with `--profile` and surface the slowest tasks from the profile report. |
+
 ## Redaction
 
 Built-in redaction covers:
