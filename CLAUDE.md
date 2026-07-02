@@ -50,10 +50,10 @@ This is a Kotlin/JVM monorepo with no Android SDK dependency — all modules tar
 ### Key design constraints
 
 - **Security model is local-only**: `ProcessRunner` only executes commands whose Gradle task matches the allowlist in `SafetyConfig.allowGradleTasks` (glob patterns). All output is passed through `Redactor` before being returned to agents.
-- **No external dependencies** beyond JDK: `toolbox-core` uses zero third-party libraries. `mcp-server` uses `com.sun.net.httpserver` (bundled in JDK). The CLI has no DI framework.
+- **No external dependencies** beyond JDK, with one deliberate exception: `toolbox-core` uses zero third-party libraries. `mcp-server` uses `com.sun.net.httpserver` (bundled in JDK) plus `org.jetbrains.kotlinx:kotlinx-serialization-json` (the project's only third-party runtime dependency, added specifically to parse Detekt SARIF reports for `android_lint_run`). The CLI has no DI framework.
 - **Config file**: target Android projects can place `.droidagentkit/config.yaml` at their root to override the Gradle task allowlist, redaction patterns, output directory, and adb permissions. Parsed by `DroidAgentConfigLoader` (hand-rolled YAML line parser — no YAML library dependency).
 - **Artifacts** always land under `build/droidagentkit/` in the target project (configurable via `reports.outputDir`).
-- **MCP tool names** are stable public API: `android_project_inspect`, `android_gradle_run`, `android_devices_list`, `android_app_install`, `android_app_launch`, `android_logcat_capture`, `android_screen_snapshot`, `android_report_bundle`. Update docs when these change.
+- **MCP tool names** are stable public API: `android_project_inspect`, `android_gradle_run`, `android_devices_list`, `android_app_install`, `android_app_launch`, `android_logcat_capture`, `android_screen_snapshot`, `android_report_bundle`, `android_lint_run`, `android_crash_triage`, `android_dependency_check`, `android_build_performance`. Update docs when these change.
 
 ## Agent Boundaries
 
