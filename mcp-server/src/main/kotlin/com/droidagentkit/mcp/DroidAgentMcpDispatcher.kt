@@ -1,5 +1,6 @@
 package com.droidagentkit.mcp
 
+import com.droidagentkit.core.ArtifactRef
 import com.droidagentkit.core.ArtifactType
 import com.droidagentkit.core.ArtifactWriter
 import com.droidagentkit.core.DiagnosticFinding
@@ -8,8 +9,10 @@ import com.droidagentkit.core.Json
 import com.droidagentkit.core.ProcessRunner
 import com.droidagentkit.core.Redactor
 import com.droidagentkit.core.ResultStatus
+import com.droidagentkit.core.Severity
 import com.droidagentkit.core.ToolResult
 import com.droidagentkit.inspector.AndroidProjectInspector
+import com.droidagentkit.mcp.tools.BuildProfileParser
 import com.droidagentkit.mcp.tools.CrashLogTriage
 import com.droidagentkit.mcp.tools.DependencyVersionChecker
 import com.droidagentkit.mcp.tools.LintResultParser
@@ -133,6 +136,18 @@ class DroidAgentMcpDispatcher(
             description = "Check declared dependency versions for drift and orphaned version-catalog entries. Local-only, no network calls, no 'latest version' data.",
             inputSchema = schema(props = mapOf("rootPath" to rootPathProp)),
         ),
+        McpTool(
+            name = "android_build_performance",
+            description = "Run an allowlisted Gradle task with --profile and surface the slowest tasks from the profile report.",
+            inputSchema = schema(
+                "task",
+                props = mapOf(
+                    "rootPath" to rootPathProp,
+                    "task" to str("Gradle task to run with --profile (must match the configured allowlist)."),
+                    "timeoutSeconds" to num("Override command timeout in seconds."),
+                ),
+            ),
+        ),
     )
 
     fun call(name: String, arguments: Map<String, Any?>): Map<String, Any> = when (name) {
@@ -147,6 +162,7 @@ class DroidAgentMcpDispatcher(
         "android_lint_run" -> lintRun(arguments)
         "android_crash_triage" -> crashTriage(arguments)
         "android_dependency_check" -> dependencyCheck(arguments)
+        "android_build_performance" -> buildPerformance(arguments)
         else -> resultMap(ToolResult(status = ResultStatus.UNSUPPORTED, summary = "Unknown MCP tool: $name"))
     }
 
@@ -406,6 +422,57 @@ class DroidAgentMcpDispatcher(
             "Found ${findings.size} dependency finding(s)."
         }
         return resultMapWithFindings(ToolResult(status = ResultStatus.SUCCESS, summary = summary), findings)
+    }
+
+    private fun buildPerformance(arguments: Map<String, Any?>): Map<String, Any> {
+        val root = rootPath(arguments)
+        val task = arguments["task"]?.toString().orEmpty()
+        val timeout = arguments["timeoutSeconds"]?.toString()?.toLongOrNull() ?: config.safety.maxCommandSeconds
+        val runResult = runAllowlistedGradleTask(root, task, listOf("--profile"), timeout)
+        if (runResult.status == ResultStatus.BLOCKED) {
+            return resultMap(runResult)
+        }
+        val reportFile = findNewestProfileReport(root)
+            ?: return resultMapWithFindings(
+                runResult.copy(warnings = runResult.warnings + "no-profile-report-found"),
+                emptyList(),
+            )
+        val html = Files.readString(reportFile)
+        val profile = BuildProfileParser.parse(html)
+        val findings = profile.taskTimings.take(10).map { timing ->
+            DiagnosticFinding(
+                category = "slow_task",
+                severity = Severity.INFO,
+                title = timing.taskPath,
+                detail = "${timing.durationMs}ms",
+                location = timing.taskPath,
+            )
+        }
+        val reportArtifact = ArtifactRef(
+            type = ArtifactType.REPORT,
+            path = reportFile.toString(),
+            mimeType = "text/html",
+            description = "Gradle --profile report",
+        )
+        val summaryText = buildString {
+            append("Ran '$task' with --profile.")
+            profile.totalBuildTimeMs?.let { append(" Total build time: ${it}ms.") }
+            if (findings.isEmpty()) append(" No task timing data could be parsed from the profile report.")
+        }
+        return resultMapWithFindings(
+            runResult.copy(summary = summaryText, artifacts = runResult.artifacts + reportArtifact),
+            findings,
+        )
+    }
+
+    private fun findNewestProfileReport(root: Path): Path? {
+        val reportsDir = root.resolve("build/reports/profile")
+        if (!Files.isDirectory(reportsDir)) return null
+        return Files.list(reportsDir).use { stream ->
+            stream.filter { it.fileName.toString().endsWith(".html") }
+                .toList()
+                .maxByOrNull { Files.getLastModifiedTime(it).toMillis() }
+        }
     }
 
     private fun runner(root: Path): ProcessRunner =
