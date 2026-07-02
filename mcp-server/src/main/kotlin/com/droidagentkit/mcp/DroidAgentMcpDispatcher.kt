@@ -11,6 +11,7 @@ import com.droidagentkit.core.ResultStatus
 import com.droidagentkit.core.ToolResult
 import com.droidagentkit.inspector.AndroidProjectInspector
 import com.droidagentkit.mcp.tools.CrashLogTriage
+import com.droidagentkit.mcp.tools.DependencyVersionChecker
 import com.droidagentkit.mcp.tools.LintResultParser
 import java.nio.file.Files
 import java.nio.file.Path
@@ -127,6 +128,11 @@ class DroidAgentMcpDispatcher(
                 ),
             ),
         ),
+        McpTool(
+            name = "android_dependency_check",
+            description = "Check declared dependency versions for drift and orphaned version-catalog entries. Local-only, no network calls, no 'latest version' data.",
+            inputSchema = schema(props = mapOf("rootPath" to rootPathProp)),
+        ),
     )
 
     fun call(name: String, arguments: Map<String, Any?>): Map<String, Any> = when (name) {
@@ -140,6 +146,7 @@ class DroidAgentMcpDispatcher(
         "android_report_bundle" -> reportBundle(arguments)
         "android_lint_run" -> lintRun(arguments)
         "android_crash_triage" -> crashTriage(arguments)
+        "android_dependency_check" -> dependencyCheck(arguments)
         else -> resultMap(ToolResult(status = ResultStatus.UNSUPPORTED, summary = "Unknown MCP tool: $name"))
     }
 
@@ -388,6 +395,17 @@ class DroidAgentMcpDispatcher(
             "Found ${findings.size} crash/ANR finding(s) in the captured logcat window."
         }
         return resultMapWithFindings(runResult.copy(summary = summary), findings)
+    }
+
+    private fun dependencyCheck(arguments: Map<String, Any?>): Map<String, Any> {
+        val root = rootPath(arguments)
+        val findings = DependencyVersionChecker.check(root)
+        val summary = if (findings.isEmpty()) {
+            "No dependency version drift or orphaned catalog entries found."
+        } else {
+            "Found ${findings.size} dependency finding(s)."
+        }
+        return resultMapWithFindings(ToolResult(status = ResultStatus.SUCCESS, summary = summary), findings)
     }
 
     private fun runner(root: Path): ProcessRunner =
