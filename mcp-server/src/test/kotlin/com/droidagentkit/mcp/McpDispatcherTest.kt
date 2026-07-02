@@ -23,6 +23,7 @@ class McpDispatcherTest {
                 "android_logcat_capture",
                 "android_screen_snapshot",
                 "android_report_bundle",
+                "android_lint_run",
             ),
             tools,
         )
@@ -70,7 +71,7 @@ class McpDispatcherTest {
 
         val tools = dispatcher.listTools()
 
-        assertEquals(8, tools.size)
+        assertEquals(9, tools.size)
         tools.forEach { tool ->
             assertEquals("tool ${tool.name} missing type:object", "object", tool.inputSchema["type"])
             assertTrue(
@@ -116,5 +117,69 @@ class McpDispatcherTest {
         assertTrue(content.contains("Readiness:"))
         assertTrue("report must include ## Key Versions section", content.contains("## Key Versions"))
         assertTrue("report must include ## Warnings section", content.contains("## Warnings"))
+    }
+
+    @Test
+    fun `lint run blocks denied task`() {
+        val root = Files.createTempDirectory("dak-lint-denied")
+        val dispatcher = DroidAgentMcpDispatcher(DroidAgentConfig.default())
+
+        val result = dispatcher.call("android_lint_run", mapOf("rootPath" to root.toString(), "task" to "clean"))
+
+        assertEquals("blocked", result["status"])
+    }
+
+    @Test
+    fun `lint run parses android lint xml report into findings`() {
+        val root = Files.createTempDirectory("dak-lint-xml")
+        val config = DroidAgentConfig.default().copy(
+            safety = DroidAgentConfig.default().safety.copy(allowGradleTasks = listOf(":app:lintDebug")),
+        )
+        writeFakeGradlew(root)
+        val reportDir = root.resolve("app/build/reports")
+        Files.createDirectories(reportDir)
+        Files.writeString(
+            reportDir.resolve("lint-results-debug.xml"),
+            """
+            <issues>
+              <issue id="HardcodedText" severity="Warning" message="Hardcoded string">
+                <location file="src/main/res/layout/main.xml" line="12"/>
+              </issue>
+            </issues>
+            """.trimIndent(),
+        )
+        val dispatcher = DroidAgentMcpDispatcher(config)
+
+        val result = dispatcher.call("android_lint_run", mapOf("rootPath" to root.toString(), "task" to ":app:lintDebug"))
+
+        assertEquals("success", result["status"])
+        @Suppress("UNCHECKED_CAST")
+        val findings = result["findings"] as List<Map<*, *>>
+        assertEquals(1, findings.size)
+        assertEquals("HardcodedText", findings[0]["title"])
+        assertEquals("warning", findings[0]["severity"])
+    }
+
+    @Test
+    fun `lint run returns partial status when no structured report is found`() {
+        val root = Files.createTempDirectory("dak-lint-none")
+        val config = DroidAgentConfig.default().copy(
+            safety = DroidAgentConfig.default().safety.copy(allowGradleTasks = listOf(":app:ktlintCheck")),
+        )
+        writeFakeGradlew(root)
+        val dispatcher = DroidAgentMcpDispatcher(config)
+
+        val result = dispatcher.call("android_lint_run", mapOf("rootPath" to root.toString(), "task" to ":app:ktlintCheck"))
+
+        assertEquals("partial", result["status"])
+        @Suppress("UNCHECKED_CAST")
+        val warnings = result["warnings"] as List<*>
+        assertTrue(warnings.contains("no-structured-lint-report-found"))
+    }
+
+    private fun writeFakeGradlew(root: java.nio.file.Path) {
+        val wrapper = root.resolve("gradlew")
+        Files.writeString(wrapper, "#!/bin/sh\nexit 0\n")
+        Files.setPosixFilePermissions(wrapper, java.nio.file.attribute.PosixFilePermissions.fromString("rwxr-xr-x"))
     }
 }

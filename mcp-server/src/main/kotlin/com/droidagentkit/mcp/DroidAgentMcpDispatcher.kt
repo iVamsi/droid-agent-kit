@@ -2,6 +2,7 @@ package com.droidagentkit.mcp
 
 import com.droidagentkit.core.ArtifactType
 import com.droidagentkit.core.ArtifactWriter
+import com.droidagentkit.core.DiagnosticFinding
 import com.droidagentkit.core.DroidAgentConfig
 import com.droidagentkit.core.Json
 import com.droidagentkit.core.ProcessRunner
@@ -9,6 +10,8 @@ import com.droidagentkit.core.Redactor
 import com.droidagentkit.core.ResultStatus
 import com.droidagentkit.core.ToolResult
 import com.droidagentkit.inspector.AndroidProjectInspector
+import com.droidagentkit.mcp.tools.LintResultParser
+import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.exists
 
@@ -100,6 +103,18 @@ class DroidAgentMcpDispatcher(
             description = "Create an agent-readable Android diagnostic report bundle.",
             inputSchema = schema(props = mapOf("rootPath" to rootPathProp)),
         ),
+        McpTool(
+            name = "android_lint_run",
+            description = "Run an allowlisted lint/detekt Gradle task and parse its XML/SARIF report into structured findings.",
+            inputSchema = schema(
+                "task",
+                props = mapOf(
+                    "rootPath" to rootPathProp,
+                    "task" to str("Gradle task to run (must match the configured allowlist)."),
+                    "timeoutSeconds" to num("Override command timeout in seconds."),
+                ),
+            ),
+        ),
     )
 
     fun call(name: String, arguments: Map<String, Any?>): Map<String, Any> = when (name) {
@@ -111,6 +126,7 @@ class DroidAgentMcpDispatcher(
         "android_logcat_capture" -> logcat(arguments)
         "android_screen_snapshot" -> snapshot(arguments)
         "android_report_bundle" -> reportBundle(arguments)
+        "android_lint_run" -> lintRun(arguments)
         else -> resultMap(ToolResult(status = ResultStatus.UNSUPPORTED, summary = "Unknown MCP tool: $name"))
     }
 
@@ -146,36 +162,90 @@ class DroidAgentMcpDispatcher(
     private fun runGradle(arguments: Map<String, Any?>): Map<String, Any> {
         val root = rootPath(arguments)
         val task = arguments["task"]?.toString().orEmpty()
+        val args = (arguments["arguments"] as? List<*> ?: emptyList<String>()).map { it.toString() }
+        val timeout = arguments["timeoutSeconds"]?.toString()?.toLongOrNull() ?: config.safety.maxCommandSeconds
+        val extraFlags = buildList {
+            if (arguments["rerunTasks"] == true) add("--rerun-tasks")
+            if (arguments["stacktrace"] == true) add("--stacktrace")
+        }
+        return resultMap(runAllowlistedGradleTask(root, task, extraFlags + args, timeout))
+    }
+
+    private fun runAllowlistedGradleTask(root: Path, task: String, extraArgs: List<String>, timeoutSeconds: Long): ToolResult {
         if (!config.safety.isGradleTaskAllowed(task)) {
-            return resultMap(
-                ToolResult(
-                    status = ResultStatus.BLOCKED,
-                    summary = "Gradle task '$task' is not allowlisted. Update .droidagentkit/config.yaml to allow it.",
-                    warnings = listOf("gradle-task-denied"),
-                ),
+            return ToolResult(
+                status = ResultStatus.BLOCKED,
+                summary = "Gradle task '$task' is not allowlisted. Update .droidagentkit/config.yaml to allow it.",
+                warnings = listOf("gradle-task-denied"),
             )
         }
         val wrapper = if (System.getProperty("os.name").startsWith("Windows")) "gradlew.bat" else "./gradlew"
         if (!root.resolve(wrapper.removePrefix("./")).exists()) {
-            return resultMap(
-                ToolResult(
-                    status = ResultStatus.BLOCKED,
-                    summary = "Gradle wrapper was not found at ${root.resolve(wrapper.removePrefix("./"))}.",
-                    warnings = listOf("missing-gradle-wrapper"),
-                ),
+            return ToolResult(
+                status = ResultStatus.BLOCKED,
+                summary = "Gradle wrapper was not found at ${root.resolve(wrapper.removePrefix("./"))}.",
+                warnings = listOf("missing-gradle-wrapper"),
             )
         }
-        val args = arguments["arguments"] as? List<*> ?: emptyList<String>()
-        val timeout = arguments["timeoutSeconds"]?.toString()?.toLongOrNull() ?: config.safety.maxCommandSeconds
         val command = buildList {
             add(wrapper)
             add(task)
-            if (arguments["rerunTasks"] == true) add("--rerun-tasks")
-            if (arguments["stacktrace"] == true) add("--stacktrace")
-            args.forEach { add(it.toString()) }
+            extraArgs.forEach { add(it) }
         }
-        return resultMap(runner(root).run(com.droidagentkit.core.CommandSpec("gradle-${task.safeId()}", command, root.toString(), false, false, timeout)))
+        return runner(root).run(com.droidagentkit.core.CommandSpec("gradle-${task.safeId()}", command, root.toString(), false, false, timeoutSeconds))
     }
+
+    private fun lintRun(arguments: Map<String, Any?>): Map<String, Any> {
+        val root = rootPath(arguments)
+        val task = arguments["task"]?.toString().orEmpty()
+        val timeout = arguments["timeoutSeconds"]?.toString()?.toLongOrNull() ?: config.safety.maxCommandSeconds
+        val runResult = runAllowlistedGradleTask(root, task, emptyList(), timeout)
+        if (runResult.status == ResultStatus.BLOCKED) {
+            return resultMap(runResult)
+        }
+        val reportFile = findNewestLintReport(root)
+            ?: return resultMapWithFindings(
+                runResult.copy(
+                    status = ResultStatus.PARTIAL,
+                    warnings = runResult.warnings + "no-structured-lint-report-found",
+                ),
+                emptyList(),
+            )
+        val text = Files.readString(reportFile)
+        val findings = when {
+            reportFile.toString().endsWith(".sarif") -> LintResultParser.parseDetektSarif(text)
+            text.contains("<issue ") -> LintResultParser.parseAndroidLintXml(text)
+            else -> LintResultParser.parseDetektCheckstyleXml(text)
+        }
+        return resultMapWithFindings(runResult, findings)
+    }
+
+    private fun findNewestLintReport(root: Path): Path? {
+        val candidates = mutableListOf<Path>()
+        Files.walk(root, 6).use { stream ->
+            stream.filter { path -> Files.isRegularFile(path) }
+                .filter { path ->
+                    val parts = root.relativize(path).map { it.toString() }
+                    val fileName = path.fileName.toString()
+                    parts.contains("build") && parts.contains("reports") &&
+                        ((fileName.startsWith("lint-results") && fileName.endsWith(".xml")) ||
+                            (parts.contains("detekt") && (fileName.endsWith(".xml") || fileName.endsWith(".sarif"))))
+                }
+                .forEach { candidates.add(it) }
+        }
+        return candidates.maxByOrNull { Files.getLastModifiedTime(it).toMillis() }
+    }
+
+    private fun resultMapWithFindings(result: ToolResult, findings: List<DiagnosticFinding>): Map<String, Any> =
+        resultMap(result) + mapOf("findings" to findings.map(::findingToMap))
+
+    private fun findingToMap(finding: DiagnosticFinding): Map<String, Any?> = mapOf(
+        "category" to finding.category,
+        "severity" to finding.severity.wireName,
+        "title" to finding.title,
+        "detail" to finding.detail,
+        "location" to finding.location,
+    )
 
     private fun install(arguments: Map<String, Any?>): Map<String, Any> {
         if (!config.safety.allowAppInstall) {
