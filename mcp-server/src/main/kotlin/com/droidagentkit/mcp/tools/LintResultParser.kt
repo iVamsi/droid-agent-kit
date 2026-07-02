@@ -107,6 +107,11 @@ object LintResultParser {
     private fun parseXml(xml: String): Document? = try {
         val factory = DocumentBuilderFactory.newInstance()
         factory.isNamespaceAware = false
+        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+        factory.setFeature("http://xml.org/sax/features/external-general-entities", false)
+        factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false)
+        factory.isXIncludeAware = false
+        factory.isExpandEntityReferences = false
         factory.newDocumentBuilder().parse(InputSource(StringReader(xml)))
     } catch (error: Exception) {
         null
