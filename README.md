@@ -28,6 +28,7 @@ That command:
 
 - updates the Codex user config at `~/.codex/config.toml`;
 - runs Claude Code's user-scope MCP install command when `claude` is available;
+- merges a `droidagentkit` entry into Cursor's, Zed's, and VS Code's user-level MCP configs, preserving any other servers/settings already there;
 - prints a generic stdio MCP config for other tools;
 - registers the server with `--project auto`, so it resolves the active project from agent-provided environment variables such as `CLAUDE_PROJECT_DIR`, `CODEX_WORKSPACE`, or the current working directory.
 

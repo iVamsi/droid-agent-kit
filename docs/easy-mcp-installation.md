@@ -24,6 +24,9 @@ For only one target:
 ```bash
 ./cli/build/install/droidagent/bin/droidagent install-mcp --targets codex
 ./cli/build/install/droidagent/bin/droidagent install-mcp --targets claude
+./cli/build/install/droidagent/bin/droidagent install-mcp --targets cursor
+./cli/build/install/droidagent/bin/droidagent install-mcp --targets zed
+./cli/build/install/droidagent/bin/droidagent install-mcp --targets vscode
 ./cli/build/install/droidagent/bin/droidagent install-mcp --targets generic
 ```
 
@@ -61,6 +64,60 @@ Prints a generic stdio config:
 ```json
 {
   "mcpServers": {
+    "droidagentkit": {
+      "type": "stdio",
+      "command": "/absolute/path/to/droidagent",
+      "args": ["serve-mcp", "--transport", "stdio", "--project", "auto"]
+    }
+  }
+}
+```
+
+### Cursor
+
+Merges a `droidagentkit` entry into `~/.cursor/mcp.json` (creating the file if needed) under the
+standard `mcpServers` key, preserving any other MCP servers already configured there:
+
+```json
+{
+  "mcpServers": {
+    "droidagentkit": {
+      "command": "/absolute/path/to/droidagent",
+      "args": ["serve-mcp", "--transport", "stdio", "--project", "auto"]
+    }
+  }
+}
+```
+
+### Zed
+
+Merges a `droidagentkit` entry into Zed's `settings.json` (`~/.config/zed/settings.json` on
+macOS/Linux, `%APPDATA%\Zed\settings.json` on Windows) under the `context_servers` key. Since this is
+Zed's general editor settings file, the installer only ever touches the `context_servers.droidagentkit`
+entry — every other setting in the file is left untouched:
+
+```json
+{
+  "context_servers": {
+    "droidagentkit": {
+      "command": "/absolute/path/to/droidagent",
+      "args": ["serve-mcp", "--transport", "stdio", "--project", "auto"],
+      "env": {}
+    }
+  }
+}
+```
+
+### VS Code (GitHub Copilot Chat)
+
+Merges a `droidagentkit` entry into VS Code's user-level `mcp.json` (`~/Library/Application
+Support/Code/User/mcp.json` on macOS, `~/.config/Code/User/mcp.json` on Linux,
+`%APPDATA%\Code\User\mcp.json` on Windows) under the `servers` key — this is VS Code's own MCP support,
+which GitHub Copilot Chat's agent mode reads:
+
+```json
+{
+  "servers": {
     "droidagentkit": {
       "type": "stdio",
       "command": "/absolute/path/to/droidagent",
