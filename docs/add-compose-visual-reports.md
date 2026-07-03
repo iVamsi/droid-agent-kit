@@ -28,6 +28,15 @@ droidAgentVisuals {
 }
 ```
 
+> **Current limitation:** the `matrix { }` block's `devices`/`themes`/`fontScales`/`locales` lists are
+> not automatically expanded into a cross-product of captures. `DroidAgentVisualRule.captureCompose`
+> only ever reads the *first* value of each list (`matrix.devices.firstOrNull()`,
+> `matrix.themes.firstOrNull()`, and so on), so declaring multiple values above does not by itself
+> produce multiple screenshots — it captures exactly one combination (here, `phone_412x915` /
+> `light` / `1.0f` / `en`). If you need coverage across multiple themes, font scales, or locales,
+> call `captureCompose` once per combination from your own test code, passing a `VisualMatrix` with
+> single-element lists describing that specific combination (see below).
+
 Use the visual test rule in your JVM test source set, rendering each case to real PNG bytes with a
 renderer of your choice — for example [Paparazzi](https://github.com/cashapp/paparazzi), which renders
 Compose/View screenshots on the JVM with no emulator required:
@@ -42,6 +51,28 @@ val capture = rule.captureCompose(
 ) {
     // Return PNG-encoded bytes from whatever renderer you use, e.g. Paparazzi's snapshot output.
     renderHomeScreenToPng()
+}
+```
+
+To exercise more than one theme, font scale, or locale, call `captureCompose` multiple times — once
+per combination — each with a `VisualMatrix` describing that single combination and a distinct
+`name` (so captures don't overwrite each other):
+
+```kotlin
+val themes = listOf("light", "dark")
+themes.forEach { theme ->
+    rule.captureCompose(
+        name = "home_screen_$theme",
+        matrix = VisualMatrix(
+            devices = listOf("phone_412x915"),
+            themes = listOf(theme),
+            fontScales = listOf(1.0f),
+            locales = listOf("en"),
+        ),
+        semantics = listOf("Button: Start"),
+    ) {
+        renderHomeScreenToPng(theme = theme)
+    }
 }
 ```
 
