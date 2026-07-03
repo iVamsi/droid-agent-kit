@@ -1,5 +1,10 @@
 package com.droidagentkit.cli
 
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.exists
@@ -8,6 +13,9 @@ enum class McpInstallTarget {
     CODEX,
     CLAUDE,
     GENERIC,
+    CURSOR,
+    ZED,
+    VSCODE,
 }
 
 data class McpInstallOptions(
@@ -25,6 +33,7 @@ data class McpInstallResult(
 
 class McpInstaller(
     private val home: Path = Path.of(System.getProperty("user.home")),
+    private val osName: String = System.getProperty("os.name"),
     private val commandExecutor: (List<String>) -> Int = { command ->
         ProcessBuilder(command)
             .redirectErrorStream(true)
@@ -66,7 +75,45 @@ class McpInstaller(
             messages += "Generic MCP stdio config:\n$generic"
         }
 
+        if (McpInstallTarget.CURSOR in options.targets) {
+            installJsonTarget("Cursor", cursorConfigPath(), "mcpServers", cursorServerConfig(options.binPath), options.dryRun, messages, changed)
+        }
+
+        if (McpInstallTarget.ZED in options.targets) {
+            installJsonTarget("Zed", zedConfigPath(), "context_servers", zedServerConfig(options.binPath), options.dryRun, messages, changed)
+        }
+
+        if (McpInstallTarget.VSCODE in options.targets) {
+            installJsonTarget("VS Code", vsCodeConfigPath(), "servers", vsCodeServerConfig(options.binPath), options.dryRun, messages, changed)
+        }
+
         return McpInstallResult(messages, changed, generic)
+    }
+
+    private fun installJsonTarget(
+        label: String,
+        path: Path,
+        topLevelKey: String,
+        serverConfig: JsonObject,
+        dryRun: Boolean,
+        messages: MutableList<String>,
+        changed: MutableList<Path>,
+    ) {
+        val existingJson = if (path.exists()) Files.readString(path) else ""
+        val merged = runCatching { McpJsonConfigMerger.merge(existingJson, topLevelKey, "droidagentkit", serverConfig) }
+        merged.fold(
+            onSuccess = { newText ->
+                if (!dryRun) {
+                    Files.createDirectories(path.parent)
+                    Files.writeString(path, newText)
+                    changed.add(path)
+                }
+                messages += "$label user MCP config ${if (dryRun) "would be updated" else "updated"} at $path"
+            },
+            onFailure = { error ->
+                messages += "Could not update $path: ${error.message ?: "invalid JSON"}. Check the file manually."
+            },
+        )
     }
 
     fun installCodexBlock(path: Path, binPath: Path): String {
@@ -125,6 +172,42 @@ class McpInstaller(
         }
         """.trimIndent()
 
+    private fun cursorConfigPath(): Path = home.resolve(".cursor/mcp.json")
+
+    private fun zedConfigPath(): Path =
+        if (osName.lowercase().contains("win")) appDataPath().resolve("Zed/settings.json") else home.resolve(".config/zed/settings.json")
+
+    private fun vsCodeConfigPath(): Path {
+        val name = osName.lowercase()
+        return when {
+            name.contains("win") -> appDataPath().resolve("Code/User/mcp.json")
+            name.contains("mac") -> home.resolve("Library/Application Support/Code/User/mcp.json")
+            else -> home.resolve(".config/Code/User/mcp.json")
+        }
+    }
+
+    private fun appDataPath(): Path = home.resolve("AppData/Roaming")
+
+    private fun serveArgsArray(): JsonArray =
+        JsonArray(listOf("serve-mcp", "--transport", "stdio", "--project", "auto").map(::JsonPrimitive))
+
+    private fun cursorServerConfig(binPath: Path): JsonObject = buildJsonObject {
+        put("command", binPath.toString())
+        put("args", serveArgsArray())
+    }
+
+    private fun zedServerConfig(binPath: Path): JsonObject = buildJsonObject {
+        put("command", binPath.toString())
+        put("args", serveArgsArray())
+        put("env", buildJsonObject { })
+    }
+
+    private fun vsCodeServerConfig(binPath: Path): JsonObject = buildJsonObject {
+        put("type", "stdio")
+        put("command", binPath.toString())
+        put("args", serveArgsArray())
+    }
+
     private fun String.escapeToml(): String = replace("\\", "\\\\").replace("\"", "\\\"")
 
     private fun String.escapeJson(): String = replace("\\", "\\\\").replace("\"", "\\\"")
@@ -132,14 +215,26 @@ class McpInstaller(
 
 object McpInstallTargets {
     fun parse(values: List<String>): Set<McpInstallTarget> {
-        val expanded = values.flatMap { if (it == "all") listOf("codex", "claude", "generic") else listOf(it) }
+        val expanded = values.flatMap { if (it == "all") listOf("codex", "claude", "generic", "cursor", "zed", "vscode") else listOf(it) }
         return expanded.mapNotNull {
             when (it.lowercase()) {
                 "codex" -> McpInstallTarget.CODEX
                 "claude", "claude-code" -> McpInstallTarget.CLAUDE
                 "generic", "json" -> McpInstallTarget.GENERIC
+                "cursor" -> McpInstallTarget.CURSOR
+                "zed" -> McpInstallTarget.ZED
+                "vscode" -> McpInstallTarget.VSCODE
                 else -> null
             }
-        }.toSet().ifEmpty { setOf(McpInstallTarget.CODEX, McpInstallTarget.CLAUDE, McpInstallTarget.GENERIC) }
+        }.toSet().ifEmpty {
+            setOf(
+                McpInstallTarget.CODEX,
+                McpInstallTarget.CLAUDE,
+                McpInstallTarget.GENERIC,
+                McpInstallTarget.CURSOR,
+                McpInstallTarget.ZED,
+                McpInstallTarget.VSCODE,
+            )
+        }
     }
 }
