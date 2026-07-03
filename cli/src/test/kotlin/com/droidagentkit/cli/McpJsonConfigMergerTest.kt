@@ -64,4 +64,38 @@ class McpJsonConfigMergerTest {
             McpJsonConfigMerger.merge("not valid json at all {{{", "mcpServers", "droidagentkit", serverConfig)
         }
     }
+
+    @Test
+    fun `merge parses existing json with line comments and trailing commas`() {
+        val existing = """
+            {
+              // top comment
+              "context_servers": {
+                "other": { "command": "/bin/other" }, // trailing comment
+              },
+              "theme": "dark",
+            }
+        """.trimIndent()
+        val serverConfig = buildJsonObject { put("command", "/bin/droidagent") }
+
+        val result = McpJsonConfigMerger.merge(existing, "context_servers", "droidagentkit", serverConfig)
+
+        val root = Json.parseToJsonElement(result).jsonObject
+        assertEquals("dark", root["theme"]!!.jsonPrimitive.content)
+        val servers = root["context_servers"]!!.jsonObject
+        assertEquals(2, servers.size)
+        assertEquals("/bin/other", servers["other"]!!.jsonObject["command"]!!.jsonPrimitive.content)
+        assertEquals("/bin/droidagent", servers["droidagentkit"]!!.jsonObject["command"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `merge does not treat a double-slash inside a string value as a comment`() {
+        val existing = """{"context_servers":{},"note":"see http://example.com for more"}"""
+        val serverConfig = buildJsonObject { put("command", "/bin/droidagent") }
+
+        val result = McpJsonConfigMerger.merge(existing, "context_servers", "droidagentkit", serverConfig)
+
+        val root = Json.parseToJsonElement(result).jsonObject
+        assertEquals("see http://example.com for more", root["note"]!!.jsonPrimitive.content)
+    }
 }
