@@ -105,7 +105,7 @@ class McpInstaller(
             onSuccess = { newText ->
                 if (!dryRun) {
                     Files.createDirectories(path.parent)
-                    Files.writeString(path, newText)
+                    Files.writeString(path, "$newText\n")
                     changed.add(path)
                 }
                 messages += "$label user MCP config ${if (dryRun) "would be updated" else "updated"} at $path"

@@ -94,7 +94,9 @@ standard `mcpServers` key, preserving any other MCP servers already configured t
 Merges a `droidagentkit` entry into Zed's `settings.json` (`~/.config/zed/settings.json` on
 macOS/Linux, `%APPDATA%\Zed\settings.json` on Windows) under the `context_servers` key. Since this is
 Zed's general editor settings file, the installer only ever touches the `context_servers.droidagentkit`
-entry — every other setting in the file is left untouched:
+entry — every other setting in the file is left untouched. Comments and the file's original
+formatting/key order are not preserved — the values of every other key are, but the file is rewritten
+in this tool's own JSON formatting:
 
 ```json
 {
