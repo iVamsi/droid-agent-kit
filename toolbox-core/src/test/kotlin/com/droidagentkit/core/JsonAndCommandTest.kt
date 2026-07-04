@@ -8,13 +8,14 @@ import java.nio.file.Files
 class JsonAndCommandTest {
     @Test
     fun `tool result serializes stable schema and status`() {
-        val result = ToolResult(
-            status = ResultStatus.BLOCKED,
-            summary = "Gradle task denied",
-            artifacts = listOf(ArtifactRef(ArtifactType.LOG, "build/droidagentkit/gradle.log", "text/plain", "Full Gradle output")),
-            redactionsApplied = listOf("authorization-bearer"),
-            warnings = listOf("Task is not allowlisted"),
-        )
+        val result =
+            ToolResult(
+                status = ResultStatus.BLOCKED,
+                summary = "Gradle task denied",
+                artifacts = listOf(ArtifactRef(ArtifactType.LOG, "build/droidagentkit/gradle.log", "text/plain", "Full Gradle output")),
+                redactionsApplied = listOf("authorization-bearer"),
+                warnings = listOf("Task is not allowlisted"),
+            )
 
         val json = Json.writeToolResult(result)
 
@@ -27,21 +28,23 @@ class JsonAndCommandTest {
     @Test
     fun `process runner captures output artifact and redacts summary`() {
         val outputDir = Files.createTempDirectory("dak-command")
-        val runner = ProcessRunner(
-            redactor = Redactor(DroidAgentConfig.default().redaction),
-            artifactWriter = ArtifactWriter(outputDir),
-        )
+        val runner =
+            ProcessRunner(
+                redactor = Redactor(DroidAgentConfig.default().redaction),
+                artifactWriter = ArtifactWriter(outputDir),
+            )
 
-        val result = runner.run(
-            CommandSpec(
-                id = "echo-secret",
-                command = listOf("/bin/sh", "-c", "echo 'Authorization: Bearer abc.def.ghi'"),
-                workingDirectory = outputDir.toString(),
-                mutatesProject = false,
-                requiresDevice = false,
-                timeoutSeconds = 10,
-            ),
-        )
+        val result =
+            runner.run(
+                CommandSpec(
+                    id = "echo-secret",
+                    command = listOf("/bin/sh", "-c", "echo 'Authorization: Bearer abc.def.ghi'"),
+                    workingDirectory = outputDir.toString(),
+                    mutatesProject = false,
+                    requiresDevice = false,
+                    timeoutSeconds = 10,
+                ),
+            )
 
         assertEquals(ResultStatus.SUCCESS, result.status)
         assertTrue(result.summary.contains("[REDACTED]"))
@@ -52,30 +55,38 @@ class JsonAndCommandTest {
     @Test
     fun `process runner preserves binary output without text corruption`() {
         val outputDir = Files.createTempDirectory("dak-binary")
-        val runner = ProcessRunner(
-            redactor = Redactor(DroidAgentConfig.default().redaction),
-            artifactWriter = ArtifactWriter(outputDir),
-        )
+        val runner =
+            ProcessRunner(
+                redactor = Redactor(DroidAgentConfig.default().redaction),
+                artifactWriter = ArtifactWriter(outputDir),
+            )
         // PNG magic bytes — would be corrupted if decoded as UTF-8
         val tmpFile = outputDir.resolve("test.bin")
         val expectedBytes = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
-        java.nio.file.Files.write(tmpFile, expectedBytes)
+        java.nio.file.Files
+            .write(tmpFile, expectedBytes)
 
-        val result = runner.run(
-            CommandSpec(
-                id = "binary-cat",
-                command = listOf("/bin/sh", "-c", "cat ${tmpFile.toAbsolutePath()}"),
-                workingDirectory = outputDir.toString(),
-                mutatesProject = false,
-                requiresDevice = false,
-                timeoutSeconds = 10,
-                outputMode = OutputMode.BINARY,
-            ),
-        )
+        val result =
+            runner.run(
+                CommandSpec(
+                    id = "binary-cat",
+                    command = listOf("/bin/sh", "-c", "cat ${tmpFile.toAbsolutePath()}"),
+                    workingDirectory = outputDir.toString(),
+                    mutatesProject = false,
+                    requiresDevice = false,
+                    timeoutSeconds = 10,
+                    outputMode = OutputMode.BINARY,
+                ),
+            )
 
         assertEquals(ResultStatus.SUCCESS, result.status)
         assertEquals(1, result.artifacts.size)
-        val written = java.nio.file.Files.readAllBytes(java.nio.file.Path.of(result.artifacts[0].path))
+        val written =
+            java.nio.file.Files
+                .readAllBytes(
+                    java.nio.file.Path
+                        .of(result.artifacts[0].path),
+                )
         org.junit.Assert.assertArrayEquals(expectedBytes, written)
     }
 

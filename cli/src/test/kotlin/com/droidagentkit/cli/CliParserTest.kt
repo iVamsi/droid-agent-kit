@@ -23,7 +23,10 @@ class CliParserTest {
 
     @Test
     fun `parser keeps visuals subcommand arguments`() {
-        val command = DroidAgentCliParser().parse(arrayOf("visuals", "compare", "--project", ".", "--baseline", "main", "--candidate", "HEAD"))
+        val command =
+            DroidAgentCliParser().parse(
+                arrayOf("visuals", "compare", "--project", ".", "--baseline", "main", "--candidate", "HEAD"),
+            )
 
         assertTrue(command is CliCommand.Visuals)
         assertEquals("compare", (command as CliCommand.Visuals).action)
@@ -31,16 +34,17 @@ class CliParserTest {
 
     @Test
     fun `parser understands install mcp defaults and options`() {
-        val command = DroidAgentCliParser().parse(
-            arrayOf(
-                "install-mcp",
-                "--targets",
-                "codex,claude",
-                "--bin",
-                "/opt/droidagent/bin/droidagent",
-                "--dry-run",
-            ),
-        )
+        val command =
+            DroidAgentCliParser().parse(
+                arrayOf(
+                    "install-mcp",
+                    "--targets",
+                    "codex,claude",
+                    "--bin",
+                    "/opt/droidagent/bin/droidagent",
+                    "--dry-run",
+                ),
+            )
 
         assertEquals(
             CliCommand.InstallMcp(
@@ -59,7 +63,13 @@ class CliParserTest {
 
         val resolved = ProjectLocator.resolve("auto", environment = env)
 
-        assertEquals(java.nio.file.Path.of("/tmp/my-android-project").toAbsolutePath().normalize(), resolved)
+        assertEquals(
+            java.nio.file.Path
+                .of("/tmp/my-android-project")
+                .toAbsolutePath()
+                .normalize(),
+            resolved,
+        )
     }
 
     @Test
@@ -126,7 +136,10 @@ class CliParserTest {
 
     @Test
     fun `parser understands snapshot command`() {
-        val command = DroidAgentCliParser().parse(arrayOf("snapshot", "--device", "emulator-5554", "--output", "build/droidagentkit/snapshot"))
+        val command =
+            DroidAgentCliParser().parse(
+                arrayOf("snapshot", "--device", "emulator-5554", "--output", "build/droidagentkit/snapshot"),
+            )
 
         assertEquals(CliCommand.Snapshot(device = "emulator-5554", output = "build/droidagentkit/snapshot"), command)
     }

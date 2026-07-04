@@ -7,17 +7,20 @@ import com.droidagentkit.core.ConfigLoadResult
 import com.droidagentkit.core.DroidAgentConfig
 import com.droidagentkit.core.DroidAgentConfigLoader
 import com.droidagentkit.core.Json
+import com.droidagentkit.core.ResultStatus
 import com.droidagentkit.inspector.AndroidProjectInspector
 import com.droidagentkit.mcp.DroidAgentMcpDispatcher
 import com.droidagentkit.mcp.DroidAgentMcpHttpServer
 import com.droidagentkit.mcp.DroidAgentStdioServer
-import com.droidagentkit.core.ResultStatus
 import com.droidagentkit.visuals.VisualCaptureEngine
 import com.droidagentkit.visuals.VisualTolerance
 import java.nio.file.Files
 import java.nio.file.Path
 
-internal fun resolveServerConfig(configResult: ConfigLoadResult, onMessage: (String) -> Unit): DroidAgentConfig =
+internal fun resolveServerConfig(
+    configResult: ConfigLoadResult,
+    onMessage: (String) -> Unit,
+): DroidAgentConfig =
     when (configResult) {
         is ConfigLoadResult.Loaded -> {
             configResult.warnings.forEach { onMessage("droidagentkit config warning: $it") }
@@ -39,59 +42,68 @@ fun main(args: Array<String>) {
 class DroidAgentCli(
     private val parser: DroidAgentCliParser = DroidAgentCliParser(),
 ) {
-    fun run(args: Array<String>): Int {
-        return when (val command = parser.parse(args)) {
-            is CliCommand.Help -> when {
-                command.error != null -> {
-                    System.err.println(command.error)
-                    1
+    fun run(args: Array<String>): Int =
+        when (val command = parser.parse(args)) {
+            is CliCommand.Help ->
+                when {
+                    command.error != null -> {
+                        System.err.println(command.error)
+                        1
+                    }
+                    command.commandName != null -> {
+                        println(usageFor(command.commandName))
+                        0
+                    }
+                    else -> {
+                        println(help())
+                        0
+                    }
                 }
-                command.commandName != null -> {
-                    println(usageFor(command.commandName))
-                    0
-                }
-                else -> {
-                    println(help())
-                    0
-                }
-            }
             is CliCommand.Inspect -> inspect(command)
             is CliCommand.Audit -> audit(command)
             is CliCommand.ServeMcp -> serveMcp(command)
             is CliCommand.Gradle -> mcpCall(command.project, "android_gradle_run", mapOf("task" to command.task))
             is CliCommand.Devices -> mcpCall(command.project, "android_devices_list", emptyMap())
-            is CliCommand.Snapshot -> mcpCall(".", "android_screen_snapshot", mapOf("deviceSerial" to command.device, "outputName" to command.output))
+            is CliCommand.Snapshot ->
+                mcpCall(
+                    ".",
+                    "android_screen_snapshot",
+                    mapOf(
+                        "deviceSerial" to command.device,
+                        "outputName" to command.output,
+                    ),
+                )
             is CliCommand.Visuals -> visuals(command)
             is CliCommand.InstallMcp -> installMcp(command)
         }
-    }
 
     private fun inspect(command: CliCommand.Inspect): Int {
         val root = Path.of(command.project).toAbsolutePath().normalize()
         val report = AndroidProjectInspector().inspect(root)
-        val output = if (command.format == "json") {
-            Json.write(
-                mapOf(
-                    "projectName" to report.projectName,
-                    "support" to report.support.name.lowercase(),
-                    "modules" to report.modules.map { it.path },
-                    "warnings" to report.warnings,
-                ),
-            )
-        } else {
-            buildString {
-                appendLine("# DroidAgentKit Project Inspection")
-                appendLine()
-                appendLine("Project: ${report.projectName}")
-                appendLine("Support: ${report.support}")
-                appendLine()
-                appendLine("## Modules")
-                report.modules.forEach { appendLine("- `${it.path}` ${it.type} namespace=${it.namespace ?: "unknown"}") }
-                appendLine()
-                appendLine("## Safe Commands")
-                report.commandMatrix.forEach { appendLine("- `${it.command.joinToString(" ")}`") }
+        val output =
+            if (command.format == "json") {
+                Json.write(
+                    mapOf(
+                        "projectName" to report.projectName,
+                        "support" to report.support.name.lowercase(),
+                        "modules" to report.modules.map { it.path },
+                        "warnings" to report.warnings,
+                    ),
+                )
+            } else {
+                buildString {
+                    appendLine("# DroidAgentKit Project Inspection")
+                    appendLine()
+                    appendLine("Project: ${report.projectName}")
+                    appendLine("Support: ${report.support}")
+                    appendLine()
+                    appendLine("## Modules")
+                    report.modules.forEach { appendLine("- `${it.path}` ${it.type} namespace=${it.namespace ?: "unknown"}") }
+                    appendLine()
+                    appendLine("## Safe Commands")
+                    report.commandMatrix.forEach { appendLine("- `${it.command.joinToString(" ")}`") }
+                }
             }
-        }
         writeOrPrint(command.output, output)
         return 0
     }
@@ -128,20 +140,25 @@ class DroidAgentCli(
         return 0
     }
 
-    private fun mcpCall(project: String, tool: String, args: Map<String, Any>): Int {
+    private fun mcpCall(
+        project: String,
+        tool: String,
+        args: Map<String, Any>,
+    ): Int {
         val root = ProjectLocator.resolve(project)
-        val config = when (val configResult = DroidAgentConfigLoader.load(root)) {
-            is ConfigLoadResult.Loaded -> {
-                configResult.warnings.forEach { System.err.println("droidagentkit config warning: $it") }
-                configResult.config
-            }
-            is ConfigLoadResult.Invalid -> {
-                configResult.errors.forEach {
-                    System.err.println("droidagentkit config error: line ${it.line}: ${it.key} — ${it.message}")
+        val config =
+            when (val configResult = DroidAgentConfigLoader.load(root)) {
+                is ConfigLoadResult.Loaded -> {
+                    configResult.warnings.forEach { System.err.println("droidagentkit config warning: $it") }
+                    configResult.config
                 }
-                return 1
+                is ConfigLoadResult.Invalid -> {
+                    configResult.errors.forEach {
+                        System.err.println("droidagentkit config error: line ${it.line}: ${it.key} — ${it.message}")
+                    }
+                    return 1
+                }
             }
-        }
         val result = DroidAgentMcpDispatcher(config).call(tool, args + ("rootPath" to root.toString()))
         println(Json.write(result))
         return if (result["status"] == "failed" || result["status"] == "blocked") 2 else 0
@@ -150,12 +167,14 @@ class DroidAgentCli(
     private fun visuals(command: CliCommand.Visuals): Int {
         val project = command.options["project"] ?: "."
         val root = Path.of(project).toAbsolutePath().normalize()
-        val outputDir = command.options["output-dir"]
-            ?.let { Path.of(it).toAbsolutePath().normalize() }
-            ?: root.resolve("build/droidagentkit/visuals")
-        val goldensDir = command.options["goldens-dir"]
-            ?.let { Path.of(it).toAbsolutePath().normalize() }
-            ?: root.resolve("src/test/resources/droidagentkit/goldens")
+        val outputDir =
+            command.options["output-dir"]
+                ?.let { Path.of(it).toAbsolutePath().normalize() }
+                ?: root.resolve("build/droidagentkit/visuals")
+        val goldensDir =
+            command.options["goldens-dir"]
+                ?.let { Path.of(it).toAbsolutePath().normalize() }
+                ?: root.resolve("src/test/resources/droidagentkit/goldens")
         return when (command.action) {
             "report" -> {
                 val report = VisualCaptureEngine.generateReport(outputDir, goldensDir, VisualTolerance())
@@ -179,12 +198,13 @@ class DroidAgentCli(
 
     private fun installMcp(command: CliCommand.InstallMcp): Int {
         val binPath = command.binPath?.let(Path::of) ?: defaultDroidAgentBin()
-        val options = McpInstallOptions(
-            targets = McpInstallTargets.parse(command.targets),
-            binPath = binPath.toAbsolutePath().normalize(),
-            dryRun = command.dryRun,
-            applyClaude = command.applyClaude,
-        )
+        val options =
+            McpInstallOptions(
+                targets = McpInstallTargets.parse(command.targets),
+                binPath = binPath.toAbsolutePath().normalize(),
+                dryRun = command.dryRun,
+                applyClaude = command.applyClaude,
+            )
         val result = McpInstaller().install(options)
         result.messages.forEach(::println)
         if (result.changedFiles.isNotEmpty()) {
@@ -201,7 +221,10 @@ class DroidAgentCli(
         return Path.of("droidagent")
     }
 
-    private fun writeOrPrint(outputPath: String?, content: String) {
+    private fun writeOrPrint(
+        outputPath: String?,
+        content: String,
+    ) {
         if (outputPath == null) {
             println(content)
         } else {
@@ -211,14 +234,15 @@ class DroidAgentCli(
         }
     }
 
-    private fun help(): String = buildString {
-        appendLine("DroidAgentKit alpha")
-        appendLine()
-        appendLine("Commands:")
-        CliCommandRegistry.all.forEach { spec -> appendLine("  ${spec.name} — ${spec.description}") }
-        appendLine()
-        appendLine("Run 'droidagent <command> --help' for command-specific flags.")
-    }
+    private fun help(): String =
+        buildString {
+            appendLine("DroidAgentKit alpha")
+            appendLine()
+            appendLine("Commands:")
+            CliCommandRegistry.all.forEach { spec -> appendLine("  ${spec.name} — ${spec.description}") }
+            appendLine()
+            appendLine("Run 'droidagent <command> --help' for command-specific flags.")
+        }
 
     private fun usageFor(commandName: String): String {
         val spec = CliCommandRegistry.all.first { it.name == commandName }

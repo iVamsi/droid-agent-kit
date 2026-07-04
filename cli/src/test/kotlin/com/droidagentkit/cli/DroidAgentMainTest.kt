@@ -11,9 +11,10 @@ class DroidAgentMainTest {
     @Test
     fun `resolveServerConfig falls back to defaults and reports each error on invalid config`() {
         val messages = mutableListOf<String>()
-        val invalid = ConfigLoadResult.Invalid(
-            listOf(ConfigError(3, "safety.maxCommandSeconds", "expected a number, got 'soon'")),
-        )
+        val invalid =
+            ConfigLoadResult.Invalid(
+                listOf(ConfigError(3, "safety.maxCommandSeconds", "expected a number, got 'soon'")),
+            )
 
         val config = resolveServerConfig(invalid) { messages.add(it) }
 

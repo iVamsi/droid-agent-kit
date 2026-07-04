@@ -71,7 +71,13 @@ class AndroidInspectorTest {
         assertEquals(listOf(":app", ":feature:scan"), report.modules.map { it.path })
         assertEquals(AndroidModuleType.APPLICATION, report.modules.first().type)
         assertEquals("com.example.demo", report.modules.first().namespace)
-        assertEquals("com.example.demo.MainActivity", report.modules.first().launcherActivities.single())
+        assertEquals(
+            "com.example.demo.MainActivity",
+            report.modules
+                .first()
+                .launcherActivities
+                .single(),
+        )
         assertTrue(report.commandMatrix.any { it.id == "app-test-unit" })
     }
 

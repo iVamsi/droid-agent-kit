@@ -113,7 +113,12 @@ class McpDispatcherTest {
 
         assertEquals("success", result["status"])
         val artifact = (result["artifacts"] as List<*>).first() as Map<*, *>
-        val content = java.nio.file.Files.readString(java.nio.file.Path.of(artifact["path"].toString()))
+        val content =
+            java.nio.file.Files
+                .readString(
+                    java.nio.file.Path
+                        .of(artifact["path"].toString()),
+                )
         assertTrue(content.contains("## Modules"))
         assertTrue(content.contains("## Safe Commands"))
         assertTrue(content.contains(":app"))
@@ -135,9 +140,10 @@ class McpDispatcherTest {
     @Test
     fun `lint run parses android lint xml report into findings`() {
         val root = Files.createTempDirectory("dak-lint-xml")
-        val config = DroidAgentConfig.default().copy(
-            safety = DroidAgentConfig.default().safety.copy(allowGradleTasks = listOf(":app:lintDebug")),
-        )
+        val config =
+            DroidAgentConfig.default().copy(
+                safety = DroidAgentConfig.default().safety.copy(allowGradleTasks = listOf(":app:lintDebug")),
+            )
         writeFakeGradlew(root)
         val reportDir = root.resolve("app/build/reports")
         Files.createDirectories(reportDir)
@@ -166,9 +172,10 @@ class McpDispatcherTest {
     @Test
     fun `lint run returns partial status when no structured report is found`() {
         val root = Files.createTempDirectory("dak-lint-none")
-        val config = DroidAgentConfig.default().copy(
-            safety = DroidAgentConfig.default().safety.copy(allowGradleTasks = listOf(":app:ktlintCheck")),
-        )
+        val config =
+            DroidAgentConfig.default().copy(
+                safety = DroidAgentConfig.default().safety.copy(allowGradleTasks = listOf(":app:ktlintCheck")),
+            )
         writeFakeGradlew(root)
         val dispatcher = DroidAgentMcpDispatcher(config)
 
@@ -183,7 +190,11 @@ class McpDispatcherTest {
     private fun writeFakeGradlew(root: java.nio.file.Path) {
         val wrapper = root.resolve("gradlew")
         Files.writeString(wrapper, "#!/bin/sh\nexit 0\n")
-        Files.setPosixFilePermissions(wrapper, java.nio.file.attribute.PosixFilePermissions.fromString("rwxr-xr-x"))
+        Files.setPosixFilePermissions(
+            wrapper,
+            java.nio.file.attribute.PosixFilePermissions
+                .fromString("rwxr-xr-x"),
+        )
     }
 
     @Test
@@ -217,9 +228,10 @@ class McpDispatcherTest {
     @Test
     fun `build performance parses slowest tasks from the profile report`() {
         val root = Files.createTempDirectory("dak-build-perf")
-        val config = DroidAgentConfig.default().copy(
-            safety = DroidAgentConfig.default().safety.copy(allowGradleTasks = listOf(":app:assembleDebug")),
-        )
+        val config =
+            DroidAgentConfig.default().copy(
+                safety = DroidAgentConfig.default().safety.copy(allowGradleTasks = listOf(":app:assembleDebug")),
+            )
         writeFakeGradlew(root)
         val profileDir = root.resolve("build/reports/profile")
         Files.createDirectories(profileDir)

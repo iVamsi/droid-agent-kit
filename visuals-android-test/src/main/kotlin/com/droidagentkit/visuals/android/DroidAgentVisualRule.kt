@@ -11,12 +11,13 @@ data class VisualMatrix(
     val locales: List<String>,
 ) {
     companion object {
-        fun standard() = VisualMatrix(
-            devices = listOf("phone_412x915"),
-            themes = listOf("light"),
-            fontScales = listOf(1.0f),
-            locales = listOf("en"),
-        )
+        fun standard() =
+            VisualMatrix(
+                devices = listOf("phone_412x915"),
+                themes = listOf("light"),
+                fontScales = listOf(1.0f),
+                locales = listOf("en"),
+            )
     }
 }
 
@@ -27,19 +28,22 @@ data class CaptureEnvironment(
     val locale: String,
 )
 
-class DroidAgentVisualRule(private val outputDir: Path = Path.of("build/droidagentkit/visuals")) {
+class DroidAgentVisualRule(
+    private val outputDir: Path = Path.of("build/droidagentkit/visuals"),
+) {
     fun captureCompose(
         name: String,
         matrix: VisualMatrix = VisualMatrix.standard(),
         semantics: List<String> = emptyList(),
         render: () -> ByteArray,
     ): VisualCapture {
-        val environment = CaptureEnvironment(
-            device = matrix.devices.firstOrNull() ?: "phone_412x915",
-            theme = matrix.themes.firstOrNull() ?: "light",
-            fontScale = matrix.fontScales.firstOrNull() ?: 1.0f,
-            locale = matrix.locales.firstOrNull() ?: "en",
-        )
+        val environment =
+            CaptureEnvironment(
+                device = matrix.devices.firstOrNull() ?: "phone_412x915",
+                theme = matrix.themes.firstOrNull() ?: "light",
+                fontScale = matrix.fontScales.firstOrNull() ?: 1.0f,
+                locale = matrix.locales.firstOrNull() ?: "en",
+            )
         return VisualCaptureEngine.persistCapture(
             outputDir = outputDir,
             caseName = name,

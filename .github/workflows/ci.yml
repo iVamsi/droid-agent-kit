@@ -14,5 +14,7 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
+      - name: Lint
+        run: ./gradlew ktlintCheck
       - name: Test
         run: ./gradlew test

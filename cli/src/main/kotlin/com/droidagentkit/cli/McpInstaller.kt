@@ -76,15 +76,39 @@ class McpInstaller(
         }
 
         if (McpInstallTarget.CURSOR in options.targets) {
-            installJsonTarget("Cursor", cursorConfigPath(), "mcpServers", cursorServerConfig(options.binPath), options.dryRun, messages, changed)
+            installJsonTarget(
+                "Cursor",
+                cursorConfigPath(),
+                "mcpServers",
+                cursorServerConfig(options.binPath),
+                options.dryRun,
+                messages,
+                changed,
+            )
         }
 
         if (McpInstallTarget.ZED in options.targets) {
-            installJsonTarget("Zed", zedConfigPath(), "context_servers", zedServerConfig(options.binPath), options.dryRun, messages, changed)
+            installJsonTarget(
+                "Zed",
+                zedConfigPath(),
+                "context_servers",
+                zedServerConfig(options.binPath),
+                options.dryRun,
+                messages,
+                changed,
+            )
         }
 
         if (McpInstallTarget.VSCODE in options.targets) {
-            installJsonTarget("VS Code", vsCodeConfigPath(), "servers", vsCodeServerConfig(options.binPath), options.dryRun, messages, changed)
+            installJsonTarget(
+                "VS Code",
+                vsCodeConfigPath(),
+                "servers",
+                vsCodeServerConfig(options.binPath),
+                options.dryRun,
+                messages,
+                changed,
+            )
         }
 
         return McpInstallResult(messages, changed, generic)
@@ -116,7 +140,10 @@ class McpInstaller(
         )
     }
 
-    fun installCodexBlock(path: Path, binPath: Path): String {
+    fun installCodexBlock(
+        path: Path,
+        binPath: Path,
+    ): String {
         val existing = if (path.exists()) Files.readString(path) else ""
         val block = codexBlock(binPath)
         val pattern = Regex("(?s)\\n?# >>> droidagentkit mcp >>>.*?# <<< droidagentkit mcp <<<\\n?")
@@ -141,23 +168,24 @@ class McpInstaller(
         # <<< droidagentkit mcp <<<
         """.trimIndent()
 
-    fun claudeCommand(binPath: Path): List<String> = listOf(
-        "claude",
-        "mcp",
-        "add",
-        "--scope",
-        "user",
-        "--transport",
-        "stdio",
-        "droidagentkit",
-        "--",
-        binPath.toString(),
-        "serve-mcp",
-        "--transport",
-        "stdio",
-        "--project",
-        "auto",
-    )
+    fun claudeCommand(binPath: Path): List<String> =
+        listOf(
+            "claude",
+            "mcp",
+            "add",
+            "--scope",
+            "user",
+            "--transport",
+            "stdio",
+            "droidagentkit",
+            "--",
+            binPath.toString(),
+            "serve-mcp",
+            "--transport",
+            "stdio",
+            "--project",
+            "auto",
+        )
 
     fun genericJson(binPath: Path): String =
         """
@@ -191,22 +219,25 @@ class McpInstaller(
     private fun serveArgsArray(): JsonArray =
         JsonArray(listOf("serve-mcp", "--transport", "stdio", "--project", "auto").map(::JsonPrimitive))
 
-    private fun cursorServerConfig(binPath: Path): JsonObject = buildJsonObject {
-        put("command", binPath.toString())
-        put("args", serveArgsArray())
-    }
+    private fun cursorServerConfig(binPath: Path): JsonObject =
+        buildJsonObject {
+            put("command", binPath.toString())
+            put("args", serveArgsArray())
+        }
 
-    private fun zedServerConfig(binPath: Path): JsonObject = buildJsonObject {
-        put("command", binPath.toString())
-        put("args", serveArgsArray())
-        put("env", buildJsonObject { })
-    }
+    private fun zedServerConfig(binPath: Path): JsonObject =
+        buildJsonObject {
+            put("command", binPath.toString())
+            put("args", serveArgsArray())
+            put("env", buildJsonObject { })
+        }
 
-    private fun vsCodeServerConfig(binPath: Path): JsonObject = buildJsonObject {
-        put("type", "stdio")
-        put("command", binPath.toString())
-        put("args", serveArgsArray())
-    }
+    private fun vsCodeServerConfig(binPath: Path): JsonObject =
+        buildJsonObject {
+            put("type", "stdio")
+            put("command", binPath.toString())
+            put("args", serveArgsArray())
+        }
 
     private fun String.escapeToml(): String = replace("\\", "\\\\").replace("\"", "\\\"")
 
@@ -216,25 +247,27 @@ class McpInstaller(
 object McpInstallTargets {
     fun parse(values: List<String>): Set<McpInstallTarget> {
         val expanded = values.flatMap { if (it == "all") listOf("codex", "claude", "generic", "cursor", "zed", "vscode") else listOf(it) }
-        return expanded.mapNotNull {
-            when (it.lowercase()) {
-                "codex" -> McpInstallTarget.CODEX
-                "claude", "claude-code" -> McpInstallTarget.CLAUDE
-                "generic", "json" -> McpInstallTarget.GENERIC
-                "cursor" -> McpInstallTarget.CURSOR
-                "zed" -> McpInstallTarget.ZED
-                "vscode" -> McpInstallTarget.VSCODE
-                else -> null
+        return expanded
+            .mapNotNull {
+                when (it.lowercase()) {
+                    "codex" -> McpInstallTarget.CODEX
+                    "claude", "claude-code" -> McpInstallTarget.CLAUDE
+                    "generic", "json" -> McpInstallTarget.GENERIC
+                    "cursor" -> McpInstallTarget.CURSOR
+                    "zed" -> McpInstallTarget.ZED
+                    "vscode" -> McpInstallTarget.VSCODE
+                    else -> null
+                }
+            }.toSet()
+            .ifEmpty {
+                setOf(
+                    McpInstallTarget.CODEX,
+                    McpInstallTarget.CLAUDE,
+                    McpInstallTarget.GENERIC,
+                    McpInstallTarget.CURSOR,
+                    McpInstallTarget.ZED,
+                    McpInstallTarget.VSCODE,
+                )
             }
-        }.toSet().ifEmpty {
-            setOf(
-                McpInstallTarget.CODEX,
-                McpInstallTarget.CLAUDE,
-                McpInstallTarget.GENERIC,
-                McpInstallTarget.CURSOR,
-                McpInstallTarget.ZED,
-                McpInstallTarget.VSCODE,
-            )
-        }
     }
 }

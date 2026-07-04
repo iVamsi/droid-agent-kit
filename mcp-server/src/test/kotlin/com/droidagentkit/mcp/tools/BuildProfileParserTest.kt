@@ -34,7 +34,8 @@ class BuildProfileParserTest {
     }
 
     companion object {
-        private val SAMPLE_PROFILE_HTML = """
+        private val SAMPLE_PROFILE_HTML =
+            """
             <html><body>
             <div class="tab" id="tab0">
             <h2>Summary</h2>
@@ -83,6 +84,6 @@ class BuildProfileParserTest {
             </table>
             </div>
             </body></html>
-        """.trimIndent()
+            """.trimIndent()
     }
 }

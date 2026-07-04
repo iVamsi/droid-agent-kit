@@ -8,7 +8,8 @@ import org.junit.Test
 class LintResultParserTest {
     @Test
     fun `parses android lint xml issues with severity and location`() {
-        val xml = """
+        val xml =
+            """
             <?xml version="1.0" encoding="UTF-8"?>
             <issues format="6" by="lint 8.5.0">
                 <issue
@@ -31,7 +32,7 @@ class LintResultParserTest {
                         line="45"/>
                 </issue>
             </issues>
-        """.trimIndent()
+            """.trimIndent()
 
         val findings = LintResultParser.parseAndroidLintXml(xml)
 
@@ -52,7 +53,8 @@ class LintResultParserTest {
 
     @Test
     fun `parses detekt checkstyle xml errors with rule name and location`() {
-        val xml = """
+        val xml =
+            """
             <?xml version="1.0" encoding="UTF-8"?>
             <checkstyle version="4.3">
                 <file name="/project/app/src/main/kotlin/com/example/MainActivity.kt">
@@ -60,7 +62,7 @@ class LintResultParserTest {
                     <error line="41" column="1" severity="error" message="Class has too many functions" source="detekt.complexity.TooManyFunctions"/>
                 </file>
             </checkstyle>
-        """.trimIndent()
+            """.trimIndent()
 
         val findings = LintResultParser.parseDetektCheckstyleXml(xml)
 
@@ -74,7 +76,8 @@ class LintResultParserTest {
 
     @Test
     fun `parses detekt sarif results with rule id, message, and location`() {
-        val sarif = """
+        val sarif =
+            """
             {
               "version": "2.1.0",
               "runs": [
@@ -98,7 +101,7 @@ class LintResultParserTest {
                 }
               ]
             }
-        """.trimIndent()
+            """.trimIndent()
 
         val findings = LintResultParser.parseDetektSarif(sarif)
 

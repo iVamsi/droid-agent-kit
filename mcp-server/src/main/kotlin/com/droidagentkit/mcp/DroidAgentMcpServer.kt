@@ -24,19 +24,25 @@ class DroidAgentMcpHttpServer(
                 exchange.responseBody.close()
                 return@createContext
             }
-            val response = if (exchange.requestMethod.equals("GET", ignoreCase = true)) {
-                Json.write(mapOf("tools" to dispatcher.listTools().map {
-                    mapOf("name" to it.name, "description" to it.description, "inputSchema" to it.inputSchema)
-                }))
-            } else {
-                val body = exchange.requestBody.readAllBytes().toString(StandardCharsets.UTF_8)
-                val name = Regex("\"name\"\\s*:\\s*\"([^\"]+)\"").find(body)?.groupValues?.get(1)
-                if (name == null) {
-                    Json.write(mapOf("status" to "failed", "summary" to "Request body must include a tool name."))
+            val response =
+                if (exchange.requestMethod.equals("GET", ignoreCase = true)) {
+                    Json.write(
+                        mapOf(
+                            "tools" to
+                                dispatcher.listTools().map {
+                                    mapOf("name" to it.name, "description" to it.description, "inputSchema" to it.inputSchema)
+                                },
+                        ),
+                    )
                 } else {
-                    Json.write(dispatcher.call(name, emptyMap()))
+                    val body = exchange.requestBody.readAllBytes().toString(StandardCharsets.UTF_8)
+                    val name = Regex("\"name\"\\s*:\\s*\"([^\"]+)\"").find(body)?.groupValues?.get(1)
+                    if (name == null) {
+                        Json.write(mapOf("status" to "failed", "summary" to "Request body must include a tool name."))
+                    } else {
+                        Json.write(dispatcher.call(name, emptyMap()))
+                    }
                 }
-            }
             val bytes = response.toByteArray(StandardCharsets.UTF_8)
             exchange.responseHeaders.add("Content-Type", "application/json")
             exchange.sendResponseHeaders(200, bytes.size.toLong())
@@ -57,8 +63,9 @@ class DroidAgentStdioServer(
     private val dispatcher: DroidAgentMcpDispatcher = DroidAgentMcpDispatcher(DroidAgentConfig.default()),
 ) {
     fun runOnce(line: String): String {
-        val tool = Regex("\"name\"\\s*:\\s*\"([^\"]+)\"").find(line)?.groupValues?.get(1)
-            ?: return Json.write(mapOf("status" to "failed", "summary" to "Missing tool name."))
+        val tool =
+            Regex("\"name\"\\s*:\\s*\"([^\"]+)\"").find(line)?.groupValues?.get(1)
+                ?: return Json.write(mapOf("status" to "failed", "summary" to "Missing tool name."))
         return Json.write(dispatcher.call(tool, emptyMap()))
     }
 }

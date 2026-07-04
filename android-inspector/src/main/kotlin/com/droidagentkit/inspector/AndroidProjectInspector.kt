@@ -9,8 +9,9 @@ import kotlin.io.path.isDirectory
 class AndroidProjectInspector {
     fun inspect(root: Path): AndroidProjectReport {
         val warnings = mutableListOf<String>()
-        val settings = listOf(root.resolve("settings.gradle.kts"), root.resolve("settings.gradle"))
-            .firstOrNull { it.exists() }
+        val settings =
+            listOf(root.resolve("settings.gradle.kts"), root.resolve("settings.gradle"))
+                .firstOrNull { it.exists() }
         if (settings == null) {
             warnings.add("No settings.gradle(.kts) found; Android support is partial.")
             return AndroidProjectReport(
@@ -29,9 +30,10 @@ class AndroidProjectInspector {
         val modulePaths = parseIncludes(settingsText)
         if (modulePaths.isEmpty()) warnings.add("No Gradle modules were found in settings.")
 
-        val modules = modulePaths.mapNotNull { modulePath ->
-            inspectModule(root, modulePath, warnings)
-        }
+        val modules =
+            modulePaths.mapNotNull { modulePath ->
+                inspectModule(root, modulePath, warnings)
+            }
         val support = if (modules.isEmpty()) ProjectSupport.PARTIAL else ProjectSupport.SUPPORTED
         return AndroidProjectReport(
             projectName = projectName,
@@ -45,10 +47,11 @@ class AndroidProjectInspector {
     }
 
     private fun parseProjectName(settingsText: String): String? {
-        val regexes = listOf(
-            Regex("rootProject\\.name\\s*=\\s*\"([^\"]+)\""),
-            Regex("rootProject\\.name\\s*=\\s*'([^']+)'"),
-        )
+        val regexes =
+            listOf(
+                Regex("rootProject\\.name\\s*=\\s*\"([^\"]+)\""),
+                Regex("rootProject\\.name\\s*=\\s*'([^']+)'"),
+            )
         return regexes.firstNotNullOfOrNull { it.find(settingsText)?.groupValues?.get(1) }
     }
 
@@ -63,7 +66,11 @@ class AndroidProjectInspector {
         return modules.toList()
     }
 
-    private fun inspectModule(root: Path, modulePath: String, warnings: MutableList<String>): AndroidModuleSummary? {
+    private fun inspectModule(
+        root: Path,
+        modulePath: String,
+        warnings: MutableList<String>,
+    ): AndroidModuleSummary? {
         val dir = root.resolve(modulePath.removePrefix(":").replace(':', '/'))
         if (!dir.exists() || !dir.isDirectory()) {
             warnings.add("Module $modulePath directory was not found at $dir.")
@@ -71,19 +78,25 @@ class AndroidProjectInspector {
         }
         val buildFile = listOf(dir.resolve("build.gradle.kts"), dir.resolve("build.gradle")).firstOrNull { it.exists() }
         val buildText = buildFile?.let(Files::readString).orEmpty()
-        val type = when {
-            buildText.contains("com.android.application") -> AndroidModuleType.APPLICATION
-            buildText.contains("com.android.dynamic-feature") -> AndroidModuleType.DYNAMIC_FEATURE
-            buildText.contains("com.android.library") -> AndroidModuleType.LIBRARY
-            buildText.contains("kotlin(\"multiplatform\")") || buildText.contains("kotlin-multiplatform") -> AndroidModuleType.KMP_ANDROID
-            else -> AndroidModuleType.UNKNOWN
-        }
-        val namespace = Regex("namespace\\s*=\\s*\"([^\"]+)\"").find(buildText)?.groupValues?.get(1)
-            ?: Regex("namespace\\s+'([^']+)'").find(buildText)?.groupValues?.get(1)
+        val type =
+            when {
+                buildText.contains("com.android.application") -> AndroidModuleType.APPLICATION
+                buildText.contains("com.android.dynamic-feature") -> AndroidModuleType.DYNAMIC_FEATURE
+                buildText.contains("com.android.library") -> AndroidModuleType.LIBRARY
+                buildText.contains(
+                    "kotlin(\"multiplatform\")",
+                ) ||
+                    buildText.contains("kotlin-multiplatform") -> AndroidModuleType.KMP_ANDROID
+                else -> AndroidModuleType.UNKNOWN
+            }
+        val namespace =
+            Regex("namespace\\s*=\\s*\"([^\"]+)\"").find(buildText)?.groupValues?.get(1)
+                ?: Regex("namespace\\s+'([^']+)'").find(buildText)?.groupValues?.get(1)
         val manifest = dir.resolve("src/main/AndroidManifest.xml")
         val manifestText = if (manifest.exists()) Files.readString(manifest) else ""
-        val packageName = Regex("<manifest[^>]*package\\s*=\\s*\"([^\"]+)\"").find(manifestText)?.groupValues?.get(1)
-            ?: namespace
+        val packageName =
+            Regex("<manifest[^>]*package\\s*=\\s*\"([^\"]+)\"").find(manifestText)?.groupValues?.get(1)
+                ?: namespace
         val launchers = parseLauncherActivities(manifestText, packageName)
         val usesCompose = buildText.contains("compose", ignoreCase = true) || dir.resolve("src/main/java").containsKotlinCompose()
         val hasUnitTests = dir.resolve("src/test").exists()
@@ -112,14 +125,21 @@ class AndroidProjectInspector {
             .sorted()
             .toList()
 
-    private fun parseBlockNames(buildText: String, sectionName: String): List<String> {
-        val sectionEnd = Regex("""(?m)^\s*$sectionName\s*\{""").find(buildText)?.range?.last
-            ?: return emptyList()
+    private fun parseBlockNames(
+        buildText: String,
+        sectionName: String,
+    ): List<String> {
+        val sectionEnd =
+            Regex("""(?m)^\s*$sectionName\s*\{""").find(buildText)?.range?.last
+                ?: return emptyList()
         val body = StringBuilder()
         var depth = 0
         for (i in (sectionEnd + 1) until buildText.length) {
             when (buildText[i]) {
-                '{' -> { body.append('{'); depth++ }
+                '{' -> {
+                    body.append('{')
+                    depth++
+                }
                 '}' -> {
                     if (depth == 0) break
                     depth--
@@ -128,8 +148,19 @@ class AndroidProjectInspector {
                 else -> body.append(buildText[i])
             }
         }
-        val excluded = setOf("android", "kotlin", "dependencies", "buildTypes", "productFlavors",
-            "defaultConfig", "signingConfigs", "composeOptions", "lint", "packaging")
+        val excluded =
+            setOf(
+                "android",
+                "kotlin",
+                "dependencies",
+                "buildTypes",
+                "productFlavors",
+                "defaultConfig",
+                "signingConfigs",
+                "composeOptions",
+                "lint",
+                "packaging",
+            )
         return Regex("""^\s*(\w+)\s*\{""", RegexOption.MULTILINE)
             .findAll(body)
             .map { it.groupValues[1] }
@@ -138,7 +169,10 @@ class AndroidProjectInspector {
             .toList()
     }
 
-    private fun parseLauncherActivities(manifestText: String, packageName: String?): List<String> {
+    private fun parseLauncherActivities(
+        manifestText: String,
+        packageName: String?,
+    ): List<String> {
         if (!manifestText.contains("android.intent.category.LAUNCHER")) return emptyList()
         return Regex("<activity[^>]*android:name\\s*=\\s*\"([^\"]+)\"[\\s\\S]*?</activity>")
             .findAll(manifestText)
@@ -147,19 +181,20 @@ class AndroidProjectInspector {
             .toList()
     }
 
-    private fun String.qualifyActivity(packageName: String?): String = when {
-        startsWith(".") && packageName != null -> packageName + this
-        contains(".") -> this
-        packageName != null -> "$packageName.$this"
-        else -> this
-    }
+    private fun String.qualifyActivity(packageName: String?): String =
+        when {
+            startsWith(".") && packageName != null -> packageName + this
+            contains(".") -> this
+            packageName != null -> "$packageName.$this"
+            else -> this
+        }
 
     private fun parseVersions(root: Path): Map<String, String> {
         val catalog = root.resolve("gradle/libs.versions.toml")
         if (!catalog.exists()) return emptyMap()
 
         val lines = Files.readAllLines(catalog)
-        val versionTable = linkedMapOf<String, String>()   // [versions] → raw string values
+        val versionTable = linkedMapOf<String, String>() // [versions] → raw string values
         val result = linkedMapOf<String, String>()
         var currentTable = ""
 
@@ -191,58 +226,66 @@ class AndroidProjectInspector {
             val alias = line.substringBefore("=").trim().takeIf { it.isNotBlank() } ?: continue
             val versionRef = Regex("""version\.ref\s*=\s*"([^"]+)"""").find(line)?.groupValues?.get(1)
             val versionDirect = Regex(""",?\s*version\s*=\s*"([^"]+)"""").find(line)?.groupValues?.get(1)
-            val resolved = when {
-                versionRef != null -> versionTable[versionRef]
-                versionDirect != null -> versionDirect
-                else -> null
-            } ?: continue
+            val resolved =
+                when {
+                    versionRef != null -> versionTable[versionRef]
+                    versionDirect != null -> versionDirect
+                    else -> null
+                } ?: continue
             result.putIfAbsent(alias, resolved)
         }
 
         return result
     }
 
-    private fun commandSpecsFor(root: Path, module: AndroidModuleSummary): List<CommandSpec> {
+    private fun commandSpecsFor(
+        root: Path,
+        module: AndroidModuleSummary,
+    ): List<CommandSpec> {
         val moduleName = module.path.removePrefix(":").replace(':', '-')
         val commands = mutableListOf<CommandSpec>()
         if (module.type == AndroidModuleType.APPLICATION || module.type == AndroidModuleType.LIBRARY) {
-            commands += CommandSpec(
-                id = "$moduleName-test-unit",
-                command = listOf("./gradlew", "${module.path}:testDebugUnitTest"),
-                workingDirectory = root.toString(),
-                mutatesProject = false,
-                requiresDevice = false,
-                timeoutSeconds = 600,
-            )
-            commands += CommandSpec(
-                id = "$moduleName-lint-debug",
-                command = listOf("./gradlew", "${module.path}:lintDebug"),
-                workingDirectory = root.toString(),
-                mutatesProject = false,
-                requiresDevice = false,
-                timeoutSeconds = 600,
-            )
-            if (module.type == AndroidModuleType.APPLICATION) {
-                commands += CommandSpec(
-                    id = "$moduleName-assemble-debug",
-                    command = listOf("./gradlew", "${module.path}:assembleDebug"),
+            commands +=
+                CommandSpec(
+                    id = "$moduleName-test-unit",
+                    command = listOf("./gradlew", "${module.path}:testDebugUnitTest"),
                     workingDirectory = root.toString(),
                     mutatesProject = false,
                     requiresDevice = false,
                     timeoutSeconds = 600,
                 )
-            }
-            if (module.productFlavors.isNotEmpty()) {
-                module.productFlavors.forEach { flavor ->
-                    val cap = flavor.replaceFirstChar { it.uppercaseChar() }
-                    commands += CommandSpec(
-                        id = "$moduleName-test-$flavor-unit",
-                        command = listOf("./gradlew", "${module.path}:test${cap}DebugUnitTest"),
+            commands +=
+                CommandSpec(
+                    id = "$moduleName-lint-debug",
+                    command = listOf("./gradlew", "${module.path}:lintDebug"),
+                    workingDirectory = root.toString(),
+                    mutatesProject = false,
+                    requiresDevice = false,
+                    timeoutSeconds = 600,
+                )
+            if (module.type == AndroidModuleType.APPLICATION) {
+                commands +=
+                    CommandSpec(
+                        id = "$moduleName-assemble-debug",
+                        command = listOf("./gradlew", "${module.path}:assembleDebug"),
                         workingDirectory = root.toString(),
                         mutatesProject = false,
                         requiresDevice = false,
                         timeoutSeconds = 600,
                     )
+            }
+            if (module.productFlavors.isNotEmpty()) {
+                module.productFlavors.forEach { flavor ->
+                    val cap = flavor.replaceFirstChar { it.uppercaseChar() }
+                    commands +=
+                        CommandSpec(
+                            id = "$moduleName-test-$flavor-unit",
+                            command = listOf("./gradlew", "${module.path}:test${cap}DebugUnitTest"),
+                            workingDirectory = root.toString(),
+                            mutatesProject = false,
+                            requiresDevice = false,
+                            timeoutSeconds = 600,
+                        )
                 }
             }
         }
@@ -252,7 +295,8 @@ class AndroidProjectInspector {
     private fun Path.containsKotlinCompose(): Boolean {
         if (!exists()) return false
         return Files.walk(this).use { stream ->
-            stream.filter { Files.isRegularFile(it) && it.fileName.toString().endsWith(".kt") }
+            stream
+                .filter { Files.isRegularFile(it) && it.fileName.toString().endsWith(".kt") }
                 .limit(200)
                 .anyMatch { Files.readString(it).contains("@Composable") }
         }

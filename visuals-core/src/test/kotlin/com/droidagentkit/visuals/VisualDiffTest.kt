@@ -18,12 +18,13 @@ class VisualDiffTest {
         writeImage(base, Color.WHITE)
         writeImage(candidate, Color.WHITE, changedPixel = Color(250, 250, 250))
 
-        val result = PngDiffEngine().compare(
-            baseline = base,
-            candidate = candidate,
-            diffOutput = dir.resolve("diff.png"),
-            tolerance = VisualTolerance(maxChangedPixelPercent = 10.0, maxColorDistance = 10),
-        )
+        val result =
+            PngDiffEngine().compare(
+                baseline = base,
+                candidate = candidate,
+                diffOutput = dir.resolve("diff.png"),
+                tolerance = VisualTolerance(maxChangedPixelPercent = 10.0, maxColorDistance = 10),
+            )
 
         assertEquals(1.0, result.changedPixelPercent, 0.01)
         assertTrue(result.passed)
@@ -31,23 +32,25 @@ class VisualDiffTest {
 
     @Test
     fun `report marks large visual diff as failed and creates agent fix packet`() {
-        val case = VisualCaseResult(
-            caseName = "home_screen",
-            environment = VisualEnvironment(theme = "dark", fontScale = 2.0f, locale = "ar", device = "phone_412x915"),
-            status = ResultStatus.FAILED,
-            findings = listOf(
-                VisualFinding(
-                    id = "large-font-overflow-home",
-                    category = VisualFindingCategory.LARGE_FONT_OVERFLOW,
-                    severity = VisualSeverity.ERROR,
-                    caseName = "home_screen",
-                    title = "Text overflows at large font",
-                    evidence = emptyList(),
-                    likelyCause = "Fixed height container",
-                    suggestedFixPrompt = "Inspect HomeScreen fixed heights around the title.",
-                ),
-            ),
-        )
+        val case =
+            VisualCaseResult(
+                caseName = "home_screen",
+                environment = VisualEnvironment(theme = "dark", fontScale = 2.0f, locale = "ar", device = "phone_412x915"),
+                status = ResultStatus.FAILED,
+                findings =
+                    listOf(
+                        VisualFinding(
+                            id = "large-font-overflow-home",
+                            category = VisualFindingCategory.LARGE_FONT_OVERFLOW,
+                            severity = VisualSeverity.ERROR,
+                            caseName = "home_screen",
+                            title = "Text overflows at large font",
+                            evidence = emptyList(),
+                            likelyCause = "Fixed height container",
+                            suggestedFixPrompt = "Inspect HomeScreen fixed heights around the title.",
+                        ),
+                    ),
+            )
 
         val report = VisualReportBuilder().build(listOf(case))
 
@@ -56,7 +59,11 @@ class VisualDiffTest {
         assertTrue(report.agentFixPacket.markdown.contains("Fixed height container"))
     }
 
-    private fun writeImage(path: java.nio.file.Path, fill: Color, changedPixel: Color? = null) {
+    private fun writeImage(
+        path: java.nio.file.Path,
+        fill: Color,
+        changedPixel: Color? = null,
+    ) {
         val image = BufferedImage(10, 10, BufferedImage.TYPE_INT_ARGB)
         val graphics = image.createGraphics()
         graphics.color = fill
