@@ -1,9 +1,12 @@
 # Changelog
 
-All notable changes to DroidAgentKit are documented here. This project uses date-based alpha
-development until a first tagged release.
+All notable changes to DroidAgentKit are documented here. The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and version numbers follow the alpha
+pre-release convention `0.y.z-alpha` until a stable 1.0 release.
 
 ## Unreleased
+
+## [0.1.0-alpha] - 2026-07-04
 
 ### Changed
 
