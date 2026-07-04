@@ -49,5 +49,8 @@ sealed class CliCommand {
         val applyClaude: Boolean,
     ) : CliCommand()
 
-    data class Help(val error: String? = null, val commandName: String? = null) : CliCommand()
+    data class Help(
+        val error: String? = null,
+        val commandName: String? = null,
+    ) : CliCommand()
 }

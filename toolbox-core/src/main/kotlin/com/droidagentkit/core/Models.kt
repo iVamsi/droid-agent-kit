@@ -2,7 +2,9 @@ package com.droidagentkit.core
 
 enum class OutputMode { TEXT, BINARY }
 
-enum class ArtifactType(val wireName: String) {
+enum class ArtifactType(
+    val wireName: String,
+) {
     LOG("log"),
     REPORT("report"),
     SCREENSHOT("screenshot"),
@@ -14,7 +16,9 @@ enum class ArtifactType(val wireName: String) {
     OTHER("other"),
 }
 
-enum class ResultStatus(val wireName: String) {
+enum class ResultStatus(
+    val wireName: String,
+) {
     SUCCESS("success"),
     PARTIAL("partial"),
     FAILED("failed"),
@@ -22,7 +26,9 @@ enum class ResultStatus(val wireName: String) {
     UNSUPPORTED("unsupported"),
 }
 
-enum class Severity(val wireName: String) {
+enum class Severity(
+    val wireName: String,
+) {
     INFO("info"),
     WARNING("warning"),
     ERROR("error"),

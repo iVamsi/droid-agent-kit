@@ -1,6 +1,9 @@
 package com.droidagentkit.mcp.tools
 
-data class TaskTiming(val taskPath: String, val durationMs: Long)
+data class TaskTiming(
+    val taskPath: String,
+    val durationMs: Long,
+)
 
 data class BuildProfileResult(
     val taskTimings: List<TaskTiming>,
@@ -9,9 +12,10 @@ data class BuildProfileResult(
 )
 
 object BuildProfileParser {
-    private val taskRowRegex = Regex(
-        """<tr>\s*<td[^>]*>([^<]+)</td>\s*<td class="numeric">([^<]+)</td>\s*<td>([^<]*)</td>\s*</tr>""",
-    )
+    private val taskRowRegex =
+        Regex(
+            """<tr>\s*<td[^>]*>([^<]+)</td>\s*<td class="numeric">([^<]+)</td>\s*<td>([^<]*)</td>\s*</tr>""",
+        )
     private val durationRegex = Regex("""(?:(\d+)m\s*)?(?:([\d.]+)s)?""")
 
     fun parse(html: String): BuildProfileResult {
@@ -20,12 +24,15 @@ object BuildProfileParser {
         val nextTabStart = html.indexOf("<div class=\"tab\"", tab4Start + 1)
         val section = if (nextTabStart == -1) html.substring(tab4Start) else html.substring(tab4Start, nextTabStart)
 
-        val timings = taskRowRegex.findAll(section).mapNotNull { match ->
-            val (task, durationText, result) = match.destructured
-            if (result.trim() == "(total)") return@mapNotNull null
-            val durationMs = parseDurationToMs(durationText.trim()) ?: return@mapNotNull null
-            TaskTiming(task.trim(), durationMs)
-        }.toList()
+        val timings =
+            taskRowRegex
+                .findAll(section)
+                .mapNotNull { match ->
+                    val (task, durationText, result) = match.destructured
+                    if (result.trim() == "(total)") return@mapNotNull null
+                    val durationMs = parseDurationToMs(durationText.trim()) ?: return@mapNotNull null
+                    TaskTiming(task.trim(), durationMs)
+                }.toList()
 
         return BuildProfileResult(
             taskTimings = timings.sortedByDescending { it.durationMs },
@@ -34,7 +41,10 @@ object BuildProfileParser {
         )
     }
 
-    private fun extractSummaryDuration(html: String, label: String): Long? {
+    private fun extractSummaryDuration(
+        html: String,
+        label: String,
+    ): Long? {
         val regex = Regex(Regex.escape("<td>$label</td>") + """\s*<td class="numeric">([^<]+)</td>""")
         val match = regex.find(html) ?: return null
         return parseDurationToMs(match.groupValues[1].trim())

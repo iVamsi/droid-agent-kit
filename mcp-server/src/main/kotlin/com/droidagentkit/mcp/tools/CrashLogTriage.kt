@@ -21,44 +21,57 @@ object CrashLogTriage {
             when {
                 fatalMatch != null -> {
                     val thread = fatalMatch.groupValues[1]
-                    val headline = lines.getOrNull(index + 1)?.substringAfter(": ")?.trim().orEmpty()
+                    val headline =
+                        lines
+                            .getOrNull(index + 1)
+                            ?.substringAfter(": ")
+                            ?.trim()
+                            .orEmpty()
                     val frames = mutableListOf<String>()
                     var cursor = index + 2
                     while (cursor < lines.size && stackFramePattern.containsMatchIn(lines[cursor])) {
                         frames.add(lines[cursor].substringAfter(": ").trim())
                         cursor++
                     }
-                    findings += DiagnosticFinding(
-                        category = "crash",
-                        severity = Severity.CRITICAL,
-                        title = headline.ifBlank { "Fatal exception on thread $thread" },
-                        detail = (listOf(headline) + frames).joinToString("\n"),
-                        location = thread,
-                    )
+                    findings +=
+                        DiagnosticFinding(
+                            category = "crash",
+                            severity = Severity.CRITICAL,
+                            title = headline.ifBlank { "Fatal exception on thread $thread" },
+                            detail = (listOf(headline) + frames).joinToString("\n"),
+                            location = thread,
+                        )
                     index = if (cursor > index + 1) cursor else index + 1
                 }
                 anrMatch != null -> {
                     val process = anrMatch.groupValues[1]
-                    val reason = lines.getOrNull(index + 1)?.substringAfter(": ")?.trim().orEmpty()
-                    findings += DiagnosticFinding(
-                        category = "anr",
-                        severity = Severity.CRITICAL,
-                        title = "ANR in $process",
-                        detail = reason.ifBlank { line.trim() },
-                        location = process,
-                    )
+                    val reason =
+                        lines
+                            .getOrNull(index + 1)
+                            ?.substringAfter(": ")
+                            ?.trim()
+                            .orEmpty()
+                    findings +=
+                        DiagnosticFinding(
+                            category = "anr",
+                            severity = Severity.CRITICAL,
+                            title = "ANR in $process",
+                            detail = reason.ifBlank { line.trim() },
+                            location = process,
+                        )
                     // Skip the reason line too, or its own "Input dispatching timed out" text
                     // would be re-matched as a second, spurious standalone ANR finding.
                     index += 2
                 }
                 timeoutMatch != null -> {
-                    findings += DiagnosticFinding(
-                        category = "anr",
-                        severity = Severity.CRITICAL,
-                        title = "Input dispatching timed out",
-                        detail = line.substringAfter(": ").trim().ifBlank { line.trim() },
-                        location = null,
-                    )
+                    findings +=
+                        DiagnosticFinding(
+                            category = "anr",
+                            severity = Severity.CRITICAL,
+                            title = "Input dispatching timed out",
+                            detail = line.substringAfter(": ").trim().ifBlank { line.trim() },
+                            location = null,
+                        )
                     index += 1
                 }
                 else -> index += 1

@@ -11,18 +11,19 @@ class ProcessRunner(
 ) {
     fun run(spec: CommandSpec): ToolResult {
         val started = Instant.now()
-        val process = try {
-            ProcessBuilder(spec.command)
-                .directory(Path.of(spec.workingDirectory).toFile())
-                .redirectErrorStream(true)
-                .start()
-        } catch (error: Exception) {
-            return ToolResult(
-                status = ResultStatus.BLOCKED,
-                summary = "Could not start command ${spec.command.joinToString(" ")}: ${error.message}",
-                warnings = listOf("command-start-failed"),
-            )
-        }
+        val process =
+            try {
+                ProcessBuilder(spec.command)
+                    .directory(Path.of(spec.workingDirectory).toFile())
+                    .redirectErrorStream(true)
+                    .start()
+            } catch (error: Exception) {
+                return ToolResult(
+                    status = ResultStatus.BLOCKED,
+                    summary = "Could not start command ${spec.command.joinToString(" ")}: ${error.message}",
+                    warnings = listOf("command-start-failed"),
+                )
+            }
 
         val completed = process.waitFor(spec.timeoutSeconds, TimeUnit.SECONDS)
         val durationMs = Duration.between(started, Instant.now()).toMillis()
@@ -31,11 +32,12 @@ class ProcessRunner(
             val bytes = process.inputStream.readBytes()
             if (!completed) process.destroyForcibly()
             val artifact = artifactWriter.writeBytes("${spec.id}.bin", bytes, ArtifactType.SCREENSHOT, "${spec.id} binary capture")
-            val status = when {
-                !completed -> ResultStatus.PARTIAL
-                process.exitValue() == 0 -> ResultStatus.SUCCESS
-                else -> ResultStatus.FAILED
-            }
+            val status =
+                when {
+                    !completed -> ResultStatus.PARTIAL
+                    process.exitValue() == 0 -> ResultStatus.SUCCESS
+                    else -> ResultStatus.FAILED
+                }
             return ToolResult(
                 status = status,
                 summary = "${spec.id} captured ${bytes.size} bytes in ${durationMs}ms",
@@ -48,18 +50,25 @@ class ProcessRunner(
         if (!completed) process.destroyForcibly()
         val redacted = redactor.redact(rawOutput)
         val artifact = artifactWriter.writeText("${spec.id}.log", redacted.text)
-        val status = when {
-            !completed -> ResultStatus.PARTIAL
-            process.exitValue() == 0 -> ResultStatus.SUCCESS
-            else -> ResultStatus.FAILED
-        }
-        val summary = buildString {
-            append("${spec.id} exited with ")
-            append(if (completed) process.exitValue().toString() else "timeout")
-            append(" in ${durationMs}ms")
-            val preview = redacted.text.lineSequence().filter { it.isNotBlank() }.take(5).joinToString("\n")
-            if (preview.isNotBlank()) append("\n").append(preview)
-        }
+        val status =
+            when {
+                !completed -> ResultStatus.PARTIAL
+                process.exitValue() == 0 -> ResultStatus.SUCCESS
+                else -> ResultStatus.FAILED
+            }
+        val summary =
+            buildString {
+                append("${spec.id} exited with ")
+                append(if (completed) process.exitValue().toString() else "timeout")
+                append(" in ${durationMs}ms")
+                val preview =
+                    redacted.text
+                        .lineSequence()
+                        .filter { it.isNotBlank() }
+                        .take(5)
+                        .joinToString("\n")
+                if (preview.isNotBlank()) append("\n").append(preview)
+            }
         return ToolResult(
             status = status,
             summary = summary,

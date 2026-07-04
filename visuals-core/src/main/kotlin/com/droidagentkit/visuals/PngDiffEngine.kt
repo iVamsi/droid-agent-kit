@@ -47,7 +47,10 @@ class PngDiffEngine {
         )
     }
 
-    private fun colorDistance(a: Color, b: Color): Double =
+    private fun colorDistance(
+        a: Color,
+        b: Color,
+    ): Double =
         sqrt(
             (a.red - b.red).toDouble().pow(2) +
                 (a.green - b.green).toDouble().pow(2) +

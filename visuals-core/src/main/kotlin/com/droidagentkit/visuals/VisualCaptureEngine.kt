@@ -24,20 +24,32 @@ object VisualCaptureEngine {
         val capturesDir = outputDir.resolve("captures")
         val writer = ArtifactWriter(capturesDir)
         val key = envKey(device, theme, fontScale, locale)
-        val pngRef = writer.writeBytes(
-            "$caseName--$key.png",
-            pngBytes,
-            ArtifactType.SCREENSHOT,
-            "Visual capture: $caseName ($key)",
-        )
-        val semanticsRef = writer.writeText(
-            "$caseName--$key.semantics.txt",
-            semanticsDump,
-            ArtifactType.OTHER,
-            "Semantics dump: $caseName ($key)",
-        )
+        val pngRef =
+            writer.writeBytes(
+                "$caseName--$key.png",
+                pngBytes,
+                ArtifactType.SCREENSHOT,
+                "Visual capture: $caseName ($key)",
+            )
+        val semanticsRef =
+            writer.writeText(
+                "$caseName--$key.semantics.txt",
+                semanticsDump,
+                ArtifactType.OTHER,
+                "Semantics dump: $caseName ($key)",
+            )
         val capturedAt = Instant.now().toString()
-        appendManifestLine(capturesDir, caseName, device, theme, fontScale, locale, Path.of(pngRef.path).fileName.toString(), Path.of(semanticsRef.path).fileName.toString(), capturedAt)
+        appendManifestLine(
+            capturesDir,
+            caseName,
+            device,
+            theme,
+            fontScale,
+            locale,
+            Path.of(pngRef.path).fileName.toString(),
+            Path.of(semanticsRef.path).fileName.toString(),
+            capturedAt,
+        )
         return VisualCapture(
             caseName = caseName,
             environment = VisualEnvironment(device = device, theme = theme, fontScale = fontScale, locale = locale),
@@ -47,7 +59,11 @@ object VisualCaptureEngine {
         )
     }
 
-    fun generateReport(outputDir: Path, goldensDir: Path, tolerance: VisualTolerance): VisualReport {
+    fun generateReport(
+        outputDir: Path,
+        goldensDir: Path,
+        tolerance: VisualTolerance,
+    ): VisualReport {
         val capturesDir = outputDir.resolve("captures")
         val manifest = capturesDir.resolve("manifest.tsv")
         val entries = if (Files.exists(manifest)) Files.readAllLines(manifest).mapNotNull(::parseManifestLine) else emptyList()
@@ -55,7 +71,10 @@ object VisualCaptureEngine {
         return VisualReportBuilder().build(cases)
     }
 
-    fun updateGoldens(outputDir: Path, goldensDir: Path): List<Path> {
+    fun updateGoldens(
+        outputDir: Path,
+        goldensDir: Path,
+    ): List<Path> {
         val capturesDir = outputDir.resolve("captures")
         val manifest = capturesDir.resolve("manifest.tsv")
         if (!Files.exists(manifest)) return emptyList()
@@ -70,30 +89,40 @@ object VisualCaptureEngine {
         }
     }
 
-    fun renderMarkdown(report: VisualReport, packageName: String = "unknown"): String = buildString {
-        appendLine("# DroidAgentKit Visual Report")
-        appendLine()
-        appendLine("Package: $packageName")
-        appendLine("Status: ${report.status.wireName}")
-        appendLine()
-        if (report.cases.isEmpty()) {
-            appendLine("No visual cases were collected. Add DroidAgentVisualRule-based tests to produce case artifacts.")
-        } else {
-            report.cases.forEach { case ->
-                appendLine(
-                    "## ${case.caseName} (${case.environment.device}, ${case.environment.theme}, " +
-                        "${case.environment.locale}, ${case.environment.fontScale}x) — ${case.status.wireName}",
-                )
-                case.findings.forEach { finding ->
-                    appendLine("- [${finding.severity.name}] ${finding.title}: ${finding.likelyCause}")
+    fun renderMarkdown(
+        report: VisualReport,
+        packageName: String = "unknown",
+    ): String =
+        buildString {
+            appendLine("# DroidAgentKit Visual Report")
+            appendLine()
+            appendLine("Package: $packageName")
+            appendLine("Status: ${report.status.wireName}")
+            appendLine()
+            if (report.cases.isEmpty()) {
+                appendLine("No visual cases were collected. Add DroidAgentVisualRule-based tests to produce case artifacts.")
+            } else {
+                report.cases.forEach { case ->
+                    appendLine(
+                        "## ${case.caseName} (${case.environment.device}, ${case.environment.theme}, " +
+                            "${case.environment.locale}, ${case.environment.fontScale}x) — ${case.status.wireName}",
+                    )
+                    case.findings.forEach { finding ->
+                        appendLine("- [${finding.severity.name}] ${finding.title}: ${finding.likelyCause}")
+                    }
                 }
             }
+            appendLine()
+            append(report.agentFixPacket.markdown)
         }
-        appendLine()
-        append(report.agentFixPacket.markdown)
-    }
 
-    private fun buildCaseResult(entry: ManifestEntry, capturesDir: Path, goldensDir: Path, tolerance: VisualTolerance, outputDir: Path): VisualCaseResult {
+    private fun buildCaseResult(
+        entry: ManifestEntry,
+        capturesDir: Path,
+        goldensDir: Path,
+        tolerance: VisualTolerance,
+        outputDir: Path,
+    ): VisualCaseResult {
         val environment = VisualEnvironment(device = entry.device, theme = entry.theme, fontScale = entry.fontScale, locale = entry.locale)
         val key = envKey(entry.device, entry.theme, entry.fontScale, entry.locale)
         val capturePng = capturesDir.resolve(entry.pngFile)
@@ -104,18 +133,29 @@ object VisualCaptureEngine {
                 caseName = entry.caseName,
                 environment = environment,
                 status = ResultStatus.PARTIAL,
-                findings = listOf(
-                    VisualFinding(
-                        id = "${entry.caseName}-$key-no-golden",
-                        category = VisualFindingCategory.PIXEL_DIFF,
-                        severity = VisualSeverity.WARNING,
-                        caseName = entry.caseName,
-                        title = "No golden image yet for $key",
-                        evidence = listOf(ArtifactRef(ArtifactType.SCREENSHOT, capturePng.toString(), "image/png", "Fresh capture, no baseline yet")),
-                        likelyCause = "This case/environment has never had droidAgentVisualsUpdateGoldens run for it.",
-                        suggestedFixPrompt = "Run droidAgentVisualsUpdateGoldens (or `droidagent visuals update-goldens`) to accept this as the baseline.",
+                findings =
+                    listOf(
+                        VisualFinding(
+                            id = "${entry.caseName}-$key-no-golden",
+                            category = VisualFindingCategory.PIXEL_DIFF,
+                            severity = VisualSeverity.WARNING,
+                            caseName = entry.caseName,
+                            title = "No golden image yet for $key",
+                            evidence =
+                                listOf(
+                                    ArtifactRef(
+                                        ArtifactType.SCREENSHOT,
+                                        capturePng.toString(),
+                                        "image/png",
+                                        "Fresh capture, no baseline yet",
+                                    ),
+                                ),
+                            likelyCause = "This case/environment has never had droidAgentVisualsUpdateGoldens run for it.",
+                            suggestedFixPrompt =
+                                "Run droidAgentVisualsUpdateGoldens (or `droidagent visuals update-goldens`)" +
+                                    " to accept this as the baseline.",
+                        ),
                     ),
-                ),
             )
         }
 
@@ -123,47 +163,60 @@ object VisualCaptureEngine {
         Files.createDirectories(diffDir)
         val diffFile = diffDir.resolve("${entry.caseName}--$key.png")
 
-        val diffResult = try {
-            PngDiffEngine().compare(goldenPng, capturePng, diffFile, tolerance)
-        } catch (error: IllegalArgumentException) {
+        val diffResult =
+            try {
+                PngDiffEngine().compare(goldenPng, capturePng, diffFile, tolerance)
+            } catch (error: IllegalArgumentException) {
+                return VisualCaseResult(
+                    caseName = entry.caseName,
+                    environment = environment,
+                    status = ResultStatus.FAILED,
+                    findings =
+                        listOf(
+                            VisualFinding(
+                                id = "${entry.caseName}-$key-dimension-mismatch",
+                                category = VisualFindingCategory.PIXEL_DIFF,
+                                severity = VisualSeverity.ERROR,
+                                caseName = entry.caseName,
+                                title = "Image dimensions changed for $key",
+                                evidence =
+                                    listOf(
+                                        ArtifactRef(ArtifactType.SCREENSHOT, capturePng.toString(), "image/png", "Fresh capture"),
+                                    ),
+                                likelyCause = error.message ?: "Captured image dimensions differ from the golden.",
+                                suggestedFixPrompt = "Review the layout change, then run droidAgentVisualsUpdateGoldens if intentional.",
+                            ),
+                        ),
+                )
+            }
+
+        if (diffResult.passed) {
             return VisualCaseResult(
                 caseName = entry.caseName,
                 environment = environment,
-                status = ResultStatus.FAILED,
-                findings = listOf(
-                    VisualFinding(
-                        id = "${entry.caseName}-$key-dimension-mismatch",
-                        category = VisualFindingCategory.PIXEL_DIFF,
-                        severity = VisualSeverity.ERROR,
-                        caseName = entry.caseName,
-                        title = "Image dimensions changed for $key",
-                        evidence = listOf(ArtifactRef(ArtifactType.SCREENSHOT, capturePng.toString(), "image/png", "Fresh capture")),
-                        likelyCause = error.message ?: "Captured image dimensions differ from the golden.",
-                        suggestedFixPrompt = "Review the layout change, then run droidAgentVisualsUpdateGoldens if intentional.",
-                    ),
-                ),
+                status = ResultStatus.SUCCESS,
+                findings = emptyList(),
             )
-        }
-
-        if (diffResult.passed) {
-            return VisualCaseResult(caseName = entry.caseName, environment = environment, status = ResultStatus.SUCCESS, findings = emptyList())
         }
         return VisualCaseResult(
             caseName = entry.caseName,
             environment = environment,
             status = ResultStatus.FAILED,
-            findings = listOf(
-                VisualFinding(
-                    id = "${entry.caseName}-$key-pixel-diff",
-                    category = VisualFindingCategory.PIXEL_DIFF,
-                    severity = VisualSeverity.ERROR,
-                    caseName = entry.caseName,
-                    title = "Pixel diff exceeds tolerance for $key",
-                    evidence = listOf(ArtifactRef(ArtifactType.IMAGE_DIFF, diffFile.toString(), "image/png", "Pixel diff overlay")),
-                    likelyCause = "${"%.2f".format(diffResult.changedPixelPercent)}% of pixels changed (tolerance: ${tolerance.maxChangedPixelPercent}%).",
-                    suggestedFixPrompt = "Review the diff image, then run droidAgentVisualsUpdateGoldens if intentional.",
+            findings =
+                listOf(
+                    VisualFinding(
+                        id = "${entry.caseName}-$key-pixel-diff",
+                        category = VisualFindingCategory.PIXEL_DIFF,
+                        severity = VisualSeverity.ERROR,
+                        caseName = entry.caseName,
+                        title = "Pixel diff exceeds tolerance for $key",
+                        evidence = listOf(ArtifactRef(ArtifactType.IMAGE_DIFF, diffFile.toString(), "image/png", "Pixel diff overlay")),
+                        likelyCause = "${"%.2f".format(
+                            diffResult.changedPixelPercent,
+                        )}% of pixels changed (tolerance: ${tolerance.maxChangedPixelPercent}%).",
+                        suggestedFixPrompt = "Review the diff image, then run droidAgentVisualsUpdateGoldens if intentional.",
+                    ),
                 ),
-            ),
         )
     }
 
@@ -185,8 +238,12 @@ object VisualCaptureEngine {
         val capturedAt: String,
     )
 
-    private fun envKey(device: String, theme: String, fontScale: Float, locale: String): String =
-        "${device}_${theme}_${fontScale}_${locale}"
+    private fun envKey(
+        device: String,
+        theme: String,
+        fontScale: Float,
+        locale: String,
+    ): String = "${device}_${theme}_${fontScale}_$locale"
 
     private fun appendManifestLine(
         capturesDir: Path,

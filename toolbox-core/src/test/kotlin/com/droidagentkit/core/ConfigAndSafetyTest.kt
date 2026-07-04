@@ -128,14 +128,15 @@ class ConfigAndSafetyTest {
     fun `redactor hides common secrets and reports what changed`() {
         val redactor = Redactor(DroidAgentConfig.default().redaction)
 
-        val result = redactor.redact(
-            """
-            Authorization: Bearer abc.def.ghi
-            apiKey = "AIzaSyA-ExampleSecret"
-            STORE_PASSWORD=swordfish
-            harmless=value
-            """.trimIndent(),
-        )
+        val result =
+            redactor.redact(
+                """
+                Authorization: Bearer abc.def.ghi
+                apiKey = "AIzaSyA-ExampleSecret"
+                STORE_PASSWORD=swordfish
+                harmless=value
+                """.trimIndent(),
+            )
 
         assertTrue(result.text.contains("Authorization: Bearer [REDACTED]"))
         assertTrue(result.text.contains("apiKey = \"[REDACTED]\""))
@@ -203,7 +204,7 @@ class ConfigAndSafetyTest {
         val redactor = Redactor(DroidAgentConfig.default().redaction)
 
         val hit = redactor.redact("MY_API_KEY=supersecret123")
-        val miss = redactor.redact("MY_KEY=short")  // 5 chars — under threshold
+        val miss = redactor.redact("MY_KEY=short") // 5 chars — under threshold
 
         assertTrue(hit.applied.contains("generic-secret-assignment"))
         assertFalse(miss.applied.contains("generic-secret-assignment"))

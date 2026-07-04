@@ -67,7 +67,8 @@ class McpJsonConfigMergerTest {
 
     @Test
     fun `merge parses existing json with line comments and trailing commas`() {
-        val existing = """
+        val existing =
+            """
             {
               // top comment
               "context_servers": {
@@ -75,7 +76,7 @@ class McpJsonConfigMergerTest {
               },
               "theme": "dark",
             }
-        """.trimIndent()
+            """.trimIndent()
         val serverConfig = buildJsonObject { put("command", "/bin/droidagent") }
 
         val result = McpJsonConfigMerger.merge(existing, "context_servers", "droidagentkit", serverConfig)

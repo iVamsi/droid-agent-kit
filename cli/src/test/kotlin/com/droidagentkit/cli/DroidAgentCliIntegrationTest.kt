@@ -60,7 +60,10 @@ class DroidAgentCliIntegrationTest {
         assertEquals(1, exitCode)
     }
 
-    private fun solidColorPng(color: Color, size: Int = 10): ByteArray {
+    private fun solidColorPng(
+        color: Color,
+        size: Int = 10,
+    ): ByteArray {
         val image = BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB)
         val graphics = image.createGraphics()
         graphics.color = color

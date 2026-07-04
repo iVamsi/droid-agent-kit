@@ -7,9 +7,10 @@ import java.nio.file.Path
 import kotlin.io.path.exists
 
 object DependencyVersionChecker {
-    private val directDependencyRegex = Regex(
-        """(?:implementation|api|testImplementation|androidTestImplementation|compileOnly|runtimeOnly)\(\s*"([\w.-]+):([\w.-]+):([\w.-]+)"\s*\)""",
-    )
+    private val directDependencyRegex =
+        Regex(
+            """(?:implementation|api|testImplementation|androidTestImplementation|compileOnly|runtimeOnly)\(\s*"([\w.-]+):([\w.-]+):([\w.-]+)"\s*\)""",
+        )
     private val versionEntryRegex = Regex("""^(\w[\w.-]*)\s*=\s*"([^"]+)"""")
     private val libraryAliasRegex = Regex("""^(\w[\w.-]*)\s*=""")
     private val libraryVersionRefRegex = Regex("""version\.ref\s*=\s*"([\w.-]+)"""")
@@ -30,7 +31,8 @@ object DependencyVersionChecker {
     private fun findBuildFiles(root: Path): List<Path> {
         val files = mutableListOf<Path>()
         Files.walk(root, 6).use { stream ->
-            stream.filter { Files.isRegularFile(it) }
+            stream
+                .filter { Files.isRegularFile(it) }
                 .filter { it.fileName.toString() == "build.gradle.kts" || it.fileName.toString() == "build.gradle" }
                 .forEach { files.add(it) }
         }
@@ -44,7 +46,8 @@ object DependencyVersionChecker {
             directDependencyRegex.findAll(text).forEach { match ->
                 val (group, artifact, version) = match.destructured
                 val coordinate = "$group:$artifact"
-                coordinateVersions.getOrPut(coordinate) { mutableMapOf() }
+                coordinateVersions
+                    .getOrPut(coordinate) { mutableMapOf() }
                     .getOrPut(version) { mutableListOf() }
                     .add(file.toString())
             }
@@ -61,7 +64,10 @@ object DependencyVersionChecker {
         }
     }
 
-    private fun checkOrphanedCatalogEntries(catalogPath: Path, buildFiles: List<Path>): List<DiagnosticFinding> {
+    private fun checkOrphanedCatalogEntries(
+        catalogPath: Path,
+        buildFiles: List<Path>,
+    ): List<DiagnosticFinding> {
         val lines = Files.readAllLines(catalogPath)
         val versionKeys = mutableSetOf<String>()
         val libraryAliases = mutableSetOf<String>()
@@ -88,22 +94,24 @@ object DependencyVersionChecker {
 
         val findings = mutableListOf<DiagnosticFinding>()
         for (versionKey in versionKeys - referencedVersionKeys) {
-            findings += DiagnosticFinding(
-                category = "dependency_drift",
-                severity = Severity.INFO,
-                title = "Unused version catalog entry: $versionKey",
-                detail = "No [libraries] entry in libs.versions.toml references version.ref = \"$versionKey\".",
-                location = "gradle/libs.versions.toml",
-            )
+            findings +=
+                DiagnosticFinding(
+                    category = "dependency_drift",
+                    severity = Severity.INFO,
+                    title = "Unused version catalog entry: $versionKey",
+                    detail = "No [libraries] entry in libs.versions.toml references version.ref = \"$versionKey\".",
+                    location = "gradle/libs.versions.toml",
+                )
         }
         for (alias in libraryAliases - usedAliases) {
-            findings += DiagnosticFinding(
-                category = "dependency_drift",
-                severity = Severity.INFO,
-                title = "Unused catalog library: $alias",
-                detail = "No build file references libs.${alias.replace('-', '.')}.",
-                location = "gradle/libs.versions.toml",
-            )
+            findings +=
+                DiagnosticFinding(
+                    category = "dependency_drift",
+                    severity = Severity.INFO,
+                    title = "Unused catalog library: $alias",
+                    detail = "No build file references libs.${alias.replace('-', '.')}.",
+                    location = "gradle/libs.versions.toml",
+                )
         }
         return findings
     }

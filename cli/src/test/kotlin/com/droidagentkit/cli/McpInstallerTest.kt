@@ -16,22 +16,24 @@ class McpInstallerTest {
         val home = Files.createTempDirectory("dak-home")
         val installer = McpInstaller(home = home, commandExecutor = { error("Claude should not run") })
 
-        val first = installer.install(
-            McpInstallOptions(
-                targets = setOf(McpInstallTarget.CODEX),
-                binPath = Path.of("/opt/droidagent/bin/droidagent"),
-                dryRun = false,
-                applyClaude = false,
-            ),
-        )
-        val second = installer.install(
-            McpInstallOptions(
-                targets = setOf(McpInstallTarget.CODEX),
-                binPath = Path.of("/opt/droidagent/bin/droidagent"),
-                dryRun = false,
-                applyClaude = false,
-            ),
-        )
+        val first =
+            installer.install(
+                McpInstallOptions(
+                    targets = setOf(McpInstallTarget.CODEX),
+                    binPath = Path.of("/opt/droidagent/bin/droidagent"),
+                    dryRun = false,
+                    applyClaude = false,
+                ),
+            )
+        val second =
+            installer.install(
+                McpInstallOptions(
+                    targets = setOf(McpInstallTarget.CODEX),
+                    binPath = Path.of("/opt/droidagent/bin/droidagent"),
+                    dryRun = false,
+                    applyClaude = false,
+                ),
+            )
 
         val config = Files.readString(home.resolve(".codex/config.toml"))
         assertTrue(config.contains("[mcp_servers.droidagentkit]"))
@@ -46,19 +48,21 @@ class McpInstallerTest {
     fun `claude installer produces user scope command and can run it`() {
         val home = Files.createTempDirectory("dak-home")
         val executed = mutableListOf<List<String>>()
-        val installer = McpInstaller(home = home, commandExecutor = { command ->
-            executed += command
-            0
-        })
+        val installer =
+            McpInstaller(home = home, commandExecutor = { command ->
+                executed += command
+                0
+            })
 
-        val result = installer.install(
-            McpInstallOptions(
-                targets = setOf(McpInstallTarget.CLAUDE),
-                binPath = Path.of("/opt/droidagent/bin/droidagent"),
-                dryRun = false,
-                applyClaude = true,
-            ),
-        )
+        val result =
+            installer.install(
+                McpInstallOptions(
+                    targets = setOf(McpInstallTarget.CLAUDE),
+                    binPath = Path.of("/opt/droidagent/bin/droidagent"),
+                    dryRun = false,
+                    applyClaude = true,
+                ),
+            )
 
         assertEquals(
             listOf(
@@ -87,14 +91,15 @@ class McpInstallerTest {
     fun `generic config explains how unsupported tools can connect`() {
         val installer = McpInstaller(home = Files.createTempDirectory("dak-home"), commandExecutor = { 0 })
 
-        val result = installer.install(
-            McpInstallOptions(
-                targets = setOf(McpInstallTarget.GENERIC),
-                binPath = Path.of("/opt/droidagent/bin/droidagent"),
-                dryRun = true,
-                applyClaude = false,
-            ),
-        )
+        val result =
+            installer.install(
+                McpInstallOptions(
+                    targets = setOf(McpInstallTarget.GENERIC),
+                    binPath = Path.of("/opt/droidagent/bin/droidagent"),
+                    dryRun = true,
+                    applyClaude = false,
+                ),
+            )
 
         assertTrue(result.genericJson.contains("\"droidagentkit\""))
         assertTrue(result.genericJson.contains("\"stdio\""))
@@ -140,14 +145,15 @@ class McpInstallerTest {
                 applyClaude = false,
             ),
         )
-        val result = installer.install(
-            McpInstallOptions(
-                targets = setOf(McpInstallTarget.CURSOR),
-                binPath = Path.of("/opt/droidagent/bin/droidagent"),
-                dryRun = false,
-                applyClaude = false,
-            ),
-        )
+        val result =
+            installer.install(
+                McpInstallOptions(
+                    targets = setOf(McpInstallTarget.CURSOR),
+                    binPath = Path.of("/opt/droidagent/bin/droidagent"),
+                    dryRun = false,
+                    applyClaude = false,
+                ),
+            )
 
         val config = Files.readString(home.resolve(".cursor/mcp.json"))
         val servers = Json.parseToJsonElement(config).jsonObject["mcpServers"]!!.jsonObject
@@ -244,14 +250,15 @@ class McpInstallerTest {
         Files.writeString(home.resolve(".cursor/mcp.json"), "not valid json {{{")
         val installer = McpInstaller(home = home, commandExecutor = { error("Claude should not run") })
 
-        val result = installer.install(
-            McpInstallOptions(
-                targets = setOf(McpInstallTarget.CURSOR),
-                binPath = Path.of("/opt/droidagent/bin/droidagent"),
-                dryRun = false,
-                applyClaude = false,
-            ),
-        )
+        val result =
+            installer.install(
+                McpInstallOptions(
+                    targets = setOf(McpInstallTarget.CURSOR),
+                    binPath = Path.of("/opt/droidagent/bin/droidagent"),
+                    dryRun = false,
+                    applyClaude = false,
+                ),
+            )
 
         assertTrue(result.messages.any { it.contains("Could not update") })
     }

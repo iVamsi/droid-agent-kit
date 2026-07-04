@@ -8,14 +8,15 @@ import org.junit.Test
 class CrashLogTriageTest {
     @Test
     fun `extracts fatal exception block with thread and stack frames`() {
-        val logcat = """
+        val logcat =
+            """
             07-01 10:00:00.000  1234  1234 I ActivityManager: Start proc
             07-01 10:00:01.000  1234  1234 E AndroidRuntime: FATAL EXCEPTION: main
             07-01 10:00:01.001  1234  1234 E AndroidRuntime: java.lang.NullPointerException: name must not be null
             07-01 10:00:01.002  1234  1234 E AndroidRuntime: 	at com.example.MainActivity.onCreate(MainActivity.kt:42)
             07-01 10:00:01.003  1234  1234 E AndroidRuntime: 	at android.app.Activity.performCreate(Activity.java:8000)
             07-01 10:00:01.004  1234  1234 I ActivityManager: Process com.example died
-        """.trimIndent()
+            """.trimIndent()
 
         val findings = CrashLogTriage.triage(logcat)
 
@@ -29,10 +30,11 @@ class CrashLogTriageTest {
 
     @Test
     fun `extracts anr block with package name`() {
-        val logcat = """
+        val logcat =
+            """
             07-01 10:00:00.000  1234  1234 I ActivityManager: ANR in com.example.app
             07-01 10:00:00.001  1234  1234 I ActivityManager: Reason: Input dispatching timed out (waiting to send key event)
-        """.trimIndent()
+            """.trimIndent()
 
         val findings = CrashLogTriage.triage(logcat)
 
@@ -54,10 +56,11 @@ class CrashLogTriageTest {
 
     @Test
     fun `returns empty list when no crash or anr patterns are present`() {
-        val logcat = """
+        val logcat =
+            """
             07-01 10:00:00.000  1234  1234 I ActivityManager: Start proc
             07-01 10:00:01.000  1234  1234 D MyApp: onCreate called
-        """.trimIndent()
+            """.trimIndent()
 
         val findings = CrashLogTriage.triage(logcat)
 

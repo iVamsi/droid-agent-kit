@@ -39,7 +39,9 @@ enum class VisualSeverity {
     ERROR,
 }
 
-enum class VisualFindingCategory(val wireName: String) {
+enum class VisualFindingCategory(
+    val wireName: String,
+) {
     PIXEL_DIFF("pixel_diff"),
     TEXT_CLIPPING("text_clipping"),
     ELEMENT_OVERLAP("element_overlap"),

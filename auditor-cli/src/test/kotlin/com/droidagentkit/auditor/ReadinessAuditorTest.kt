@@ -67,9 +67,11 @@ class ReadinessAuditorTest {
 
         val report = ReadinessAuditor(AndroidProjectInspector()).audit(root)
 
-        val evidence = report.risks.filter { it.id == "possible-secret" }
-            .flatMap { it.evidence }
-            .joinToString()
+        val evidence =
+            report.risks
+                .filter { it.id == "possible-secret" }
+                .flatMap { it.evidence }
+                .joinToString()
         assertTrue(evidence.contains("local.properties"))
         assertFalse(evidence.contains("build/outputs"))
     }
@@ -109,12 +111,13 @@ class ReadinessAuditorTest {
         assertTrue(report.risks.any { it.id == "missing-version-catalog" })
     }
 
-    private fun sampleAndroidProject() = Files.createTempDirectory("dak-ready").also { root ->
-        Files.writeString(root.resolve("settings.gradle.kts"), "rootProject.name = \"Ready\"\ninclude(\":app\")")
-        Files.createDirectories(root.resolve("app/src/test/java"))
-        Files.writeString(
-            root.resolve("app/build.gradle.kts"),
-            "plugins { id(\"com.android.application\") }\nandroid { namespace = \"com.example.ready\" }",
-        )
-    }
+    private fun sampleAndroidProject() =
+        Files.createTempDirectory("dak-ready").also { root ->
+            Files.writeString(root.resolve("settings.gradle.kts"), "rootProject.name = \"Ready\"\ninclude(\":app\")")
+            Files.createDirectories(root.resolve("app/src/test/java"))
+            Files.writeString(
+                root.resolve("app/build.gradle.kts"),
+                "plugins { id(\"com.android.application\") }\nandroid { namespace = \"com.example.ready\" }",
+            )
+        }
 }
