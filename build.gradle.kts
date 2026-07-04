@@ -1,5 +1,6 @@
 plugins {
     kotlin("jvm") version "2.3.20" apply false
+    id("org.jlleitschuh.gradle.ktlint") version "14.2.0" apply false
 }
 
 group = "com.droidagentkit"
@@ -8,6 +9,8 @@ version = "0.1.0-alpha"
 subprojects {
     group = rootProject.group
     version = rootProject.version
+
+    apply(plugin = "org.jlleitschuh.gradle.ktlint")
 
     plugins.withId("org.jetbrains.kotlin.jvm") {
         extensions.configure<org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension>("kotlin") {

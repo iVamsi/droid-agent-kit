@@ -42,37 +42,53 @@ class DroidAgentVisualsPlugin : Plugin<Project> {
     }
 }
 
-abstract class DroidAgentVisualsExtension @Inject constructor(project: Project) {
-    val outputDir: DirectoryProperty = project.objects.directoryProperty()
-        .convention(project.layout.buildDirectory.dir("droidagentkit/visuals"))
-    val goldensDir: DirectoryProperty = project.objects.directoryProperty()
-        .convention(project.layout.projectDirectory.dir("src/test/resources/droidagentkit/goldens"))
-    val packageName: Property<String> = project.objects.property(String::class.java).convention("")
-    val failOnChangedGoldens: Property<Boolean> = project.objects.property(Boolean::class.java).convention(true)
-    val failOnAccessibilityWarnings: Property<Boolean> = project.objects.property(Boolean::class.java).convention(false)
-    val matrix: VisualMatrixSpec = project.objects.newInstance(VisualMatrixSpec::class.java)
-    val tolerance: VisualToleranceSpec = project.objects.newInstance(VisualToleranceSpec::class.java)
+abstract class DroidAgentVisualsExtension
+    @Inject
+    constructor(
+        project: Project,
+    ) {
+        val outputDir: DirectoryProperty =
+            project.objects
+                .directoryProperty()
+                .convention(project.layout.buildDirectory.dir("droidagentkit/visuals"))
+        val goldensDir: DirectoryProperty =
+            project.objects
+                .directoryProperty()
+                .convention(project.layout.projectDirectory.dir("src/test/resources/droidagentkit/goldens"))
+        val packageName: Property<String> = project.objects.property(String::class.java).convention("")
+        val failOnChangedGoldens: Property<Boolean> = project.objects.property(Boolean::class.java).convention(true)
+        val failOnAccessibilityWarnings: Property<Boolean> = project.objects.property(Boolean::class.java).convention(false)
+        val matrix: VisualMatrixSpec = project.objects.newInstance(VisualMatrixSpec::class.java)
+        val tolerance: VisualToleranceSpec = project.objects.newInstance(VisualToleranceSpec::class.java)
 
-    fun matrix(action: VisualMatrixSpec.() -> Unit) {
-        matrix.action()
+        fun matrix(action: VisualMatrixSpec.() -> Unit) {
+            matrix.action()
+        }
+
+        fun tolerance(action: VisualToleranceSpec.() -> Unit) {
+            tolerance.action()
+        }
     }
 
-    fun tolerance(action: VisualToleranceSpec.() -> Unit) {
-        tolerance.action()
+abstract class VisualMatrixSpec
+    @Inject
+    constructor(
+        project: Project,
+    ) {
+        val devices: ListProperty<String> = project.objects.listProperty(String::class.java).convention(listOf("phone_412x915"))
+        val themes: ListProperty<String> = project.objects.listProperty(String::class.java).convention(listOf("light", "dark"))
+        val fontScales: ListProperty<Float> = project.objects.listProperty(Float::class.java).convention(listOf(1.0f, 1.3f, 2.0f))
+        val locales: ListProperty<String> = project.objects.listProperty(String::class.java).convention(listOf("en"))
     }
-}
 
-abstract class VisualMatrixSpec @Inject constructor(project: Project) {
-    val devices: ListProperty<String> = project.objects.listProperty(String::class.java).convention(listOf("phone_412x915"))
-    val themes: ListProperty<String> = project.objects.listProperty(String::class.java).convention(listOf("light", "dark"))
-    val fontScales: ListProperty<Float> = project.objects.listProperty(Float::class.java).convention(listOf(1.0f, 1.3f, 2.0f))
-    val locales: ListProperty<String> = project.objects.listProperty(String::class.java).convention(listOf("en"))
-}
-
-abstract class VisualToleranceSpec @Inject constructor(project: Project) {
-    val maxChangedPixelPercent: Property<Double> = project.objects.property(Double::class.java).convention(0.10)
-    val maxColorDistance: Property<Int> = project.objects.property(Int::class.java).convention(3)
-}
+abstract class VisualToleranceSpec
+    @Inject
+    constructor(
+        project: Project,
+    ) {
+        val maxChangedPixelPercent: Property<Double> = project.objects.property(Double::class.java).convention(0.10)
+        val maxColorDistance: Property<Int> = project.objects.property(Int::class.java).convention(3)
+    }
 
 abstract class DroidAgentVisualsReportTask : DefaultTask() {
     @get:OutputDirectory
@@ -98,11 +114,12 @@ abstract class DroidAgentVisualsReportTask : DefaultTask() {
     @TaskAction
     fun writeReport() {
         val tolerance = VisualTolerance(maxChangedPixelPercent.get(), maxColorDistance.get())
-        val report = VisualCaptureEngine.generateReport(
-            outputDir.get().asFile.toPath(),
-            goldensDir.get().asFile.toPath(),
-            tolerance,
-        )
+        val report =
+            VisualCaptureEngine.generateReport(
+                outputDir.get().asFile.toPath(),
+                goldensDir.get().asFile.toPath(),
+                tolerance,
+            )
         val file = outputDir.file("visual-report.md").get().asFile
         file.parentFile.mkdirs()
         file.writeText(VisualCaptureEngine.renderMarkdown(report, packageName.orNull ?: "unknown"))
@@ -121,10 +138,11 @@ abstract class DroidAgentVisualsUpdateGoldensTask : DefaultTask() {
 
     @TaskAction
     fun updateGoldens() {
-        val updated = VisualCaptureEngine.updateGoldens(
-            outputDir.get().asFile.toPath(),
-            goldensDir.get().asFile.toPath(),
-        )
+        val updated =
+            VisualCaptureEngine.updateGoldens(
+                outputDir.get().asFile.toPath(),
+                goldensDir.get().asFile.toPath(),
+            )
         logger.lifecycle("DroidAgentKit updated ${updated.size} golden image(s) in ${goldensDir.get().asFile}")
     }
 }

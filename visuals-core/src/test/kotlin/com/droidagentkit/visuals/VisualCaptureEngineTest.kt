@@ -16,16 +16,17 @@ class VisualCaptureEngineTest {
         val outputDir = Files.createTempDirectory("dak-visual-capture")
         val pngBytes = byteArrayOf(1, 2, 3, 4)
 
-        val capture = VisualCaptureEngine.persistCapture(
-            outputDir = outputDir,
-            caseName = "home_screen",
-            device = "phone_412x915",
-            theme = "light",
-            fontScale = 1.0f,
-            locale = "en",
-            pngBytes = pngBytes,
-            semanticsDump = "Button: Start",
-        )
+        val capture =
+            VisualCaptureEngine.persistCapture(
+                outputDir = outputDir,
+                caseName = "home_screen",
+                device = "phone_412x915",
+                theme = "light",
+                fontScale = 1.0f,
+                locale = "en",
+                pngBytes = pngBytes,
+                semanticsDump = "Button: Start",
+            )
 
         assertEquals("home_screen", capture.caseName)
         assertEquals("phone_412x915", capture.environment.device)
@@ -84,7 +85,12 @@ class VisualCaptureEngineTest {
         Files.createDirectories(goldenDir)
         Files.write(goldenDir.resolve("phone_412x915_light_1.0_en.png"), golden)
 
-        val report = VisualCaptureEngine.generateReport(outputDir, goldensDir, VisualTolerance(maxChangedPixelPercent = 0.0, maxColorDistance = 0))
+        val report =
+            VisualCaptureEngine.generateReport(
+                outputDir,
+                goldensDir,
+                VisualTolerance(maxChangedPixelPercent = 0.0, maxColorDistance = 0),
+            )
 
         assertEquals(ResultStatus.FAILED, report.status)
         assertEquals(VisualFindingCategory.PIXEL_DIFF, report.findings.single().category)
@@ -100,14 +106,28 @@ class VisualCaptureEngineTest {
 
         assertEquals(ResultStatus.PARTIAL, report.status)
         assertEquals(VisualSeverity.WARNING, report.findings.single().severity)
-        assertTrue(report.findings.single().title.contains("No golden image yet"))
+        assertTrue(
+            report.findings
+                .single()
+                .title
+                .contains("No golden image yet"),
+        )
     }
 
     @Test
     fun `generateReport flags dimension mismatch as a finding not a crash`() {
         val outputDir = Files.createTempDirectory("dak-report-dims")
         val goldensDir = Files.createTempDirectory("dak-goldens-dims")
-        VisualCaptureEngine.persistCapture(outputDir, "home_screen", "phone_412x915", "light", 1.0f, "en", solidColorPng(Color.WHITE, size = 20), "")
+        VisualCaptureEngine.persistCapture(
+            outputDir,
+            "home_screen",
+            "phone_412x915",
+            "light",
+            1.0f,
+            "en",
+            solidColorPng(Color.WHITE, size = 20),
+            "",
+        )
         val goldenDir = goldensDir.resolve("home_screen")
         Files.createDirectories(goldenDir)
         Files.write(goldenDir.resolve("phone_412x915_light_1.0_en.png"), solidColorPng(Color.WHITE, size = 10))
@@ -115,7 +135,12 @@ class VisualCaptureEngineTest {
         val report = VisualCaptureEngine.generateReport(outputDir, goldensDir, VisualTolerance())
 
         assertEquals(ResultStatus.FAILED, report.status)
-        assertTrue(report.findings.single().title.contains("dimensions changed"))
+        assertTrue(
+            report.findings
+                .single()
+                .title
+                .contains("dimensions changed"),
+        )
     }
 
     @Test
@@ -146,7 +171,10 @@ class VisualCaptureEngineTest {
         assertTrue(markdown.contains("com.example.app"))
     }
 
-    private fun solidColorPng(color: Color, size: Int = 10): ByteArray {
+    private fun solidColorPng(
+        color: Color,
+        size: Int = 10,
+    ): ByteArray {
         val image = BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB)
         val graphics = image.createGraphics()
         graphics.color = color
@@ -157,7 +185,11 @@ class VisualCaptureEngineTest {
         return out.toByteArray()
     }
 
-    private fun solidColorPngWithChangedPixel(fill: Color, changed: Color, size: Int = 10): ByteArray {
+    private fun solidColorPngWithChangedPixel(
+        fill: Color,
+        changed: Color,
+        size: Int = 10,
+    ): ByteArray {
         val image = BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB)
         val graphics = image.createGraphics()
         graphics.color = fill

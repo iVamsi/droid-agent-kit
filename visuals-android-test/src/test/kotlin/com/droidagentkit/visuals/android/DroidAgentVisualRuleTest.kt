@@ -12,13 +12,14 @@ class DroidAgentVisualRuleTest {
         val rule = DroidAgentVisualRule(outputDir)
         val pngBytes = byteArrayOf(1, 2, 3)
 
-        val capture = rule.captureCompose(
-            name = "home_screen",
-            matrix = VisualMatrix.standard(),
-            semantics = listOf("Button: Start"),
-        ) {
-            pngBytes
-        }
+        val capture =
+            rule.captureCompose(
+                name = "home_screen",
+                matrix = VisualMatrix.standard(),
+                semantics = listOf("Button: Start"),
+            ) {
+                pngBytes
+            }
 
         assertEquals("home_screen", capture.caseName)
         assertTrue(capture.environment.theme.isNotBlank())

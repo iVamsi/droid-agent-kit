@@ -23,7 +23,12 @@ class DroidAgentVisualsPluginTest {
         assertNotNull(project.extensions.findByName("droidAgentVisuals"))
         assertNotNull(project.tasks.findByName("droidAgentVisualsReport"))
         assertNotNull(project.tasks.findByName("droidAgentVisualsUpdateGoldens"))
-        assertTrue(project.tasks.getByName("droidAgentVisualsUpdateGoldens").description!!.contains("golden"))
+        assertTrue(
+            project.tasks
+                .getByName("droidAgentVisualsUpdateGoldens")
+                .description!!
+                .contains("golden"),
+        )
     }
 
     @Test
@@ -88,7 +93,10 @@ class DroidAgentVisualsPluginTest {
         assertTrue(Files.exists(goldensDir.resolve("home_screen/phone_412x915_light_1.0_en.png")))
     }
 
-    private fun solidColorPng(color: Color, size: Int = 10): ByteArray {
+    private fun solidColorPng(
+        color: Color,
+        size: Int = 10,
+    ): ByteArray {
         val image = BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB)
         val graphics = image.createGraphics()
         graphics.color = color

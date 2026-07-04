@@ -21,18 +21,18 @@ data class ProjectConfig(
 )
 
 data class SafetyConfig(
-    val allowGradleTasks: List<String> = listOf(
-        ":*:test*UnitTest",
-        ":*:lint*",
-        ":*:assemble*Debug",
-    ),
+    val allowGradleTasks: List<String> =
+        listOf(
+            ":*:test*UnitTest",
+            ":*:lint*",
+            ":*:assemble*Debug",
+        ),
     val allowAdbInput: Boolean = false,
     val allowAppInstall: Boolean = true,
     val allowEmulatorStart: Boolean = false,
     val maxCommandSeconds: Long = 600,
 ) {
-    fun isGradleTaskAllowed(task: String): Boolean =
-        allowGradleTasks.any { pattern -> globToRegex(pattern).matches(task) }
+    fun isGradleTaskAllowed(task: String): Boolean = allowGradleTasks.any { pattern -> globToRegex(pattern).matches(task) }
 
     private fun globToRegex(pattern: String): Regex {
         val builder = StringBuilder("^")
@@ -59,20 +59,37 @@ data class RedactionConfig(
     val extraPatterns: List<String> = emptyList(),
 )
 
-data class ConfigError(val line: Int, val key: String, val message: String)
+data class ConfigError(
+    val line: Int,
+    val key: String,
+    val message: String,
+)
 
 sealed interface ConfigLoadResult {
-    data class Loaded(val config: DroidAgentConfig, val warnings: List<String> = emptyList()) : ConfigLoadResult
-    data class Invalid(val errors: List<ConfigError>) : ConfigLoadResult
+    data class Loaded(
+        val config: DroidAgentConfig,
+        val warnings: List<String> = emptyList(),
+    ) : ConfigLoadResult
+
+    data class Invalid(
+        val errors: List<ConfigError>,
+    ) : ConfigLoadResult
 }
 
 object DroidAgentConfigLoader {
     private val knownSections = setOf("project", "safety", "reports", "redaction")
-    private val knownKeys = setOf(
-        "project.name", "safety.allowGradleTasks", "safety.allowAdbInput", "safety.allowAppInstall",
-        "safety.allowEmulatorStart", "safety.maxCommandSeconds", "reports.outputDir",
-        "redaction.enabled", "redaction.extraPatterns",
-    )
+    private val knownKeys =
+        setOf(
+            "project.name",
+            "safety.allowGradleTasks",
+            "safety.allowAdbInput",
+            "safety.allowAppInstall",
+            "safety.allowEmulatorStart",
+            "safety.maxCommandSeconds",
+            "reports.outputDir",
+            "redaction.enabled",
+            "redaction.extraPatterns",
+        )
 
     fun load(projectRoot: Path): ConfigLoadResult {
         val path = projectRoot.resolve(".droidagentkit/config.yaml")
@@ -142,7 +159,9 @@ object DroidAgentConfigLoader {
                 "project.name" -> projectName = value
                 "safety.allowAdbInput" -> allowAdbInput = value.toStrictBooleanOrError(lineNumber, fullKey, errors) ?: allowAdbInput
                 "safety.allowAppInstall" -> allowAppInstall = value.toStrictBooleanOrError(lineNumber, fullKey, errors) ?: allowAppInstall
-                "safety.allowEmulatorStart" -> allowEmulatorStart = value.toStrictBooleanOrError(lineNumber, fullKey, errors) ?: allowEmulatorStart
+                "safety.allowEmulatorStart" ->
+                    allowEmulatorStart =
+                        value.toStrictBooleanOrError(lineNumber, fullKey, errors) ?: allowEmulatorStart
                 "safety.maxCommandSeconds" -> maxCommandSeconds = value.toLongOrError(lineNumber, fullKey, errors) ?: maxCommandSeconds
                 "reports.outputDir" -> outputDir = value
                 "redaction.enabled" -> redactionEnabled = value.toStrictBooleanOrError(lineNumber, fullKey, errors) ?: redactionEnabled
@@ -152,13 +171,14 @@ object DroidAgentConfigLoader {
 
         if (errors.isNotEmpty()) return ConfigLoadResult.Invalid(errors)
 
-        val safety = SafetyConfig(
-            allowGradleTasks = allowGradleTasks.ifEmpty { SafetyConfig().allowGradleTasks },
-            allowAdbInput = allowAdbInput,
-            allowAppInstall = allowAppInstall,
-            allowEmulatorStart = allowEmulatorStart,
-            maxCommandSeconds = maxCommandSeconds,
-        )
+        val safety =
+            SafetyConfig(
+                allowGradleTasks = allowGradleTasks.ifEmpty { SafetyConfig().allowGradleTasks },
+                allowAdbInput = allowAdbInput,
+                allowAppInstall = allowAppInstall,
+                allowEmulatorStart = allowEmulatorStart,
+                maxCommandSeconds = maxCommandSeconds,
+            )
         return ConfigLoadResult.Loaded(
             DroidAgentConfig(
                 project = ProjectConfig(projectName),
@@ -172,7 +192,11 @@ object DroidAgentConfigLoader {
 
     private fun String.unquote(): String = trim().removeSurrounding("\"").removeSurrounding("'")
 
-    private fun String.toStrictBooleanOrError(line: Int, key: String, errors: MutableList<ConfigError>): Boolean? =
+    private fun String.toStrictBooleanOrError(
+        line: Int,
+        key: String,
+        errors: MutableList<ConfigError>,
+    ): Boolean? =
         when (this) {
             "true" -> true
             "false" -> false
@@ -182,7 +206,11 @@ object DroidAgentConfigLoader {
             }
         }
 
-    private fun String.toLongOrError(line: Int, key: String, errors: MutableList<ConfigError>): Long? =
+    private fun String.toLongOrError(
+        line: Int,
+        key: String,
+        errors: MutableList<ConfigError>,
+    ): Long? =
         toLongOrNull() ?: run {
             errors += ConfigError(line, key, "expected a number, got '$this'")
             null
