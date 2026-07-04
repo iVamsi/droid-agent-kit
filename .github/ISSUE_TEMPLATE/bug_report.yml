@@ -1,0 +1,48 @@
+name: Bug report
+description: Report a problem with DroidAgentKit
+labels: ["bug"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear description of the bug.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Exact commands or steps that trigger the problem.
+      placeholder: |
+        1. Run `./cli/build/install/droidagent/bin/droidagent inspect --project ...`
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include the exact error message or output, if any.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: DroidAgentKit version / commit
+      description: Output of `git rev-parse HEAD`, or the tagged release you're using.
+    validations:
+      required: false
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, JDK version (`java -version`), Gradle version.
+    validations:
+      required: false
