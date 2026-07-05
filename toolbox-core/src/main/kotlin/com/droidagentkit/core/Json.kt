@@ -28,10 +28,10 @@ object Json {
             is Number, is Boolean -> value.toString()
             is Enum<*> -> write(value.name.lowercase())
             is Map<*, *> ->
-                value.entries.sortedBy { it.key.toString() }.joinToString(separator = ",", prefix = "{", postfix = "}") { (key, item) ->
+                value.entries.sortedBy { it.key.toString() }.joinToString(prefix = "{", postfix = "}") { (key, item) ->
                     write(key.toString()) + ":" + write(item)
                 }
-            is Iterable<*> -> value.joinToString(separator = ",", prefix = "[", postfix = "]") { write(it) }
+            is Iterable<*> -> value.joinToString(prefix = "[", postfix = "]") { write(it) }
             else -> write(value.toString())
         }
 
