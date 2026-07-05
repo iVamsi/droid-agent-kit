@@ -45,6 +45,24 @@ After installation, open any Android project in Codex or Claude Code and ask for
 - "Audit this repo for agent readiness."
 - "Capture Android diagnostics and summarize likely failures."
 
+## How It Works
+
+`droidagent serve-mcp` is a long-running MCP (Model Context Protocol) server. You never run it by
+hand — once `install-mcp` registers it, your agent tool launches it as a subprocess automatically:
+
+1. The agent (Claude Code, Cursor, Codex, Zed, or VS Code + GitHub Copilot Chat) starts
+   `droidagent serve-mcp --transport stdio --project auto` itself, whenever it starts up.
+2. The agent and server perform the MCP handshake over JSON-RPC 2.0: `initialize`, then
+   `notifications/initialized`.
+3. The agent sends `tools/list` to discover the 12 `android_*` tools (project inspection, allowlisted
+   Gradle runs, adb, logcat, lint, crash triage, and more) and their descriptions and input schemas.
+4. From then on, whenever your prompt matches what a tool description says it does, the agent's own
+   model decides to call it via `tools/call` — you don't invoke tools directly, you just ask in natural
+   language (see the example prompts above).
+5. `--project auto` resolves whichever Android project is "active" from agent-provided environment
+   variables (`CLAUDE_PROJECT_DIR`, `CODEX_WORKSPACE`, ...) or the current working directory, so one
+   user-wide registration works across every Android project you open.
+
 ## Direct CLI Usage
 
 ```bash
