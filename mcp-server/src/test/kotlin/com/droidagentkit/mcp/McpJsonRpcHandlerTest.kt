@@ -86,7 +86,7 @@ class McpJsonRpcHandlerTest {
 
         val response = handler.handle("not json at all")
 
-        assertEquals("""{"error":{"code":-32700,"message":"Parse error"},"id":null,"jsonrpc":"2.0"}""", response)
+        assertEquals("""{"error":{"code":-32700, "message":"Parse error"}, "id":null, "jsonrpc":"2.0"}""", response)
     }
 
     @Test
@@ -95,7 +95,7 @@ class McpJsonRpcHandlerTest {
 
         val response = handler.handle("""{"jsonrpc":"2.0","id":6}""")
 
-        assertEquals("""{"error":{"code":-32600,"message":"Invalid Request"},"id":6,"jsonrpc":"2.0"}""", response)
+        assertEquals("""{"error":{"code":-32600, "message":"Invalid Request"}, "id":6, "jsonrpc":"2.0"}""", response)
     }
 
     @Test
@@ -104,7 +104,7 @@ class McpJsonRpcHandlerTest {
 
         val response = handler.handle("""{"jsonrpc":"2.0","id":7,"method":"resources/list"}""")
 
-        assertEquals("""{"error":{"code":-32601,"message":"Method not found: resources/list"},"id":7,"jsonrpc":"2.0"}""", response)
+        assertEquals("""{"error":{"code":-32601, "message":"Method not found: resources/list"}, "id":7, "jsonrpc":"2.0"}""", response)
     }
 
     @Test
