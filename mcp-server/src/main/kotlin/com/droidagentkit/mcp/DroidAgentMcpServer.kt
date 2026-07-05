@@ -14,6 +14,10 @@ class DroidAgentMcpHttpServer(
     private val bearerToken: String? = "local-dev-token",
 ) {
     private var server: HttpServer? = null
+    private val rpcHandler = McpJsonRpcHandler(dispatcher)
+
+    val boundPort: Int?
+        get() = server?.address?.port
 
     fun start() {
         val http = HttpServer.create(InetSocketAddress(host, port), 0)
@@ -24,8 +28,8 @@ class DroidAgentMcpHttpServer(
                 exchange.responseBody.close()
                 return@createContext
             }
-            val response =
-                if (exchange.requestMethod.equals("GET", ignoreCase = true)) {
+            if (exchange.requestMethod.equals("GET", ignoreCase = true)) {
+                val response =
                     Json.write(
                         mapOf(
                             "tools" to
@@ -34,19 +38,23 @@ class DroidAgentMcpHttpServer(
                                 },
                         ),
                     )
+                val bytes = response.toByteArray(StandardCharsets.UTF_8)
+                exchange.responseHeaders.add("Content-Type", "application/json")
+                exchange.sendResponseHeaders(200, bytes.size.toLong())
+                exchange.responseBody.use { it.write(bytes) }
+            } else {
+                val body = exchange.requestBody.readAllBytes().toString(StandardCharsets.UTF_8)
+                val response = rpcHandler.handle(body)
+                if (response == null) {
+                    exchange.sendResponseHeaders(202, -1)
+                    exchange.responseBody.close()
                 } else {
-                    val body = exchange.requestBody.readAllBytes().toString(StandardCharsets.UTF_8)
-                    val name = Regex("\"name\"\\s*:\\s*\"([^\"]+)\"").find(body)?.groupValues?.get(1)
-                    if (name == null) {
-                        Json.write(mapOf("status" to "failed", "summary" to "Request body must include a tool name."))
-                    } else {
-                        Json.write(dispatcher.call(name, emptyMap()))
-                    }
+                    val bytes = response.toByteArray(StandardCharsets.UTF_8)
+                    exchange.responseHeaders.add("Content-Type", "application/json")
+                    exchange.sendResponseHeaders(200, bytes.size.toLong())
+                    exchange.responseBody.use { it.write(bytes) }
                 }
-            val bytes = response.toByteArray(StandardCharsets.UTF_8)
-            exchange.responseHeaders.add("Content-Type", "application/json")
-            exchange.sendResponseHeaders(200, bytes.size.toLong())
-            exchange.responseBody.use { it.write(bytes) }
+            }
         }
         http.executor = Executors.newCachedThreadPool()
         http.start()
@@ -62,10 +70,7 @@ class DroidAgentMcpHttpServer(
 class DroidAgentStdioServer(
     private val dispatcher: DroidAgentMcpDispatcher = DroidAgentMcpDispatcher(DroidAgentConfig.default()),
 ) {
-    fun runOnce(line: String): String {
-        val tool =
-            Regex("\"name\"\\s*:\\s*\"([^\"]+)\"").find(line)?.groupValues?.get(1)
-                ?: return Json.write(mapOf("status" to "failed", "summary" to "Missing tool name."))
-        return Json.write(dispatcher.call(tool, emptyMap()))
-    }
+    private val rpcHandler = McpJsonRpcHandler(dispatcher)
+
+    fun runOnce(line: String): String? = rpcHandler.handle(line)
 }
