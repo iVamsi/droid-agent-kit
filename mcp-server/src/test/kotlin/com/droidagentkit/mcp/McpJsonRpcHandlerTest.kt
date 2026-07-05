@@ -63,7 +63,10 @@ class McpJsonRpcHandlerTest {
 
         val response =
             handler.handle(
-                """{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"android_project_inspect","arguments":{"rootPath":"${root.toString().replace("\\", "\\\\")}"}}}""",
+                """{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"android_project_inspect","arguments":{"rootPath":"${root.toString().replace(
+                    "\\",
+                    "\\\\",
+                )}"}}}""",
             )
 
         assertTrue(response!!.contains("\"isError\":false"))
