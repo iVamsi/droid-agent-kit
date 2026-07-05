@@ -81,7 +81,7 @@ object CliCommandRegistry {
                 "install-mcp",
                 "Register DroidAgentKit as a user-scope MCP server.",
                 listOf(
-                    CliOption("--targets", "Comma-separated: codex, claude, generic, all. Defaults to all."),
+                    CliOption("--targets", "Comma-separated: codex, claude, generic, cursor, zed, vscode, all. Defaults to all."),
                     CliOption("--bin", "Override path to the droidagent binary."),
                     CliOption("--dry-run", "Preview changes without writing files.", takesValue = false),
                     CliOption("--no-claude-apply", "Skip running the Claude Code apply step.", takesValue = false),
