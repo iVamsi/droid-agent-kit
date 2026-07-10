@@ -125,6 +125,19 @@ class ConfigAndSafetyTest {
     }
 
     @Test
+    fun `config loader rejects report output outside the project`() {
+        val dir = Files.createTempDirectory("dak-config-output")
+        val config = dir.resolve(".droidagentkit/config.yaml")
+        Files.createDirectories(config.parent)
+        Files.writeString(config, "reports:\n  outputDir: ../../outside\n")
+
+        val result = DroidAgentConfigLoader.load(dir)
+
+        assertTrue(result is ConfigLoadResult.Invalid)
+        assertEquals("reports.outputDir", (result as ConfigLoadResult.Invalid).errors.single().key)
+    }
+
+    @Test
     fun `redactor hides common secrets and reports what changed`() {
         val redactor = Redactor(DroidAgentConfig.default().redaction)
 

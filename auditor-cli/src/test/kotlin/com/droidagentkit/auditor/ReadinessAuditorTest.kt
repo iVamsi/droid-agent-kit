@@ -77,6 +77,16 @@ class ReadinessAuditorTest {
     }
 
     @Test
+    fun `auditor ignores unreadable binary files while scanning visual hooks`() {
+        val root = sampleAndroidProject()
+        Files.write(root.resolve(".DS_Store"), byteArrayOf(0xFF.toByte(), 0xFE.toByte()))
+
+        val report = ReadinessAuditor(AndroidProjectInspector()).audit(root)
+
+        assertTrue(report.score >= 0)
+    }
+
+    @Test
     fun `auditor awards points and skips risk for static analysis config`() {
         val root = sampleAndroidProject()
         Files.writeString(root.resolve("detekt.yml"), "build:\n  maxIssues: 0\n")

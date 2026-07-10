@@ -22,23 +22,32 @@ import kotlin.io.path.exists
 
 data class McpTool(
     val name: String,
+    val title: String,
     val description: String,
     val inputSchema: Map<String, Any>,
+    val outputSchema: Map<String, Any>,
 )
 
 class DroidAgentMcpDispatcher(
     private val config: DroidAgentConfig,
+    projectRoot: Path = Path.of("."),
     private val inspector: AndroidProjectInspector = AndroidProjectInspector(),
 ) {
+    private val projectRoot = projectRoot.toAbsolutePath().normalize()
+    private val realProjectRoot = this.projectRoot.toRealPath()
+
     fun listTools(): List<McpTool> =
         listOf(
             McpTool(
                 name = "android_project_inspect",
+                title = "Inspect Android project",
                 description = "Inspect Android Gradle modules, versions, manifests, and safe commands.",
                 inputSchema = schema(props = mapOf("rootPath" to rootPathProp)),
+                outputSchema = toolResultSchema,
             ),
             McpTool(
                 name = "android_gradle_run",
+                title = "Run allowlisted Gradle task",
                 description = "Run a configured allowlisted Gradle task and capture redacted logs.",
                 inputSchema =
                     schema(
@@ -53,14 +62,18 @@ class DroidAgentMcpDispatcher(
                                 "timeoutSeconds" to num("Override command timeout in seconds."),
                             ),
                     ),
+                outputSchema = toolResultSchema,
             ),
             McpTool(
                 name = "android_devices_list",
+                title = "List Android devices",
                 description = "List adb devices and basic status.",
                 inputSchema = schema(props = mapOf("rootPath" to rootPathProp)),
+                outputSchema = toolResultSchema,
             ),
             McpTool(
                 name = "android_app_install",
+                title = "Install Android app",
                 description = "Install an APK when app install is enabled.",
                 inputSchema =
                     schema(
@@ -74,9 +87,11 @@ class DroidAgentMcpDispatcher(
                                 "reinstall" to bool("Pass -r to adb install to reinstall keeping data."),
                             ),
                     ),
+                outputSchema = toolResultSchema,
             ),
             McpTool(
                 name = "android_app_launch",
+                title = "Launch Android app",
                 description = "Launch an Android package/activity on an explicit device.",
                 inputSchema =
                     schema(
@@ -89,9 +104,11 @@ class DroidAgentMcpDispatcher(
                                 "activityName" to str("Fully qualified activity name. Omit to use the default launcher."),
                             ),
                     ),
+                outputSchema = toolResultSchema,
             ),
             McpTool(
                 name = "android_logcat_capture",
+                title = "Capture Logcat",
                 description = "Capture redacted logcat output for a device or package.",
                 inputSchema =
                     schema(
@@ -102,9 +119,11 @@ class DroidAgentMcpDispatcher(
                                 "maxLines" to num("Maximum number of log lines to capture. Default: 500."),
                             ),
                     ),
+                outputSchema = toolResultSchema,
             ),
             McpTool(
                 name = "android_screen_snapshot",
+                title = "Capture Android screen",
                 description = "Capture screenshot and UIAutomator XML from an explicit device.",
                 inputSchema =
                     schema(
@@ -115,14 +134,18 @@ class DroidAgentMcpDispatcher(
                                 "outputName" to str("Base name for the output artifact. Optional."),
                             ),
                     ),
+                outputSchema = toolResultSchema,
             ),
             McpTool(
                 name = "android_report_bundle",
+                title = "Create Android report bundle",
                 description = "Create an agent-readable Android diagnostic report bundle.",
                 inputSchema = schema(props = mapOf("rootPath" to rootPathProp)),
+                outputSchema = toolResultSchema,
             ),
             McpTool(
                 name = "android_lint_run",
+                title = "Run Android lint",
                 description = "Run an allowlisted lint/detekt Gradle task and parse its XML/SARIF report into structured findings.",
                 inputSchema =
                     schema(
@@ -134,9 +157,11 @@ class DroidAgentMcpDispatcher(
                                 "timeoutSeconds" to num("Override command timeout in seconds."),
                             ),
                     ),
+                outputSchema = toolResultSchema,
             ),
             McpTool(
                 name = "android_crash_triage",
+                title = "Triage Android crash",
                 description = "Capture logcat from a device and extract structured crash/ANR findings.",
                 inputSchema =
                     schema(
@@ -147,16 +172,20 @@ class DroidAgentMcpDispatcher(
                                 "maxLines" to num("Maximum number of log lines to capture. Default: 500."),
                             ),
                     ),
+                outputSchema = toolResultSchema,
             ),
             McpTool(
                 name = "android_dependency_check",
+                title = "Check dependency hygiene",
                 description =
                     "Check declared dependency versions for drift and orphaned version-catalog entries." +
                         " Local-only, no network calls, no 'latest version' data.",
                 inputSchema = schema(props = mapOf("rootPath" to rootPathProp)),
+                outputSchema = toolResultSchema,
             ),
             McpTool(
                 name = "android_build_performance",
+                title = "Profile Android build",
                 description = "Run an allowlisted Gradle task with --profile and surface the slowest tasks from the profile report.",
                 inputSchema =
                     schema(
@@ -168,6 +197,7 @@ class DroidAgentMcpDispatcher(
                                 "timeoutSeconds" to num("Override command timeout in seconds."),
                             ),
                     ),
+                outputSchema = toolResultSchema,
             ),
         )
 
@@ -175,20 +205,30 @@ class DroidAgentMcpDispatcher(
         name: String,
         arguments: Map<String, Any?>,
     ): Map<String, Any> =
-        when (name) {
-            "android_project_inspect" -> inspect(arguments)
-            "android_gradle_run" -> runGradle(arguments)
-            "android_devices_list" -> runAdb(listOf("devices", "-l"), "adb-devices", rootPath(arguments))
-            "android_app_install" -> install(arguments)
-            "android_app_launch" -> launch(arguments)
-            "android_logcat_capture" -> logcat(arguments)
-            "android_screen_snapshot" -> snapshot(arguments)
-            "android_report_bundle" -> reportBundle(arguments)
-            "android_lint_run" -> lintRun(arguments)
-            "android_crash_triage" -> crashTriage(arguments)
-            "android_dependency_check" -> dependencyCheck(arguments)
-            "android_build_performance" -> buildPerformance(arguments)
-            else -> resultMap(ToolResult(status = ResultStatus.UNSUPPORTED, summary = "Unknown MCP tool: $name"))
+        try {
+            when (name) {
+                "android_project_inspect" -> inspect(arguments)
+                "android_gradle_run" -> runGradle(arguments)
+                "android_devices_list" -> runAdb(listOf("devices", "-l"), "adb-devices", rootPath(arguments))
+                "android_app_install" -> install(arguments)
+                "android_app_launch" -> launch(arguments)
+                "android_logcat_capture" -> logcat(arguments)
+                "android_screen_snapshot" -> snapshot(arguments)
+                "android_report_bundle" -> reportBundle(arguments)
+                "android_lint_run" -> lintRun(arguments)
+                "android_crash_triage" -> crashTriage(arguments)
+                "android_dependency_check" -> dependencyCheck(arguments)
+                "android_build_performance" -> buildPerformance(arguments)
+                else -> resultMap(ToolResult(status = ResultStatus.UNSUPPORTED, summary = "Unknown MCP tool: $name"))
+            }
+        } catch (error: ProjectRootViolation) {
+            resultMap(
+                ToolResult(
+                    status = ResultStatus.BLOCKED,
+                    summary = error.message ?: "Requested project root is not allowed.",
+                    warnings = listOf("project-root-denied"),
+                ),
+            )
         }
 
     private fun inspect(arguments: Map<String, Any?>): Map<String, Any> {
@@ -226,7 +266,19 @@ class DroidAgentMcpDispatcher(
         val root = rootPath(arguments)
         val task = arguments["task"]?.toString().orEmpty()
         val args = (arguments["arguments"] as? List<*> ?: emptyList<String>()).map { it.toString() }
-        val timeout = arguments["timeoutSeconds"]?.toString()?.toLongOrNull() ?: config.safety.maxCommandSeconds
+        val disallowedArgs = args.filter { it !in SAFE_GRADLE_ARGUMENTS }
+        if (disallowedArgs.isNotEmpty()) {
+            return resultMap(
+                ToolResult(
+                    status = ResultStatus.BLOCKED,
+                    summary = "Unsupported Gradle arguments: ${disallowedArgs.joinToString(", ")}. Use the dedicated tool options instead.",
+                    warnings = listOf("gradle-argument-denied"),
+                ),
+            )
+        }
+        val timeout =
+            (arguments["timeoutSeconds"]?.toString()?.toLongOrNull() ?: config.safety.maxCommandSeconds)
+                .coerceIn(1, config.safety.maxCommandSeconds)
         val extraFlags =
             buildList {
                 if (arguments["rerunTasks"] == true) add("--rerun-tasks")
@@ -495,7 +547,7 @@ class DroidAgentMcpDispatcher(
                 }
             }
 
-        val writer = ArtifactWriter(root.resolve(config.reports.outputDir))
+        val writer = ArtifactWriter(artifactOutputDir(root))
         val ref = writer.writeText("android-report.md", markdown, ArtifactType.MARKDOWN, "Android project report")
 
         return resultMap(
@@ -613,7 +665,22 @@ class DroidAgentMcpDispatcher(
     }
 
     private fun runner(root: Path): ProcessRunner =
-        ProcessRunner(Redactor(config.redaction), ArtifactWriter(root.resolve(config.reports.outputDir)))
+        ProcessRunner(
+            Redactor(config.redaction),
+            ArtifactWriter(artifactOutputDir(root)),
+        )
+
+    private fun artifactOutputDir(root: Path): Path {
+        val output = root.resolve(config.reports.outputDir).normalize()
+        if (!output.startsWith(root)) {
+            throw ProjectRootViolation("Configured report output must stay inside the server project root.")
+        }
+        val existingAncestor = generateSequence(output) { it.parent }.first { it.exists() }
+        if (!existingAncestor.toRealPath().startsWith(realProjectRoot)) {
+            throw ProjectRootViolation("Configured report output resolves outside the server project root.")
+        }
+        return output
+    }
 
     private fun resultMap(result: ToolResult): Map<String, Any> =
         mapOf(
@@ -625,8 +692,13 @@ class DroidAgentMcpDispatcher(
             "warnings" to result.warnings,
         )
 
-    private fun rootPath(arguments: Map<String, Any?>): Path =
-        Path.of(arguments["rootPath"]?.toString() ?: ".").toAbsolutePath().normalize()
+    private fun rootPath(arguments: Map<String, Any?>): Path {
+        val requested = Path.of(arguments["rootPath"]?.toString() ?: projectRoot.toString()).toAbsolutePath().normalize()
+        if (!requested.exists() || requested.toRealPath() != realProjectRoot) {
+            throw ProjectRootViolation("Requested root '$requested' is outside the server project '$projectRoot'.")
+        }
+        return projectRoot
+    }
 
     private fun String.safeId(): String = replace(Regex("[^A-Za-z0-9._-]"), "-").trim('-').ifBlank { "task" }
 
@@ -648,6 +720,38 @@ class DroidAgentMcpDispatcher(
     private fun arrStr(desc: String): Map<String, Any> =
         mapOf("type" to "array", "items" to mapOf("type" to "string"), "description" to desc)
 
-    private val rootPathProp get() = str("Absolute path to the Android project root. Defaults to cwd.")
+    private val rootPathProp get() = str("Android project root bound when this MCP server started. Defaults to that root.")
     private val deviceSerialProp get() = str("adb device serial from `adb devices`.")
+    private val toolResultSchema: Map<String, Any> =
+        mapOf(
+            "type" to "object",
+            "properties" to
+                mapOf(
+                    "schemaVersion" to mapOf("type" to "string"),
+                    "status" to mapOf("type" to "string"),
+                    "summary" to mapOf("type" to "string"),
+                    "artifacts" to mapOf("type" to "array"),
+                    "redactionsApplied" to mapOf("type" to "array"),
+                    "warnings" to mapOf("type" to "array"),
+                ),
+            "required" to listOf("schemaVersion", "status", "summary"),
+        )
+
+    private class ProjectRootViolation(
+        message: String,
+    ) : IllegalArgumentException(message)
+
+    private companion object {
+        val SAFE_GRADLE_ARGUMENTS =
+            setOf(
+                "--continue",
+                "--debug",
+                "--full-stacktrace",
+                "--info",
+                "--no-daemon",
+                "--offline",
+                "--rerun-tasks",
+                "--stacktrace",
+            )
+    }
 }

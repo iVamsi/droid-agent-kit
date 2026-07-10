@@ -127,7 +127,7 @@ class DroidAgentCli(
     private fun serveMcp(command: CliCommand.ServeMcp): Int {
         val projectRoot = ProjectLocator.resolve(command.project)
         val config = resolveServerConfig(DroidAgentConfigLoader.load(projectRoot)) { System.err.println(it) }
-        val dispatcher = DroidAgentMcpDispatcher(config)
+        val dispatcher = DroidAgentMcpDispatcher(config, projectRoot)
         if (command.transport == "stdio") {
             val stdio = DroidAgentStdioServer(dispatcher)
             generateSequence(::readLine).forEach { line ->
@@ -137,6 +137,7 @@ class DroidAgentCli(
             val server = DroidAgentMcpHttpServer(dispatcher, command.host, command.port)
             server.start()
             println("DroidAgentKit MCP server listening at http://${command.host}:${command.port}/mcp")
+            println("Set Authorization: Bearer ${server.bearerToken} in the MCP client configuration.")
             Thread.currentThread().join()
         }
         return 0
@@ -161,7 +162,7 @@ class DroidAgentCli(
                     return 1
                 }
             }
-        val result = DroidAgentMcpDispatcher(config).call(tool, args + ("rootPath" to root.toString()))
+        val result = DroidAgentMcpDispatcher(config, root).call(tool, args + ("rootPath" to root.toString()))
         println(Json.write(result))
         return if (result["status"] == "failed" || result["status"] == "blocked") 2 else 0
     }

@@ -52,7 +52,7 @@ hand — once `install-mcp` registers it, your agent tool launches it as a subpr
 
 1. The agent (Claude Code, Cursor, Codex, Zed, or VS Code + GitHub Copilot Chat) starts
    `droidagent serve-mcp --transport stdio --project auto` itself, whenever it starts up.
-2. The agent and server perform the MCP handshake over JSON-RPC 2.0: `initialize`, then
+2. The agent and server perform the MCP `2025-11-25` handshake over JSON-RPC 2.0: `initialize`, then
    `notifications/initialized`.
 3. The agent sends `tools/list` to discover the 12 `android_*` tools (project inspection, allowlisted
    Gradle runs, adb, logcat, lint, crash triage, and more) and their descriptions and input schemas.

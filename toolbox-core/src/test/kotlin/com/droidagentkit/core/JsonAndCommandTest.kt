@@ -91,6 +91,27 @@ class JsonAndCommandTest {
     }
 
     @Test
+    fun `process runner drains verbose output while the process is still running`() {
+        val outputDir = Files.createTempDirectory("dak-verbose")
+        val runner = ProcessRunner(Redactor(DroidAgentConfig.default().redaction), ArtifactWriter(outputDir))
+
+        val result =
+            runner.run(
+                CommandSpec(
+                    id = "verbose",
+                    command = listOf("/bin/sh", "-c", "yes line | head -n 100000"),
+                    workingDirectory = outputDir.toString(),
+                    mutatesProject = false,
+                    requiresDevice = false,
+                    timeoutSeconds = 5,
+                ),
+            )
+
+        assertEquals(ResultStatus.SUCCESS, result.status)
+        assertTrue(Files.size(outputDir.resolve("verbose.log")) > 64 * 1024)
+    }
+
+    @Test
     fun `json map serialization uses stable alphabetical key order`() {
         val map = mapOf("z" to "last", "a" to "first", "m" to "middle")
 

@@ -6,8 +6,13 @@ DroidAgentKit is local-only by default.
 
 - MCP v1 does not expose arbitrary shell execution.
 - Gradle tasks must match configured allowlist patterns.
+- Gradle arguments are restricted to a small safe set (`--continue`, logging, stacktrace, offline,
+  daemon, and rerun controls); init scripts, alternate settings files, project properties, and custom
+  JVM properties are blocked.
 - adb install and input-style actions are controlled by config.
 - Device-specific commands require explicit serials.
+- An MCP server is bound to the project root supplied at startup. Tool calls cannot replace that root,
+  and generated artifacts must remain under it.
 
 Default `.droidagentkit/config.yaml`:
 
@@ -88,6 +93,7 @@ Maximum score: 100 (capped via `coerceIn`).
 - Boolean fields (`allowAdbInput`, `allowAppInstall`, `allowEmulatorStart`, `redaction.enabled`) must be
   literal `true`/`false`.
 - `safety.maxCommandSeconds` must be a whole number.
+- `reports.outputDir` must be a non-empty relative path inside the project root.
 - Unrecognized sections or keys produce a warning (printed to stderr) but do not fail the load.
 
 When validation fails, the CLI prints every error and exits non-zero. The MCP server logs the errors
