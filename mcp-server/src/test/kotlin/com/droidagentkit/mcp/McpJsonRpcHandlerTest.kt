@@ -9,7 +9,7 @@ import java.nio.file.Files
 
 class McpJsonRpcHandlerTest {
     @Test
-    fun `initialize echoes requested protocol version and returns server info`() {
+    fun `initialize negotiates the latest supported protocol version and returns server info`() {
         val handler = McpJsonRpcHandler(DroidAgentMcpDispatcher(DroidAgentConfig.default()))
 
         val response =
@@ -18,7 +18,7 @@ class McpJsonRpcHandlerTest {
             )
 
         assertTrue(response != null)
-        assertTrue(response!!.contains("\"protocolVersion\":\"2025-03-26\""))
+        assertTrue(response!!.contains("\"protocolVersion\":\"2025-11-25\""))
         assertTrue(response.contains("\"name\":\"droidagentkit\""))
         assertTrue(response.contains("\"version\":\"0.1.0-alpha\""))
         assertTrue(response.contains("\"id\":1"))
@@ -30,7 +30,7 @@ class McpJsonRpcHandlerTest {
 
         val response = handler.handle("""{"jsonrpc":"2.0","id":2,"method":"initialize","params":{}}""")
 
-        assertTrue(response!!.contains("\"protocolVersion\":\"2024-11-05\""))
+        assertTrue(response!!.contains("\"protocolVersion\":\"2025-11-25\""))
     }
 
     @Test
@@ -51,6 +51,7 @@ class McpJsonRpcHandlerTest {
 
         assertTrue(response!!.contains("\"android_project_inspect\""))
         assertTrue(response.contains("\"android_build_performance\""))
+        assertTrue(response.contains("\"outputSchema\""))
     }
 
     @Test
@@ -59,7 +60,7 @@ class McpJsonRpcHandlerTest {
         Files.writeString(root.resolve("settings.gradle.kts"), "rootProject.name = \"RpcDemo\"\ninclude(\":app\")")
         Files.createDirectories(root.resolve("app"))
         Files.writeString(root.resolve("app/build.gradle.kts"), "plugins { id(\"com.android.application\") }")
-        val handler = McpJsonRpcHandler(DroidAgentMcpDispatcher(DroidAgentConfig.default()))
+        val handler = McpJsonRpcHandler(DroidAgentMcpDispatcher(DroidAgentConfig.default(), root))
 
         val response =
             handler.handle(
@@ -70,7 +71,17 @@ class McpJsonRpcHandlerTest {
             )
 
         assertTrue(response!!.contains("\"isError\":false"))
+        assertTrue(response.contains("\"structuredContent\""))
         assertTrue(response.contains("RpcDemo"))
+    }
+
+    @Test
+    fun `ping returns an empty success result`() {
+        val handler = McpJsonRpcHandler(DroidAgentMcpDispatcher(DroidAgentConfig.default()))
+
+        val response = handler.handle("""{"jsonrpc":"2.0","id":9,"method":"ping"}""")
+
+        assertEquals("""{"id":9, "jsonrpc":"2.0", "result":{}}""", response)
     }
 
     @Test

@@ -1,8 +1,11 @@
 package com.droidagentkit.core
 
+import java.io.ByteArrayOutputStream
+import java.io.InputStream
 import java.nio.file.Path
 import java.time.Duration
 import java.time.Instant
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 class ProcessRunner(
@@ -25,34 +28,48 @@ class ProcessRunner(
                 )
             }
 
-        val completed = process.waitFor(spec.timeoutSeconds, TimeUnit.SECONDS)
+        val outputExecutor = Executors.newSingleThreadExecutor()
+        val output = outputExecutor.submit<CapturedOutput> { readOutput(process.inputStream) }
+        val completed: Boolean
+        val captured: CapturedOutput
+        try {
+            completed = process.waitFor(spec.timeoutSeconds, TimeUnit.SECONDS)
+            if (!completed) terminate(process)
+            captured = output.get()
+        } finally {
+            outputExecutor.shutdownNow()
+        }
         val durationMs = Duration.between(started, Instant.now()).toMillis()
 
         if (spec.outputMode == OutputMode.BINARY) {
-            val bytes = process.inputStream.readBytes()
-            if (!completed) process.destroyForcibly()
-            val artifact = artifactWriter.writeBytes("${spec.id}.bin", bytes, ArtifactType.SCREENSHOT, "${spec.id} binary capture")
+            val artifact =
+                artifactWriter.writeBytes(
+                    "${spec.id}.bin",
+                    captured.bytes,
+                    ArtifactType.SCREENSHOT,
+                    "${spec.id} binary capture",
+                )
             val status =
                 when {
                     !completed -> ResultStatus.PARTIAL
+                    captured.truncated -> ResultStatus.PARTIAL
                     process.exitValue() == 0 -> ResultStatus.SUCCESS
                     else -> ResultStatus.FAILED
                 }
             return ToolResult(
                 status = status,
-                summary = "${spec.id} captured ${bytes.size} bytes in ${durationMs}ms",
+                summary = "${spec.id} captured ${captured.bytes.size} bytes in ${durationMs}ms",
                 artifacts = listOf(artifact),
-                warnings = if (completed) emptyList() else listOf("command-timeout"),
+                warnings = warnings(completed, captured.truncated),
             )
         }
 
-        val rawOutput = process.inputStream.bufferedReader().readText()
-        if (!completed) process.destroyForcibly()
-        val redacted = redactor.redact(rawOutput)
+        val redacted = redactor.redact(captured.bytes.toString(Charsets.UTF_8))
         val artifact = artifactWriter.writeText("${spec.id}.log", redacted.text)
         val status =
             when {
                 !completed -> ResultStatus.PARTIAL
+                captured.truncated -> ResultStatus.PARTIAL
                 process.exitValue() == 0 -> ResultStatus.SUCCESS
                 else -> ResultStatus.FAILED
             }
@@ -74,7 +91,50 @@ class ProcessRunner(
             summary = summary,
             artifacts = listOf(artifact),
             redactionsApplied = redacted.applied,
-            warnings = if (completed) emptyList() else listOf("command-timeout"),
+            warnings = warnings(completed, captured.truncated),
         )
+    }
+
+    private fun terminate(process: Process) {
+        process.toHandle().descendants().forEach(ProcessHandle::destroy)
+        process.destroy()
+        if (!process.waitFor(1, TimeUnit.SECONDS)) {
+            process.toHandle().descendants().forEach(ProcessHandle::destroyForcibly)
+            process.destroyForcibly()
+            process.waitFor(1, TimeUnit.SECONDS)
+        }
+    }
+
+    private fun readOutput(input: InputStream): CapturedOutput {
+        val bytes = ByteArrayOutputStream()
+        val buffer = ByteArray(BUFFER_SIZE)
+        var truncated = false
+        while (true) {
+            val count = input.read(buffer)
+            if (count == -1) break
+            val remaining = MAX_CAPTURE_BYTES - bytes.size()
+            if (remaining > 0) bytes.write(buffer, 0, minOf(count, remaining))
+            if (count > remaining) truncated = true
+        }
+        return CapturedOutput(bytes.toByteArray(), truncated)
+    }
+
+    private fun warnings(
+        completed: Boolean,
+        truncated: Boolean,
+    ): List<String> =
+        buildList {
+            if (!completed) add("command-timeout")
+            if (truncated) add("command-output-truncated")
+        }
+
+    private data class CapturedOutput(
+        val bytes: ByteArray,
+        val truncated: Boolean,
+    )
+
+    private companion object {
+        const val BUFFER_SIZE = 8 * 1024
+        const val MAX_CAPTURE_BYTES = 10 * 1024 * 1024
     }
 }

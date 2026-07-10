@@ -126,6 +126,7 @@ object DroidAgentConfigLoader {
         var allowEmulatorStart = false
         var maxCommandSeconds = 600L
         var outputDir = "build/droidagentkit"
+        var outputDirLine: Int? = null
         var redactionEnabled = true
         val extraPatterns = mutableListOf<String>()
         var listTarget = ""
@@ -163,10 +164,22 @@ object DroidAgentConfigLoader {
                     allowEmulatorStart =
                         value.toStrictBooleanOrError(lineNumber, fullKey, errors) ?: allowEmulatorStart
                 "safety.maxCommandSeconds" -> maxCommandSeconds = value.toLongOrError(lineNumber, fullKey, errors) ?: maxCommandSeconds
-                "reports.outputDir" -> outputDir = value
+                "reports.outputDir" -> {
+                    outputDir = value
+                    outputDirLine = lineNumber
+                }
                 "redaction.enabled" -> redactionEnabled = value.toStrictBooleanOrError(lineNumber, fullKey, errors) ?: redactionEnabled
                 else -> if (fullKey !in knownKeys) warnings += "line $lineNumber: unknown key '$fullKey' — ignored"
             }
+        }
+
+        if (!outputDir.isSafeProjectRelativePath()) {
+            errors +=
+                ConfigError(
+                    outputDirLine ?: 0,
+                    "reports.outputDir",
+                    "must be a non-empty relative path inside the project",
+                )
         }
 
         if (errors.isNotEmpty()) return ConfigLoadResult.Invalid(errors)
@@ -215,4 +228,10 @@ object DroidAgentConfigLoader {
             errors += ConfigError(line, key, "expected a number, got '$this'")
             null
         }
+
+    private fun String.isSafeProjectRelativePath(): Boolean =
+        runCatching {
+            val path = Path.of(this).normalize()
+            isNotBlank() && !path.isAbsolute && !path.startsWith("..")
+        }.getOrDefault(false)
 }
