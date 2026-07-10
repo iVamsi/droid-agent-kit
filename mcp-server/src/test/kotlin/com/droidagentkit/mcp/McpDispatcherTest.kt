@@ -9,7 +9,8 @@ import java.nio.file.Files
 class McpDispatcherTest {
     @Test
     fun `dispatcher lists expected android tools`() {
-        val dispatcher = DroidAgentMcpDispatcher(DroidAgentConfig.default())
+        val root = Files.createTempDirectory("dak-tool-list")
+        val dispatcher = DroidAgentMcpDispatcher(DroidAgentConfig.default(), root)
 
         val tools = dispatcher.listTools().map { it.name }
 
@@ -35,7 +36,7 @@ class McpDispatcherTest {
     @Test
     fun `gradle run blocks denied task`() {
         val root = Files.createTempDirectory("dak-mcp")
-        val dispatcher = DroidAgentMcpDispatcher(DroidAgentConfig.default())
+        val dispatcher = DroidAgentMcpDispatcher(DroidAgentConfig.default(), root)
 
         val result = dispatcher.call("android_gradle_run", mapOf("rootPath" to root.toString(), "task" to "clean"))
 
@@ -49,7 +50,7 @@ class McpDispatcherTest {
         Files.writeString(root.resolve("settings.gradle.kts"), "rootProject.name = \"McpDemo\"\ninclude(\":app\")")
         Files.createDirectories(root.resolve("app"))
         Files.writeString(root.resolve("app/build.gradle.kts"), "plugins { id(\"com.android.application\") }")
-        val dispatcher = DroidAgentMcpDispatcher(DroidAgentConfig.default())
+        val dispatcher = DroidAgentMcpDispatcher(DroidAgentConfig.default(), root)
 
         val result = dispatcher.call("android_project_inspect", mapOf("rootPath" to root.toString()))
 
@@ -60,7 +61,7 @@ class McpDispatcherTest {
     @Test
     fun `snapshot is blocked when device serial is missing`() {
         val root = Files.createTempDirectory("dak-snapshot")
-        val dispatcher = DroidAgentMcpDispatcher(DroidAgentConfig.default())
+        val dispatcher = DroidAgentMcpDispatcher(DroidAgentConfig.default(), root)
 
         val result = dispatcher.call("android_screen_snapshot", mapOf("rootPath" to root.toString()))
 
@@ -70,7 +71,8 @@ class McpDispatcherTest {
 
     @Test
     fun `each tool exposes an input schema with type object and properties`() {
-        val dispatcher = DroidAgentMcpDispatcher(DroidAgentConfig.default())
+        val root = Files.createTempDirectory("dak-tool-schema")
+        val dispatcher = DroidAgentMcpDispatcher(DroidAgentConfig.default(), root)
 
         val tools = dispatcher.listTools()
 
@@ -86,7 +88,8 @@ class McpDispatcherTest {
 
     @Test
     fun `gradle run tool schema marks task as required`() {
-        val dispatcher = DroidAgentMcpDispatcher(DroidAgentConfig.default())
+        val root = Files.createTempDirectory("dak-gradle-schema")
+        val dispatcher = DroidAgentMcpDispatcher(DroidAgentConfig.default(), root)
 
         val gradleTool = dispatcher.listTools().first { it.name == "android_gradle_run" }
 
@@ -107,7 +110,7 @@ class McpDispatcherTest {
             root.resolve("app/build.gradle.kts"),
             "plugins { id(\"com.android.application\") }\nandroid { namespace = \"com.example.bundle\" }",
         )
-        val dispatcher = DroidAgentMcpDispatcher(DroidAgentConfig.default())
+        val dispatcher = DroidAgentMcpDispatcher(DroidAgentConfig.default(), root)
 
         val result = dispatcher.call("android_report_bundle", mapOf("rootPath" to root.toString()))
 
@@ -130,11 +133,46 @@ class McpDispatcherTest {
     @Test
     fun `lint run blocks denied task`() {
         val root = Files.createTempDirectory("dak-lint-denied")
-        val dispatcher = DroidAgentMcpDispatcher(DroidAgentConfig.default())
+        val dispatcher = DroidAgentMcpDispatcher(DroidAgentConfig.default(), root)
 
         val result = dispatcher.call("android_lint_run", mapOf("rootPath" to root.toString(), "task" to "clean"))
 
         assertEquals("blocked", result["status"])
+    }
+
+    @Test
+    fun `dispatcher rejects a caller supplied project root`() {
+        val root = Files.createTempDirectory("dak-root")
+        val otherRoot = Files.createTempDirectory("dak-other-root")
+        val dispatcher = DroidAgentMcpDispatcher(DroidAgentConfig.default(), root)
+
+        val result = dispatcher.call("android_project_inspect", mapOf("rootPath" to otherRoot.toString()))
+
+        assertEquals("blocked", result["status"])
+        assertTrue((result["warnings"] as List<*>).contains("project-root-denied"))
+    }
+
+    @Test
+    fun `gradle run rejects unsafe extra arguments`() {
+        val root = Files.createTempDirectory("dak-gradle-args")
+        val config =
+            DroidAgentConfig.default().copy(
+                safety = DroidAgentConfig.default().safety.copy(allowGradleTasks = listOf(":app:assembleDebug")),
+            )
+        val dispatcher = DroidAgentMcpDispatcher(config, root)
+
+        val result =
+            dispatcher.call(
+                "android_gradle_run",
+                mapOf(
+                    "rootPath" to root.toString(),
+                    "task" to ":app:assembleDebug",
+                    "arguments" to listOf("--init-script", "malicious.gradle.kts"),
+                ),
+            )
+
+        assertEquals("blocked", result["status"])
+        assertTrue((result["warnings"] as List<*>).contains("gradle-argument-denied"))
     }
 
     @Test
@@ -157,7 +195,7 @@ class McpDispatcherTest {
             </issues>
             """.trimIndent(),
         )
-        val dispatcher = DroidAgentMcpDispatcher(config)
+        val dispatcher = DroidAgentMcpDispatcher(config, root)
 
         val result = dispatcher.call("android_lint_run", mapOf("rootPath" to root.toString(), "task" to ":app:lintDebug"))
 
@@ -177,7 +215,7 @@ class McpDispatcherTest {
                 safety = DroidAgentConfig.default().safety.copy(allowGradleTasks = listOf(":app:ktlintCheck")),
             )
         writeFakeGradlew(root)
-        val dispatcher = DroidAgentMcpDispatcher(config)
+        val dispatcher = DroidAgentMcpDispatcher(config, root)
 
         val result = dispatcher.call("android_lint_run", mapOf("rootPath" to root.toString(), "task" to ":app:ktlintCheck"))
 
@@ -200,7 +238,7 @@ class McpDispatcherTest {
     @Test
     fun `crash triage is blocked when device serial is missing`() {
         val root = Files.createTempDirectory("dak-crash-triage")
-        val dispatcher = DroidAgentMcpDispatcher(DroidAgentConfig.default())
+        val dispatcher = DroidAgentMcpDispatcher(DroidAgentConfig.default(), root)
 
         val result = dispatcher.call("android_crash_triage", mapOf("rootPath" to root.toString()))
 
@@ -215,7 +253,7 @@ class McpDispatcherTest {
         Files.createDirectories(root.resolve("core"))
         Files.writeString(root.resolve("app/build.gradle.kts"), "implementation(\"com.squareup.okhttp3:okhttp:4.11.0\")")
         Files.writeString(root.resolve("core/build.gradle.kts"), "implementation(\"com.squareup.okhttp3:okhttp:4.12.0\")")
-        val dispatcher = DroidAgentMcpDispatcher(DroidAgentConfig.default())
+        val dispatcher = DroidAgentMcpDispatcher(DroidAgentConfig.default(), root)
 
         val result = dispatcher.call("android_dependency_check", mapOf("rootPath" to root.toString()))
 
@@ -253,7 +291,7 @@ class McpDispatcherTest {
             </body></html>
             """.trimIndent(),
         )
-        val dispatcher = DroidAgentMcpDispatcher(config)
+        val dispatcher = DroidAgentMcpDispatcher(config, root)
 
         val result = dispatcher.call("android_build_performance", mapOf("rootPath" to root.toString(), "task" to ":app:assembleDebug"))
 

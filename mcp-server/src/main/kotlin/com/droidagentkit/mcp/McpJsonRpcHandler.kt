@@ -18,9 +18,10 @@ private const val METHOD_NOT_FOUND = -32601
 
 private const val SERVER_NAME = "droidagentkit"
 private const val SERVER_VERSION = "0.1.0-alpha"
-private const val DEFAULT_PROTOCOL_VERSION = "2024-11-05"
+internal const val MCP_PROTOCOL_VERSION = "2025-11-25"
 
 private val ERROR_STATUSES = setOf("failed", "blocked", "unsupported")
+private val SUPPORTED_PROTOCOL_VERSIONS = setOf(MCP_PROTOCOL_VERSION)
 
 class McpJsonRpcHandler(
     private val dispatcher: DroidAgentMcpDispatcher,
@@ -37,6 +38,10 @@ class McpJsonRpcHandler(
         val id = root["id"]?.toKotlinValue()
         val method = (root["method"] as? JsonPrimitive)?.takeIf { it.isString }?.content
 
+        if ((root["jsonrpc"] as? JsonPrimitive)?.content != "2.0") {
+            return if (hasId) errorResponse(id, INVALID_REQUEST, "Invalid Request") else null
+        }
+
         if (method == null) {
             return if (hasId) errorResponse(id, INVALID_REQUEST, "Invalid Request") else null
         }
@@ -44,6 +49,8 @@ class McpJsonRpcHandler(
         return when (method) {
             "initialize" -> successResponse(id, handleInitialize(root["params"] as? JsonObject))
             "notifications/initialized" -> null
+            "notifications/cancelled" -> null
+            "ping" -> successResponse(id, emptyMap())
             "tools/list" -> successResponse(id, handleToolsList())
             "tools/call" -> handleToolsCall(id, root["params"] as? JsonObject)
             else -> if (hasId) errorResponse(id, METHOD_NOT_FOUND, "Method not found: $method") else null
@@ -51,11 +58,13 @@ class McpJsonRpcHandler(
     }
 
     private fun handleInitialize(params: JsonObject?): Map<String, Any?> {
-        val protocolVersion = (params?.get("protocolVersion") as? JsonPrimitive)?.content ?: DEFAULT_PROTOCOL_VERSION
+        val requestedVersion = (params?.get("protocolVersion") as? JsonPrimitive)?.content
+        val protocolVersion = requestedVersion?.takeIf { it in SUPPORTED_PROTOCOL_VERSIONS } ?: MCP_PROTOCOL_VERSION
         return mapOf(
             "protocolVersion" to protocolVersion,
             "capabilities" to mapOf("tools" to emptyMap<String, Any?>()),
             "serverInfo" to mapOf("name" to SERVER_NAME, "version" to SERVER_VERSION),
+            "instructions" to "Use DroidAgentKit only for the project root selected when this server started.",
         )
     }
 
@@ -63,7 +72,13 @@ class McpJsonRpcHandler(
         mapOf(
             "tools" to
                 dispatcher.listTools().map {
-                    mapOf("name" to it.name, "description" to it.description, "inputSchema" to it.inputSchema)
+                    mapOf(
+                        "name" to it.name,
+                        "title" to it.title,
+                        "description" to it.description,
+                        "inputSchema" to it.inputSchema,
+                        "outputSchema" to it.outputSchema,
+                    )
                 },
         )
 
@@ -87,6 +102,7 @@ class McpJsonRpcHandler(
             id,
             mapOf(
                 "content" to listOf(mapOf("type" to "text", "text" to Json.write(result))),
+                "structuredContent" to result,
                 "isError" to isError,
             ),
         )

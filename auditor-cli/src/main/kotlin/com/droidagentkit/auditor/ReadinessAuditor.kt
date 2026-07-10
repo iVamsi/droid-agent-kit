@@ -222,7 +222,7 @@ class ReadinessAuditor(
                 .filter { isScannable(it) }
                 .limit(500)
                 .anyMatch { path ->
-                    val text = Files.readString(path)
+                    val text = runCatching { Files.readString(path) }.getOrDefault("")
                     text.contains("droidAgentVisuals") || text.contains("Paparazzi") || text.contains("Roborazzi")
                 }
         }
@@ -255,7 +255,7 @@ class ReadinessAuditor(
                 .toString()
                 .substringAfterLast('.', "")
                 .lowercase()
-        return ext !in BINARY_EXTENSIONS
+        return path.fileName.toString() != ".DS_Store" && ext !in BINARY_EXTENSIONS
     }
 
     companion object {
