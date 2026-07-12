@@ -66,6 +66,8 @@ class CliParserTest {
                     "/opt/droidagent/bin/droidagent",
                     "--project",
                     "/tmp/android-app",
+                    "--projects-root",
+                    "/tmp/android-projects",
                     "--dry-run",
                 ),
             )
@@ -75,6 +77,7 @@ class CliParserTest {
                 targets = listOf("codex", "claude"),
                 binPath = "/opt/droidagent/bin/droidagent",
                 project = "/tmp/android-app",
+                projectsRoot = "/tmp/android-projects",
                 dryRun = true,
                 applyClaude = false,
             ),

@@ -26,6 +26,7 @@ object CliCommandRegistry {
                     CliOption("--host", "Bind host for http transport. Defaults to 127.0.0.1."),
                     CliOption("--port", "Bind port for http transport. Defaults to 8765."),
                     CliOption("--bearer-token-file", "Read the HTTP bearer token from a local file."),
+                    CliOption("--projects-root", "Allow Android projects beneath this trusted directory."),
                 ),
             ),
             CliCommandSpec(
@@ -88,6 +89,7 @@ object CliCommandRegistry {
                     ),
                     CliOption("--bin", "Override path to the droidagent binary."),
                     CliOption("--project", "Project root used by Android Studio's local HTTP server. Defaults to cwd."),
+                    CliOption("--projects-root", "Trusted directory containing Android Studio projects."),
                     CliOption("--dry-run", "Preview changes without writing files.", takesValue = false),
                     CliOption("--no-claude-apply", "Skip running the Claude Code apply step.", takesValue = false),
                 ),

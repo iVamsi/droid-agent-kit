@@ -12,6 +12,7 @@ import com.droidagentkit.inspector.AndroidProjectInspector
 import com.droidagentkit.mcp.DroidAgentMcpDispatcher
 import com.droidagentkit.mcp.DroidAgentMcpHttpServer
 import com.droidagentkit.mcp.DroidAgentStdioServer
+import com.droidagentkit.mcp.DroidAgentWorkspaceDispatcher
 import com.droidagentkit.visuals.VisualCaptureEngine
 import com.droidagentkit.visuals.VisualTolerance
 import java.nio.file.Files
@@ -127,7 +128,20 @@ class DroidAgentCli(
     private fun serveMcp(command: CliCommand.ServeMcp): Int {
         val projectRoot = ProjectLocator.resolve(command.project)
         val config = resolveServerConfig(DroidAgentConfigLoader.load(projectRoot)) { System.err.println(it) }
-        val dispatcher = DroidAgentMcpDispatcher(config, projectRoot)
+        val projectDispatcher = DroidAgentMcpDispatcher(config, projectRoot)
+        val dispatcher =
+            command.projectsRoot?.let { configuredRoot ->
+                val projectsRoot = Path.of(configuredRoot).toAbsolutePath().normalize()
+                if (!Files.isDirectory(projectsRoot)) {
+                    System.err.println("Projects root '$projectsRoot' does not exist or is not a directory.")
+                    return 1
+                }
+                DroidAgentWorkspaceDispatcher(projectsRoot, projectDispatcher) { root ->
+                    val projectConfig =
+                        resolveServerConfig(DroidAgentConfigLoader.load(root)) { System.err.println(it) }
+                    DroidAgentMcpDispatcher(projectConfig, root)
+                }
+            } ?: projectDispatcher
         if (command.transport == "stdio") {
             val stdio = DroidAgentStdioServer(dispatcher)
             generateSequence { readlnOrNull() }.forEach { line ->
@@ -220,11 +234,13 @@ class DroidAgentCli(
     private fun installMcp(command: CliCommand.InstallMcp): Int {
         val binPath = command.binPath?.let(Path::of) ?: defaultDroidAgentBin()
         val projectRoot = ProjectLocator.resolve(command.project)
+        val projectsRoot = command.projectsRoot?.let { Path.of(it).toAbsolutePath().normalize() }
         val options =
             McpInstallOptions(
                 targets = McpInstallTargets.parse(command.targets),
                 binPath = binPath.toAbsolutePath().normalize(),
                 projectRoot = projectRoot,
+                projectsRoot = projectsRoot,
                 dryRun = command.dryRun,
                 applyClaude = command.applyClaude,
             )

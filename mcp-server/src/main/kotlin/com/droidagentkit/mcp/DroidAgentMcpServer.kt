@@ -11,7 +11,7 @@ import java.util.Base64
 import java.util.concurrent.Executors
 
 class DroidAgentMcpHttpServer(
-    private val dispatcher: DroidAgentMcpDispatcher,
+    private val dispatcher: McpDispatcher,
     private val host: String = "127.0.0.1",
     private val port: Int = 8765,
     bearerToken: String? = null,
@@ -94,7 +94,7 @@ class DroidAgentMcpHttpServer(
 }
 
 class DroidAgentStdioServer(
-    private val dispatcher: DroidAgentMcpDispatcher = DroidAgentMcpDispatcher(DroidAgentConfig.default(), Path.of(".")),
+    private val dispatcher: McpDispatcher = DroidAgentMcpDispatcher(DroidAgentConfig.default(), Path.of(".")),
 ) {
     private val rpcHandler = McpJsonRpcHandler(dispatcher)
 

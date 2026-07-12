@@ -336,6 +336,55 @@ class McpInstallerTest {
     }
 
     @Test
+    fun `android studio launch agent preserves a trusted projects root`() {
+        val home = Files.createTempDirectory("dak-home-studio-workspace")
+        val studioDirectory = home.resolve("Library/Application Support/Google/AndroidStudio2026.1.1")
+        val workspace = Files.createTempDirectory("dak-studio-workspace")
+        val project = Files.createDirectories(workspace.resolve("sample"))
+        Files.createDirectories(studioDirectory)
+        val installer = McpInstaller(home = home, osName = "Mac OS X", commandExecutor = { 0 })
+
+        installer.install(
+            McpInstallOptions(
+                targets = setOf(McpInstallTarget.ANDROID_STUDIO),
+                binPath = Path.of("/opt/droidagent/bin/droidagent"),
+                projectRoot = project,
+                projectsRoot = workspace,
+                dryRun = false,
+                applyClaude = false,
+            ),
+        )
+
+        val plist = Files.readString(home.resolve("Library/LaunchAgents/com.droidagentkit.mcp.android-studio.plist"))
+        assertTrue(plist.contains("--projects-root"))
+        assertTrue(plist.contains(workspace.toString()))
+    }
+
+    @Test
+    fun `android studio rejects a missing trusted projects root before writing files`() {
+        val home = Files.createTempDirectory("dak-home-studio-missing-workspace")
+        val studioDirectory = home.resolve("Library/Application Support/Google/AndroidStudio2026.1.1")
+        Files.createDirectories(studioDirectory)
+        val installer = McpInstaller(home = home, osName = "Mac OS X", commandExecutor = { error("should not run") })
+
+        val result =
+            installer.install(
+                McpInstallOptions(
+                    targets = setOf(McpInstallTarget.ANDROID_STUDIO),
+                    binPath = Path.of("/opt/droidagent/bin/droidagent"),
+                    projectRoot = Files.createTempDirectory("dak-project"),
+                    projectsRoot = home.resolve("missing"),
+                    dryRun = false,
+                    applyClaude = false,
+                ),
+            )
+
+        assertFalse(Files.exists(studioDirectory.resolve("mcp.json")))
+        assertFalse(Files.exists(home.resolve(".droidagentkit")))
+        assertTrue(result.messages.any { it.contains("does not exist") })
+    }
+
+    @Test
     fun `all target expansion includes the new ide targets`() {
         assertEquals(
             setOf(
