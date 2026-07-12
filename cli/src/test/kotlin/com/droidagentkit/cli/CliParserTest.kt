@@ -14,10 +14,32 @@ class CliParserTest {
 
     @Test
     fun `parser understands mcp and audit commands`() {
-        val mcp = DroidAgentCliParser().parse(arrayOf("serve-mcp", "--project", ".", "--transport", "http", "--port", "8765"))
+        val mcp =
+            DroidAgentCliParser().parse(
+                arrayOf(
+                    "serve-mcp",
+                    "--project",
+                    ".",
+                    "--transport",
+                    "http",
+                    "--port",
+                    "8765",
+                    "--bearer-token-file",
+                    "/tmp/droidagent.token",
+                ),
+            )
         val audit = DroidAgentCliParser().parse(arrayOf("audit", "--project", ".", "--write-agents", "--fail-under", "80"))
 
-        assertEquals(CliCommand.ServeMcp(project = ".", transport = "http", host = "127.0.0.1", port = 8765), mcp)
+        assertEquals(
+            CliCommand.ServeMcp(
+                project = ".",
+                transport = "http",
+                host = "127.0.0.1",
+                port = 8765,
+                bearerTokenFile = "/tmp/droidagent.token",
+            ),
+            mcp,
+        )
         assertEquals(CliCommand.Audit(project = ".", writeAgents = true, verify = false, failUnder = 80, redactPublic = false), audit)
     }
 
@@ -42,6 +64,8 @@ class CliParserTest {
                     "codex,claude",
                     "--bin",
                     "/opt/droidagent/bin/droidagent",
+                    "--project",
+                    "/tmp/android-app",
                     "--dry-run",
                 ),
             )
@@ -50,6 +74,7 @@ class CliParserTest {
             CliCommand.InstallMcp(
                 targets = listOf("codex", "claude"),
                 binPath = "/opt/droidagent/bin/droidagent",
+                project = "/tmp/android-app",
                 dryRun = true,
                 applyClaude = false,
             ),

@@ -6,6 +6,7 @@ sealed class CliCommand {
         val transport: String,
         val host: String = "127.0.0.1",
         val port: Int = 8765,
+        val bearerTokenFile: String? = null,
     ) : CliCommand()
 
     data class Inspect(
@@ -45,6 +46,7 @@ sealed class CliCommand {
     data class InstallMcp(
         val targets: List<String>,
         val binPath: String?,
+        val project: String,
         val dryRun: Boolean,
         val applyClaude: Boolean,
     ) : CliCommand()

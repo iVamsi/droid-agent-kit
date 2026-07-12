@@ -28,7 +28,8 @@ That command:
 
 - updates the Codex user config at `~/.codex/config.toml`;
 - runs Claude Code's user-scope MCP install command when `claude` is available;
-- merges a `droidagentkit` entry into Cursor's, Zed's, and VS Code's user-level MCP configs, preserving any other servers/settings already there;
+- merges a `droidagentkit` entry into Cursor's, Zed's, VS Code's, and Android Studio's user-level MCP configs, preserving any other servers/settings already there;
+- on macOS, installs a user LaunchAgent that keeps Android Studio's authenticated localhost MCP endpoint available without a terminal;
 - prints a generic stdio MCP config for other tools;
 - registers the server with `--project auto`, so it resolves the active project from agent-provided environment variables such as `CLAUDE_PROJECT_DIR`, `CODEX_WORKSPACE`, or the current working directory.
 
@@ -47,8 +48,9 @@ After installation, open any Android project in Codex or Claude Code and ask for
 
 ## How It Works
 
-`droidagent serve-mcp` is a long-running MCP (Model Context Protocol) server. You never run it by
-hand — once `install-mcp` registers it, your agent tool launches it as a subprocess automatically:
+`droidagent serve-mcp` is a long-running MCP (Model Context Protocol) server. After `install-mcp`
+registers it, stdio-capable tools launch it as a subprocess automatically. Android Studio uses the
+authenticated localhost HTTP service installed by the same command on macOS:
 
 1. The agent (Claude Code, Cursor, Codex, Zed, or VS Code + GitHub Copilot Chat) starts
    `droidagent serve-mcp --transport stdio --project auto` itself, whenever it starts up.
