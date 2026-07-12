@@ -18,6 +18,8 @@ jobs:
         with:
           distribution: temurin
           java-version: ${{ matrix.java }}
+      - name: Public repository hygiene
+        run: ./scripts/check-public-hygiene.sh
       - name: Lint
         run: ./gradlew ktlintCheck
       - name: Test
