@@ -121,6 +121,22 @@ class ReadinessAuditorTest {
         assertTrue(report.risks.any { it.id == "missing-version-catalog" })
     }
 
+    @Test
+    fun `auditor uses JVM tooling profile without app release penalties`() {
+        val root = Files.createTempDirectory("dak-jvm-tooling")
+        Files.writeString(root.resolve("settings.gradle.kts"), "rootProject.name = \"Tools\"\ninclude(\":cli\")")
+        Files.createDirectories(root.resolve("cli/src/test/kotlin"))
+        Files.writeString(root.resolve("cli/build.gradle.kts"), "plugins { kotlin(\"jvm\") }")
+
+        val report = ReadinessAuditor(AndroidProjectInspector()).audit(root)
+
+        assertEquals(ReadinessProfile.JVM_TOOLING, report.profile)
+        assertEquals("2026-07-11", report.policyVersion)
+        assertTrue(report.commandMatrix.any { it.command.last() == ":cli:test" })
+        assertTrue(report.risks.none { it.id == "missing-proguard" })
+        assertTrue(report.risks.none { it.id == "missing-baseline-profile" })
+    }
+
     private fun sampleAndroidProject() =
         Files.createTempDirectory("dak-ready").also { root ->
             Files.writeString(root.resolve("settings.gradle.kts"), "rootProject.name = \"Ready\"\ninclude(\":app\")")

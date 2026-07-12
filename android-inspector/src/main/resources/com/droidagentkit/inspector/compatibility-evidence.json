@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "1.0",
+  "evidenceVersion": "2026-07-11",
+  "retrievedAt": "2026-07-11",
+  "sources": [
+    {
+      "component": "kotlin-gradle",
+      "version": "2.4.0",
+      "minimumGradle": "7.6.3",
+      "maximumFullySupportedGradle": "9.5.0",
+      "url": "https://kotlinlang.org/docs/gradle-configure-project.html"
+    },
+    {
+      "component": "kotlin-gradle",
+      "version": "2.3.20-2.3.21",
+      "minimumGradle": "7.6.3",
+      "maximumFullySupportedGradle": "9.3.0",
+      "url": "https://kotlinlang.org/docs/gradle-configure-project.html"
+    },
+    {
+      "component": "agp",
+      "version": "9.2.x",
+      "minimumGradle": "9.4.1",
+      "minimumJdk": 17,
+      "maximumApi": 37,
+      "url": "https://developer.android.com/build/releases/agp-9-2-0-release-notes"
+    }
+  ]
+}

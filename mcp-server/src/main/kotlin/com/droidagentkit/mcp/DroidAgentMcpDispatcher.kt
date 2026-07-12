@@ -12,10 +12,12 @@ import com.droidagentkit.core.ResultStatus
 import com.droidagentkit.core.Severity
 import com.droidagentkit.core.ToolResult
 import com.droidagentkit.inspector.AndroidProjectInspector
+import com.droidagentkit.mcp.tools.BuildFailureParser
 import com.droidagentkit.mcp.tools.BuildProfileParser
 import com.droidagentkit.mcp.tools.CrashLogTriage
 import com.droidagentkit.mcp.tools.DependencyVersionChecker
 import com.droidagentkit.mcp.tools.LintResultParser
+import com.droidagentkit.mcp.tools.TestResultParser
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.exists
@@ -199,6 +201,40 @@ class DroidAgentMcpDispatcher(
                     ),
                 outputSchema = toolResultSchema,
             ),
+            McpTool(
+                name = "android_test_run",
+                title = "Run Android tests",
+                description = "Run an allowlisted test task and parse local JUnit XML into a deterministic summary and findings.",
+                inputSchema =
+                    schema(
+                        "task",
+                        props =
+                            mapOf(
+                                "rootPath" to rootPathProp,
+                                "task" to str("Test task discovered by project inspection or allowed in configuration."),
+                                "mode" to str("Test mode: unit, device, managed-device, or screenshot."),
+                                "timeoutSeconds" to num("Override command timeout in seconds."),
+                            ),
+                    ),
+                outputSchema = toolResultSchema,
+            ),
+            McpTool(
+                name = "android_build_diagnose",
+                title = "Diagnose Android build",
+                description = "Run an allowlisted task and classify recognized compiler, resource, manifest, and cache failures.",
+                inputSchema =
+                    schema(
+                        "task",
+                        props =
+                            mapOf(
+                                "rootPath" to rootPathProp,
+                                "task" to str("Gradle task to diagnose (must match the configured allowlist)."),
+                                "stacktrace" to bool("Pass --stacktrace to Gradle."),
+                                "timeoutSeconds" to num("Override command timeout in seconds."),
+                            ),
+                    ),
+                outputSchema = toolResultSchema,
+            ),
         )
 
     fun call(
@@ -219,6 +255,8 @@ class DroidAgentMcpDispatcher(
                 "android_crash_triage" -> crashTriage(arguments)
                 "android_dependency_check" -> dependencyCheck(arguments)
                 "android_build_performance" -> buildPerformance(arguments)
+                "android_test_run" -> testRun(arguments)
+                "android_build_diagnose" -> buildDiagnose(arguments)
                 else -> resultMap(ToolResult(status = ResultStatus.UNSUPPORTED, summary = "Unknown MCP tool: $name"))
             }
         } catch (error: ProjectRootViolation) {
@@ -254,8 +292,36 @@ class DroidAgentMcpDispatcher(
                                 "moduleDependencies" to it.moduleDependencies,
                                 "buildTypes" to it.buildTypes,
                                 "productFlavors" to it.productFlavors,
+                                "pluginIds" to it.pluginIds,
+                                "kotlinIntegration" to it.kotlinIntegration.name.lowercase(),
+                                "compileSdk" to (it.compileSdk ?: ""),
+                                "minSdk" to (it.minSdk ?: ""),
+                                "targetSdk" to (it.targetSdk ?: ""),
+                                "sourceSets" to it.sourceSets,
+                                "hasScreenshotTests" to it.hasScreenshotTests,
+                                "managedDevices" to it.managedDevices,
+                                "managedDeviceGroups" to it.managedDeviceGroups,
+                                "confidence" to it.confidence.name.lowercase(),
                             )
                         },
+                    "toolchain" to
+                        mapOf(
+                            "kotlinVersion" to (report.toolchain.kotlinVersion ?: ""),
+                            "gradleVersion" to (report.toolchain.gradleVersion ?: ""),
+                            "agpVersion" to (report.toolchain.agpVersion ?: ""),
+                            "jdkVersion" to report.toolchain.jdkVersion,
+                            "evidenceVersion" to report.toolchain.evidenceVersion,
+                            "findings" to
+                                report.toolchain.findings.map { finding ->
+                                    mapOf(
+                                        "component" to finding.component,
+                                        "version" to (finding.version ?: ""),
+                                        "status" to finding.status.name.lowercase(),
+                                        "detail" to finding.detail,
+                                        "sourceUrl" to finding.sourceUrl,
+                                    )
+                                },
+                        ),
                     "commands" to report.commandMatrix.map { it.command.joinToString(" ") },
                     "warnings" to report.warnings,
                 ),
@@ -345,6 +411,81 @@ class DroidAgentMcpDispatcher(
             }
         return resultMapWithFindings(runResult, findings)
     }
+
+    private fun testRun(arguments: Map<String, Any?>): Map<String, Any> {
+        val root = rootPath(arguments)
+        val task = arguments["task"]?.toString().orEmpty()
+        val mode = arguments["mode"]?.toString() ?: "unit"
+        if (mode !in TEST_MODES) {
+            return resultMap(
+                ToolResult(
+                    status = ResultStatus.BLOCKED,
+                    summary = "Unsupported test mode '$mode'.",
+                    warnings = listOf("test-mode-denied"),
+                ),
+            )
+        }
+        val runResult = runAllowlistedGradleTask(root, task, emptyList(), boundedTimeout(arguments))
+        if (runResult.status == ResultStatus.BLOCKED) return resultMap(runResult)
+        val parsed =
+            runCatching { TestResultParser.parse(root) }.getOrElse { error ->
+                return resultMapWithFindings(
+                    runResult.copy(
+                        status = ResultStatus.PARTIAL,
+                        warnings = runResult.warnings + "malformed-test-report:${error.javaClass.simpleName}",
+                    ),
+                    emptyList(),
+                )
+            }
+        val result =
+            if (parsed.summary.reportFiles.isEmpty()) {
+                runResult.copy(
+                    status = ResultStatus.PARTIAL,
+                    warnings = runResult.warnings + "no-structured-test-report-found",
+                )
+            } else {
+                runResult
+            }
+        return resultMapWithFindings(result, parsed.findings) + mapOf("testSummary" to testSummaryMap(parsed.summary))
+    }
+
+    private fun buildDiagnose(arguments: Map<String, Any?>): Map<String, Any> {
+        val root = rootPath(arguments)
+        val task = arguments["task"]?.toString().orEmpty()
+        val flags = if (arguments["stacktrace"] == true) listOf("--stacktrace") else emptyList()
+        val runResult = runAllowlistedGradleTask(root, task, flags, boundedTimeout(arguments))
+        if (runResult.status == ResultStatus.BLOCKED) return resultMap(runResult)
+        val log =
+            runResult.artifacts
+                .firstOrNull { it.mimeType.startsWith("text/") }
+                ?.path
+                ?.let(Path::of)
+                ?.takeIf { it.normalize().startsWith(root) && it.exists() }
+                ?.let(Files::readString)
+                .orEmpty()
+        val findings = BuildFailureParser.parse(log)
+        val result =
+            if (runResult.status == ResultStatus.FAILED && findings.isEmpty()) {
+                runResult.copy(warnings = runResult.warnings + "unclassified-build-failure")
+            } else {
+                runResult
+            }
+        return resultMapWithFindings(result, findings)
+    }
+
+    private fun testSummaryMap(summary: com.droidagentkit.mcp.tools.TestRunSummary): Map<String, Any> =
+        mapOf(
+            "tests" to summary.tests,
+            "failures" to summary.failures,
+            "errors" to summary.errors,
+            "skipped" to summary.skipped,
+            "durationSeconds" to summary.durationSeconds,
+            "reportFiles" to summary.reportFiles,
+        )
+
+    private fun boundedTimeout(arguments: Map<String, Any?>): Long =
+        (arguments["timeoutSeconds"]?.toString()?.toLongOrNull() ?: config.safety.maxCommandSeconds)
+            .coerceIn(1, config.safety.maxCommandSeconds)
 
     private fun findNewestLintReport(root: Path): Path? {
         val candidates = mutableListOf<Path>()
@@ -742,6 +883,7 @@ class DroidAgentMcpDispatcher(
     ) : IllegalArgumentException(message)
 
     private companion object {
+        val TEST_MODES = setOf("unit", "device", "managed-device", "screenshot")
         val SAFE_GRADLE_ARGUMENTS =
             setOf(
                 "--continue",

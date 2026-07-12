@@ -54,7 +54,7 @@ hand — once `install-mcp` registers it, your agent tool launches it as a subpr
    `droidagent serve-mcp --transport stdio --project auto` itself, whenever it starts up.
 2. The agent and server perform the MCP `2025-11-25` handshake over JSON-RPC 2.0: `initialize`, then
    `notifications/initialized`.
-3. The agent sends `tools/list` to discover the 12 `android_*` tools (project inspection, allowlisted
+3. The agent sends `tools/list` to discover the 14 `android_*` tools (project inspection, allowlisted
    Gradle runs, adb, logcat, lint, crash triage, and more) and their descriptions and input schemas.
 4. From then on, whenever your prompt matches what a tool description says it does, the agent's own
    model decides to call it via `tools/call` — you don't invoke tools directly, you just ask in natural
