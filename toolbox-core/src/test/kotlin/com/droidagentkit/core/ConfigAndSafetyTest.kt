@@ -8,13 +8,15 @@ import java.nio.file.Files
 
 class ConfigAndSafetyTest {
     @Test
-    fun `default config allows unit lint and debug assemble tasks only`() {
+    fun `default config allows safe verification tasks`() {
         val safety = DroidAgentConfig.default().safety
 
         assertTrue(safety.isGradleTaskAllowed(":app:testDebugUnitTest"))
         assertTrue(safety.isGradleTaskAllowed(":feature:lintDebug"))
         assertTrue(safety.isGradleTaskAllowed(":app:assembleDemoDebug"))
-        assertFalse(safety.isGradleTaskAllowed(":app:connectedDebugAndroidTest"))
+        assertTrue(safety.isGradleTaskAllowed(":app:connectedDebugAndroidTest"))
+        assertTrue(safety.isGradleTaskAllowed(":app:pixelApi37DebugAndroidTest"))
+        assertTrue(safety.isGradleTaskAllowed(":app:validateDebugScreenshotTest"))
         assertFalse(safety.isGradleTaskAllowed("clean"))
     }
 

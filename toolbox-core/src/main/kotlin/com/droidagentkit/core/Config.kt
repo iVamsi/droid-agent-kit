@@ -26,6 +26,8 @@ data class SafetyConfig(
             ":*:test*UnitTest",
             ":*:lint*",
             ":*:assemble*Debug",
+            ":*:*AndroidTest",
+            ":*:validate*ScreenshotTest",
         ),
     val allowAdbInput: Boolean = false,
     val allowAppInstall: Boolean = true,

@@ -13,6 +13,14 @@ enum class ReadinessLevel {
     UNSAFE_FOR_AUTONOMY,
 }
 
+enum class ReadinessProfile {
+    ANDROID_APP,
+    ANDROID_LIBRARY,
+    ANDROID_KMP_LIBRARY,
+    JVM_TOOLING,
+    MIXED_REPOSITORY,
+}
+
 data class ProjectSummary(
     val name: String,
     val rootPath: String,
@@ -31,6 +39,9 @@ data class ReadinessRisk(
     val title: String,
     val evidence: List<String>,
     val fix: String,
+    val applicability: String = "all",
+    val confidence: String = "declared",
+    val source: String = "DroidAgentKit project policy",
 )
 
 data class ReadinessReport(
@@ -43,4 +54,6 @@ data class ReadinessReport(
     val risks: List<ReadinessRisk>,
     val generatedDocuments: List<ArtifactRef> = emptyList(),
     val recommendedActions: List<RecommendedAction>,
+    val profile: ReadinessProfile = ReadinessProfile.MIXED_REPOSITORY,
+    val policyVersion: String = "2026-07-11",
 )

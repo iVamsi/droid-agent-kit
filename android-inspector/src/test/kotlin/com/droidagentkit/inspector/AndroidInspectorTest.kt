@@ -202,4 +202,141 @@ class AndroidInspectorTest {
         assertTrue(report.warnings.any { it.contains("settings.gradle") })
         assertTrue(report.modules.isEmpty())
     }
+
+    @Test
+    fun `inspector normalizes Gradle includes without leading colons`() {
+        val root = Files.createTempDirectory("dak-modern-includes")
+        Files.writeString(root.resolve("settings.gradle.kts"), "rootProject.name = \"Includes\"\ninclude(\"cli\", \"feature:scan\")")
+        Files.createDirectories(root.resolve("cli"))
+        Files.writeString(root.resolve("cli/build.gradle.kts"), "plugins { kotlin(\"jvm\") }")
+        Files.createDirectories(root.resolve("feature/scan"))
+        Files.writeString(root.resolve("feature/scan/build.gradle.kts"), "plugins { id(\"com.android.library\") }")
+
+        val report = AndroidProjectInspector().inspect(root)
+
+        assertEquals(listOf(":cli", ":feature:scan"), report.modules.map { it.path })
+        assertEquals(AndroidModuleType.JVM_TOOLING, report.modules.first().type)
+    }
+
+    @Test
+    fun `inspector recognizes AGP 9 built in Kotlin and documented toolchain mismatch`() {
+        val root = Files.createTempDirectory("dak-agp9")
+        Files.writeString(root.resolve("settings.gradle.kts"), "rootProject.name = \"Agp9\"\ninclude(\":app\")")
+        Files.createDirectories(root.resolve("gradle/wrapper"))
+        Files.writeString(
+            root.resolve("gradle/wrapper/gradle-wrapper.properties"),
+            "distributionUrl=https\\://services.gradle.org/distributions/gradle-9.5.1-bin.zip",
+        )
+        Files.createDirectories(root.resolve("gradle"))
+        Files.writeString(
+            root.resolve("gradle/libs.versions.toml"),
+            """
+            [versions]
+            agp = "9.2.0"
+            kotlin = "2.3.20"
+
+            [plugins]
+            android-application = { id = "com.android.application", version.ref = "agp" }
+            """.trimIndent(),
+        )
+        Files.createDirectories(root.resolve("app/src/main/kotlin"))
+        Files.writeString(
+            root.resolve("app/build.gradle.kts"),
+            """
+            plugins { alias(libs.plugins.android.application) }
+            android {
+                namespace = "com.example.agp9"
+                compileSdk = 37
+                defaultConfig { minSdk = 24; targetSdk = 37 }
+            }
+            """.trimIndent(),
+        )
+
+        val report = AndroidProjectInspector().inspect(root)
+
+        val app = report.modules.single()
+        assertEquals(AndroidModuleType.APPLICATION, app.type)
+        assertEquals(KotlinIntegration.BUILT_IN, app.kotlinIntegration)
+        assertEquals(37, app.compileSdk)
+        assertEquals(24, app.minSdk)
+        assertEquals(37, app.targetSdk)
+        assertEquals(
+            CompatibilityStatus.OUTSIDE_DOCUMENTED_RANGE,
+            report.toolchain.findings
+                .first { it.component == "kotlin-gradle" }
+                .status,
+        )
+    }
+
+    @Test
+    fun `inspector recognizes Android KMP source sets tests and single variant model`() {
+        val root = Files.createTempDirectory("dak-kmp")
+        Files.writeString(root.resolve("settings.gradle.kts"), "rootProject.name = \"Kmp\"\ninclude(\":shared\")")
+        Files.createDirectories(root.resolve("shared/src/androidMain"))
+        Files.createDirectories(root.resolve("shared/src/androidHostTest"))
+        Files.createDirectories(root.resolve("shared/src/androidDeviceTest"))
+        Files.writeString(
+            root.resolve("shared/build.gradle.kts"),
+            """
+            plugins {
+                id("org.jetbrains.kotlin.multiplatform")
+                id("com.android.kotlin.multiplatform.library")
+            }
+            kotlin {
+                android {
+                    namespace = "com.example.shared"
+                    compileSdk = 37
+                    minSdk = 24
+                    withHostTestBuilder {}
+                    withDeviceTestBuilder {}
+                }
+            }
+            """.trimIndent(),
+        )
+
+        val report = AndroidProjectInspector().inspect(root)
+
+        val shared = report.modules.single()
+        assertEquals(AndroidModuleType.KMP_ANDROID, shared.type)
+        assertEquals(KotlinIntegration.MULTIPLATFORM, shared.kotlinIntegration)
+        assertEquals(listOf("androidDeviceTest", "androidHostTest", "androidMain"), shared.sourceSets)
+        assertTrue(shared.hasUnitTests)
+        assertTrue(shared.hasAndroidTests)
+        assertTrue(report.commandMatrix.none { "testDebugUnitTest" in it.command })
+    }
+
+    @Test
+    fun `inspector discovers managed device groups and official screenshot validation`() {
+        val root = Files.createTempDirectory("dak-modern-tests")
+        Files.writeString(root.resolve("settings.gradle.kts"), "rootProject.name = \"Tests\"\ninclude(\":app\")")
+        Files.createDirectories(root.resolve("app/src/screenshotTestDebug"))
+        Files.writeString(
+            root.resolve("app/build.gradle.kts"),
+            """
+            plugins {
+                id("com.android.application")
+                id("com.android.compose.screenshot")
+            }
+            android {
+                namespace = "com.example.tests"
+                testOptions {
+                    managedDevices {
+                        localDevices { create("pixelApi37") { apiLevel = 37 } }
+                        groups { create("phones") { } }
+                    }
+                }
+            }
+            """.trimIndent(),
+        )
+
+        val report = AndroidProjectInspector().inspect(root)
+        val app = report.modules.single()
+
+        assertEquals(listOf("pixelApi37"), app.managedDevices)
+        assertEquals(listOf("phones"), app.managedDeviceGroups)
+        assertTrue(app.hasScreenshotTests)
+        assertTrue(report.commandMatrix.any { it.command.last() == ":app:pixelApi37DebugAndroidTest" })
+        assertTrue(report.commandMatrix.any { it.command.last() == ":app:phonesGroupDebugAndroidTest" })
+        assertTrue(report.commandMatrix.any { it.command.last() == ":app:validateDebugScreenshotTest" })
+    }
 }

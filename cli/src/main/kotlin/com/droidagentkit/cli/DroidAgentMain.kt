@@ -130,7 +130,7 @@ class DroidAgentCli(
         val dispatcher = DroidAgentMcpDispatcher(config, projectRoot)
         if (command.transport == "stdio") {
             val stdio = DroidAgentStdioServer(dispatcher)
-            generateSequence(::readLine).forEach { line ->
+            generateSequence { readlnOrNull() }.forEach { line ->
                 stdio.runOnce(line)?.let { println(it) }
             }
         } else {

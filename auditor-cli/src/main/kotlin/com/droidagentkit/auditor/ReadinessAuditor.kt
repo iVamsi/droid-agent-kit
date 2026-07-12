@@ -5,7 +5,9 @@ import com.droidagentkit.core.ArtifactType
 import com.droidagentkit.core.RedactionConfig
 import com.droidagentkit.core.Redactor
 import com.droidagentkit.core.Severity
+import com.droidagentkit.inspector.AndroidModuleType
 import com.droidagentkit.inspector.AndroidProjectInspector
+import com.droidagentkit.inspector.CompatibilityStatus
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.exists
@@ -18,6 +20,7 @@ class ReadinessAuditor(
         redactPublic: Boolean = false,
     ): ReadinessReport {
         val project = inspector.inspect(root)
+        val profile = determineProfile(project.modules.map { it.type })
         val risks = mutableListOf<ReadinessRisk>()
         var score = 0
 
@@ -133,46 +136,49 @@ class ReadinessAuditor(
                 )
         }
 
-        // ProGuard rules
-        val hasProguard =
-            project.modules.any { mod ->
-                java.nio.file.Path
-                    .of(mod.directory)
-                    .resolve("proguard-rules.pro")
-                    .exists()
-            }
-        if (hasProguard) {
-            score += 5
+        if (profile == ReadinessProfile.ANDROID_APP || profile == ReadinessProfile.MIXED_REPOSITORY) {
+            score += appReleaseReadinessScore(project.modules, risks)
         } else {
+            // Preserve the denominator without applying app-only requirements to libraries and tooling.
+            score += 10
+        }
+
+        project.toolchain.findings
+            .filter { it.status == CompatibilityStatus.OUTSIDE_DOCUMENTED_RANGE }
+            .forEach { finding ->
+                risks +=
+                    ReadinessRisk(
+                        id = "unsupported-${finding.component}",
+                        severity = Severity.WARNING,
+                        title = "Toolchain pair is outside the documented support range",
+                        evidence = listOf(finding.detail),
+                        fix = "Select versions inside the official compatibility table or document a tested best-effort lane.",
+                        applicability = "all",
+                        confidence = "declared",
+                        source = finding.sourceUrl,
+                    )
+            }
+
+        if (!root.resolve("gradle/verification-metadata.xml").exists()) {
             risks +=
                 risk(
-                    "missing-proguard",
-                    Severity.WARNING,
-                    "No ProGuard rules file detected",
-                    "No proguard-rules.pro found in any module directory.",
-                    "Add proguard-rules.pro and enable R8 minification in release builds.",
+                    "missing-dependency-verification",
+                    Severity.INFO,
+                    "Gradle dependency verification is not configured",
+                    "No gradle/verification-metadata.xml was found.",
+                    "Bootstrap and review SHA-256/PGP dependency verification metadata.",
                 )
         }
 
-        // Baseline Profile
-        val hasBaselineProfile =
-            project.modules.any { mod ->
-                val buildFile =
-                    java.nio.file.Path
-                        .of(mod.directory)
-                        .resolve("build.gradle.kts")
-                buildFile.exists() && Files.readString(buildFile).contains("baselineProfile", ignoreCase = true)
-            }
-        if (hasBaselineProfile) {
-            score += 5
-        } else {
+        val gradleProperties = root.resolve("gradle.properties")
+        if (!gradleProperties.exists() || !Files.readString(gradleProperties).contains("org.gradle.configuration-cache=true")) {
             risks +=
                 risk(
-                    "missing-baseline-profile",
+                    "configuration-cache-not-enabled",
                     Severity.INFO,
-                    "No Baseline Profile configuration detected",
-                    "No baselineProfile keyword found in any module's build.gradle.kts.",
-                    "Add a Baseline Profile to improve startup performance.",
+                    "Gradle configuration cache is not enabled",
+                    "No persistent strict configuration-cache setting was detected.",
+                    "Verify store and reuse twice, then enable org.gradle.configuration-cache=true.",
                 )
         }
 
@@ -191,7 +197,57 @@ class ReadinessAuditor(
             moduleMap = project.modules,
             risks = risks,
             recommendedActions = risks.map { RecommendedAction(it.id, it.fix, null) },
+            profile = profile,
         )
+    }
+
+    private fun determineProfile(types: List<AndroidModuleType>): ReadinessProfile =
+        when {
+            types.any { it == AndroidModuleType.APPLICATION || it == AndroidModuleType.DYNAMIC_FEATURE } ->
+                if (types.any { it == AndroidModuleType.KMP_ANDROID }) ReadinessProfile.MIXED_REPOSITORY else ReadinessProfile.ANDROID_APP
+            types.any { it == AndroidModuleType.KMP_ANDROID } -> ReadinessProfile.ANDROID_KMP_LIBRARY
+            types.any { it == AndroidModuleType.LIBRARY } -> ReadinessProfile.ANDROID_LIBRARY
+            types.any { it == AndroidModuleType.JVM_TOOLING } -> ReadinessProfile.JVM_TOOLING
+            types.isNotEmpty() -> ReadinessProfile.MIXED_REPOSITORY
+            else -> ReadinessProfile.JVM_TOOLING
+        }
+
+    private fun appReleaseReadinessScore(
+        modules: List<com.droidagentkit.inspector.AndroidModuleSummary>,
+        risks: MutableList<ReadinessRisk>,
+    ): Int {
+        var score = 0
+        val hasProguard = modules.any { Path.of(it.directory).resolve("proguard-rules.pro").exists() }
+        if (hasProguard) {
+            score += 5
+        } else {
+            risks +=
+                risk(
+                    "missing-proguard",
+                    Severity.WARNING,
+                    "No ProGuard rules file detected",
+                    "No proguard-rules.pro found in an Android application module.",
+                    "Review release shrinking and add project rules when the application requires them.",
+                )
+        }
+        val hasBaselineProfile =
+            modules.any { module ->
+                val buildFile = Path.of(module.directory).resolve("build.gradle.kts")
+                buildFile.exists() && Files.readString(buildFile).contains("baselineProfile", ignoreCase = true)
+            }
+        if (hasBaselineProfile) {
+            score += 5
+        } else {
+            risks +=
+                risk(
+                    "missing-baseline-profile",
+                    Severity.INFO,
+                    "No Baseline Profile configuration detected",
+                    "No baselineProfile keyword found in an Android application module.",
+                    "Evaluate a Baseline Profile for startup and critical user journeys.",
+                )
+        }
+        return score
     }
 
     private fun risk(
@@ -293,6 +349,8 @@ class AgentsDocumentGenerator {
             appendLine("## Project Overview")
             appendLine("- Name: ${report.project.name}")
             appendLine("- Support: ${report.project.support}")
+            appendLine("- Profile: ${report.profile}")
+            appendLine("- Readiness policy: ${report.policyVersion}")
             appendLine("- Readiness: ${report.score}/100 (${report.level})")
             appendLine()
             appendLine("## Safe Commands")

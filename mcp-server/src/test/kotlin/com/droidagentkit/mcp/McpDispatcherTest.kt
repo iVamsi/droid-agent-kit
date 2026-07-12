@@ -28,6 +28,8 @@ class McpDispatcherTest {
                 "android_crash_triage",
                 "android_dependency_check",
                 "android_build_performance",
+                "android_test_run",
+                "android_build_diagnose",
             ),
             tools,
         )
@@ -76,7 +78,7 @@ class McpDispatcherTest {
 
         val tools = dispatcher.listTools()
 
-        assertEquals(12, tools.size)
+        assertEquals(14, tools.size)
         tools.forEach { tool ->
             assertEquals("tool ${tool.name} missing type:object", "object", tool.inputSchema["type"])
             assertTrue(
@@ -300,5 +302,68 @@ class McpDispatcherTest {
         val findings = result["findings"] as List<Map<*, *>>
         assertEquals(1, findings.size)
         assertEquals(":toolbox-core:compileKotlin", findings[0]["title"])
+    }
+
+    @Test
+    fun `test run returns junit summary and structured failures`() {
+        val root = Files.createTempDirectory("dak-test-run")
+        val config =
+            DroidAgentConfig.default().copy(
+                safety = DroidAgentConfig.default().safety.copy(allowGradleTasks = listOf(":app:testDebugUnitTest")),
+            )
+        writeFakeGradlew(root)
+        val results = root.resolve("app/build/test-results/testDebugUnitTest")
+        Files.createDirectories(results)
+        Files.writeString(
+            results.resolve("TEST-example.xml"),
+            """
+            <testsuite tests="1" failures="1" errors="0" skipped="0" time="0.1">
+              <testcase classname="example.Test" name="fails"><failure message="boom"/></testcase>
+            </testsuite>
+            """.trimIndent(),
+        )
+        val dispatcher = DroidAgentMcpDispatcher(config, root)
+
+        val result =
+            dispatcher.call(
+                "android_test_run",
+                mapOf("rootPath" to root.toString(), "task" to ":app:testDebugUnitTest", "mode" to "unit"),
+            )
+
+        assertEquals("success", result["status"])
+        @Suppress("UNCHECKED_CAST")
+        val summary = result["testSummary"] as Map<String, Any>
+        assertEquals(1, summary["tests"])
+        assertEquals(1, summary["failures"])
+        @Suppress("UNCHECKED_CAST")
+        assertEquals(1, (result["findings"] as List<*>).size)
+    }
+
+    @Test
+    fun `build diagnose preserves unknown failures and classifies known compiler output`() {
+        val root = Files.createTempDirectory("dak-build-diagnose")
+        val config =
+            DroidAgentConfig.default().copy(
+                safety = DroidAgentConfig.default().safety.copy(allowGradleTasks = listOf(":app:assembleDebug")),
+            )
+        val wrapper = root.resolve("gradlew")
+        Files.writeString(wrapper, "#!/bin/sh\necho \"e: file:///project/App.kt:4:2 Unresolved reference\"\nexit 1\n")
+        Files.setPosixFilePermissions(
+            wrapper,
+            java.nio.file.attribute.PosixFilePermissions
+                .fromString("rwxr-xr-x"),
+        )
+        val dispatcher = DroidAgentMcpDispatcher(config, root)
+
+        val result =
+            dispatcher.call(
+                "android_build_diagnose",
+                mapOf("rootPath" to root.toString(), "task" to ":app:assembleDebug"),
+            )
+
+        assertEquals("failed", result["status"])
+        @Suppress("UNCHECKED_CAST")
+        val findings = result["findings"] as List<Map<*, *>>
+        assertEquals("compiler.kotlin", findings.single()["category"])
     }
 }
