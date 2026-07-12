@@ -52,6 +52,8 @@ redaction:
 | `android_crash_triage` | Capture logcat from a device and extract structured crash/ANR findings. |
 | `android_dependency_check` | Check declared dependency versions for drift and orphaned version-catalog entries. Local-only, no network calls, no "latest version" data. |
 | `android_build_performance` | Run an allowlisted Gradle task with `--profile` and surface the slowest tasks from the profile report. |
+| `android_test_run` | Run an allowlisted unit, device, managed-device, or screenshot task and parse bounded JUnit XML results. |
+| `android_build_diagnose` | Run an allowlisted Gradle task and classify recognized compiler, resource, manifest, and configuration-cache failures. |
 
 ## Redaction
 
