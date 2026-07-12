@@ -4,7 +4,9 @@ Build and register DroidAgentKit for Android Studio with one command:
 
 ```bash
 ./gradlew :cli:installDist
-./cli/build/install/droidagent/bin/droidagent install-mcp --targets android-studio --project .
+./cli/build/install/droidagent/bin/droidagent install-mcp \
+  --targets android-studio \
+  --projects-root ~/Developer/StudioProjects
 ```
 
 On macOS this command:
@@ -15,7 +17,8 @@ On macOS this command:
 - installs and starts a user LaunchAgent so no terminal has to remain open.
 
 Restart Android Studio after the first registration, or reload its MCP configuration from Settings.
-Rerun the command with a different `--project` path to switch the project root exposed to Studio.
+Every Gradle project beneath the trusted directory then uses the same registration and background
+service; no per-project MCP installation is needed.
 
 See [Easy MCP Installation](easy-mcp-installation.md) for every supported client and Linux/Windows
 service notes.
@@ -27,13 +30,16 @@ loopback HTTP endpoint for this target. See the official
 documentation.
 
 DroidAgentKit negotiates MCP protocol version `2025-11-25`. Tool definitions expose JSON input and
-output schemas; calls return both readable JSON text and structured MCP result content.
+output schemas; calls return both readable JSON text and structured MCP result content. In workspace
+mode, every tool requires the active project's absolute `rootPath`. DroidAgentKit resolves and checks
+that path against `--projects-root` before reading project configuration or running any command.
 
 For manual or non-macOS setup, create a token file containing at least 32 URL-safe characters and
 start the local HTTP MCP server from an Android project:
 
 ```bash
-droidagent serve-mcp --project . --transport http --host 127.0.0.1 --port 8765 \
+droidagent serve-mcp --project . --projects-root ~/Developer/StudioProjects \
+  --transport http --host 127.0.0.1 --port 8765 \
   --bearer-token-file ~/.droidagentkit/android-studio/bearer-token
 ```
 

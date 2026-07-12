@@ -7,6 +7,7 @@ sealed class CliCommand {
         val host: String = "127.0.0.1",
         val port: Int = 8765,
         val bearerTokenFile: String? = null,
+        val projectsRoot: String? = null,
     ) : CliCommand()
 
     data class Inspect(
@@ -47,6 +48,7 @@ sealed class CliCommand {
         val targets: List<String>,
         val binPath: String?,
         val project: String,
+        val projectsRoot: String? = null,
         val dryRun: Boolean,
         val applyClaude: Boolean,
     ) : CliCommand()

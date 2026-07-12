@@ -26,6 +26,7 @@ data class McpInstallOptions(
     val targets: Set<McpInstallTarget>,
     val binPath: Path,
     val projectRoot: Path = Path.of("").toAbsolutePath().normalize(),
+    val projectsRoot: Path? = null,
     val dryRun: Boolean,
     val applyClaude: Boolean,
 )
@@ -231,6 +232,11 @@ class McpInstaller(
         changed: MutableList<Path>,
     ) {
         val projectRoot = options.projectRoot.toAbsolutePath().normalize()
+        val projectsRoot = options.projectsRoot?.toAbsolutePath()?.normalize()
+        if (projectsRoot != null && !Files.isDirectory(projectsRoot)) {
+            messages += "Projects root '$projectsRoot' does not exist or is not a directory. Android Studio was not updated."
+            return
+        }
         val port = 8765
         val stateDirectory = home.resolve(".droidagentkit/android-studio")
         val tokenFile = stateDirectory.resolve("bearer-token")
@@ -259,6 +265,7 @@ class McpInstaller(
             installMacLaunchAgent(
                 options,
                 projectRoot,
+                projectsRoot,
                 port,
                 tokenFile,
                 stateDirectory,
@@ -266,7 +273,7 @@ class McpInstaller(
                 changed,
             )
         } else {
-            val command = androidStudioServeCommand(options.binPath, projectRoot, port, tokenFile)
+            val command = androidStudioServeCommand(options.binPath, projectRoot, projectsRoot, port, tokenFile)
             messages += "Start the Android Studio MCP service after sign-in: ${command.joinToString(" ")}"
         }
     }
@@ -320,6 +327,7 @@ class McpInstaller(
     private fun installMacLaunchAgent(
         options: McpInstallOptions,
         projectRoot: Path,
+        projectsRoot: Path?,
         port: Int,
         tokenFile: Path,
         stateDirectory: Path,
@@ -328,7 +336,7 @@ class McpInstaller(
     ) {
         val label = "com.droidagentkit.mcp.android-studio"
         val plist = home.resolve("Library/LaunchAgents/$label.plist")
-        val arguments = androidStudioServeCommand(options.binPath, projectRoot, port, tokenFile)
+        val arguments = androidStudioServeCommand(options.binPath, projectRoot, projectsRoot, port, tokenFile)
         val xmlArguments = arguments.joinToString("\n") { "        <string>${it.escapeXml()}</string>" }
         val logFile = stateDirectory.resolve("service.log")
         val content =
@@ -369,7 +377,8 @@ class McpInstaller(
         runCatching { commandExecutor(listOf("launchctl", "unload", plist.toString())) }
         val exit = runCatching { commandExecutor(listOf("launchctl", "load", "-w", plist.toString())) }.getOrElse { -1 }
         if (exit == 0) {
-            messages += "Android Studio MCP service installed and started for $projectRoot on 127.0.0.1:$port."
+            val scope = projectsRoot?.let { "projects under $it" } ?: projectRoot.toString()
+            messages += "Android Studio MCP service installed and started for $scope on 127.0.0.1:$port."
         } else {
             messages += "Android Studio launch agent was written but could not be started. Run: launchctl load -w $plist"
         }
@@ -378,23 +387,28 @@ class McpInstaller(
     private fun androidStudioServeCommand(
         binPath: Path,
         projectRoot: Path,
+        projectsRoot: Path?,
         port: Int,
         tokenFile: Path,
     ): List<String> =
-        listOf(
-            binPath.toString(),
-            "serve-mcp",
-            "--transport",
-            "http",
-            "--host",
-            "127.0.0.1",
-            "--port",
-            port.toString(),
-            "--project",
-            projectRoot.toString(),
-            "--bearer-token-file",
-            tokenFile.toString(),
-        )
+        buildList {
+            add(binPath.toString())
+            add("serve-mcp")
+            add("--transport")
+            add("http")
+            add("--host")
+            add("127.0.0.1")
+            add("--port")
+            add(port.toString())
+            add("--project")
+            add(projectRoot.toString())
+            projectsRoot?.let {
+                add("--projects-root")
+                add(it.toString())
+            }
+            add("--bearer-token-file")
+            add(tokenFile.toString())
+        }
 
     private fun androidStudioServerConfig(
         port: Int,

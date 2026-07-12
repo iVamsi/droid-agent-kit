@@ -27,7 +27,7 @@ For only one target:
 ./cli/build/install/droidagent/bin/droidagent install-mcp --targets cursor
 ./cli/build/install/droidagent/bin/droidagent install-mcp --targets zed
 ./cli/build/install/droidagent/bin/droidagent install-mcp --targets vscode
-./cli/build/install/droidagent/bin/droidagent install-mcp --targets android-studio --project /path/to/android/project
+./cli/build/install/droidagent/bin/droidagent install-mcp --targets android-studio --projects-root /path/to/projects
 ./cli/build/install/droidagent/bin/droidagent install-mcp --targets generic
 ```
 
@@ -157,13 +157,21 @@ after login and reads its bearer token from an owner-only file under
 `~/.droidagentkit/android-studio/`. Rerunning the command updates the registered project and service
 without duplicating the MCP entry.
 
-Android Studio's MCP configuration is IDE-wide while DroidAgentKit deliberately confines each HTTP
-service to one explicit project root. Run the Android Studio target again with `--project` when you
-want to switch the registered root:
+For a one-time machine registration, pass the parent directory that contains the Android projects you
+trust DroidAgentKit to access:
 
 ```bash
-droidagent install-mcp --targets android-studio --project /path/to/another/android/project
+droidagent install-mcp --targets android-studio --projects-root ~/Developer/StudioProjects
 ```
+
+The persistent service then works across every Gradle project beneath that directory. DroidAgentKit
+adds `rootPath` as a required input to every MCP tool in this mode. Before loading a project's config
+or executing a tool, it resolves the requested path, verifies that it remains beneath the trusted
+directory, and verifies that it contains `settings.gradle` or `settings.gradle.kts`. Symlinks cannot
+escape the trusted boundary. Each accepted project loads its own `.droidagentkit/config.yaml`, command
+allowlist, redaction settings, and report output configuration.
+
+`--project` remains available when intentionally restricting the service to exactly one project.
 
 On Linux and Windows, the installer writes the official Android Studio `mcp.json` location and prints
 the authenticated service command to run after sign-in. Automatic login service installation is
@@ -195,6 +203,7 @@ This lets one user-wide MCP registration adapt to whichever project the agent is
 ## Safety Defaults
 
 - The MCP server uses stdio for capable local agent tools and authenticated loopback HTTP for Android Studio.
+- Workspace mode accepts only resolved Gradle project roots beneath the explicitly trusted `--projects-root` directory.
 - No arbitrary shell tool is exposed.
 - Gradle tasks are allowlisted by `.droidagentkit/config.yaml`.
 - Command output is redacted before returning summaries to agents.
