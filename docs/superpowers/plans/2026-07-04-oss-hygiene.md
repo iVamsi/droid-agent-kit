@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - No GitHub remote is configured for this repo. Do not write any URL that assumes a live repo (badges, Discussions links, `github.com/<org>/...` references) — omit instead.
-- CODEOWNERS / CoC enforcement contact uses the existing commit email `private-maintainer-contact` — do not invent a different contact.
+- Do not publish personal email addresses, machine paths, or local identities in repository content.
 - No production code changes. If any step would touch a `src/main` or `src/test` Kotlin file for reasons other than ktlint auto-format, stop and flag it — out of scope.
 - `./gradlew test` must pass after every task.
 - Project version is already `0.1.0-alpha` in root `build.gradle.kts` (`version = "0.1.0-alpha"`) — the release tag must match this exactly: `v0.1.0-alpha`.
@@ -159,8 +159,9 @@ an appointed representative at an online or offline event.
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the community
-leaders responsible for enforcement at private-maintainer-contact. All complaints will be reviewed and
-investigated promptly and fairly.
+leaders responsible for enforcement through a private maintainer contact channel published in the
+repository metadata. Sensitive incident details must not be placed in public issues. All complaints
+will be reviewed and investigated promptly and fairly.
 
 All community leaders are obligated to respect the privacy and security of the reporter of any
 incident.
@@ -219,8 +220,8 @@ Community Impact Guidelines were inspired by [Mozilla's code of conduct enforcem
 
 - [ ] **Step 3: Verify both files exist with expected content**
 
-Run: `test -f CONTRIBUTING.md && test -f CODE_OF_CONDUCT.md && grep -c "private-maintainer-contact" CODE_OF_CONDUCT.md`
-Expected: no error, and the grep prints `1`.
+Run: `test -f CONTRIBUTING.md && test -f CODE_OF_CONDUCT.md`
+Expected: no error.
 
 - [ ] **Step 4: Commit**
 
@@ -431,15 +432,13 @@ contact_links: []
 - [ ] Tests added or updated for behavior changes
 ```
 
-- [ ] **Step 5: Write `.github/CODEOWNERS`**
+- [ ] **Step 5: Defer `.github/CODEOWNERS`**
 
-```
-* private-maintainer-contact
-```
+Do not create CODEOWNERS until a non-personal GitHub organization or team owner is available.
 
 - [ ] **Step 6: Verify all five files exist**
 
-Run: `test -f .github/ISSUE_TEMPLATE/bug_report.yml && test -f .github/ISSUE_TEMPLATE/feature_request.yml && test -f .github/ISSUE_TEMPLATE/config.yml && test -f .github/PULL_REQUEST_TEMPLATE.md && test -f .github/CODEOWNERS && echo OK`
+Run: `test -f .github/ISSUE_TEMPLATE/bug_report.yml && test -f .github/ISSUE_TEMPLATE/feature_request.yml && test -f .github/ISSUE_TEMPLATE/config.yml && test -f .github/PULL_REQUEST_TEMPLATE.md && echo OK`
 Expected: `OK`
 
 - [ ] **Step 7: Commit**

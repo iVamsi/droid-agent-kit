@@ -15,9 +15,8 @@ and CI-config only — no production code changes.
 
 **Known gap:** no GitHub remote is configured for this repo yet. Anything that would normally reference
 a live repo URL (issue-template contact links, Discussions, badges) is either omitted or written so it
-degrades gracefully once a remote exists. CODEOWNERS uses the committer email already present in every
-commit (`private-maintainer-contact`) as the single default owner. The final tag is created locally only —
-there is nothing to push to.
+degrades gracefully once a remote exists. No personal email address or machine-local identity is
+stored in repository content. The final tag is created locally only — there is nothing to push to.
 
 ---
 
@@ -34,7 +33,8 @@ only, output must stay redacted.
 
 ### 2. CODE_OF_CONDUCT.md
 
-Contributor Covenant v2.1 standard text, enforcement contact set to `private-maintainer-contact`.
+Contributor Covenant v2.1 standard text, with private maintainer contact guidance that does not expose
+a personal email address.
 
 ### 3. CHANGELOG.md — cut the first release section
 
@@ -58,7 +58,7 @@ updated if CLI subcommands / MCP tool names / Gradle plugin behavior changed.
 
 ### 6. CODEOWNERS
 
-`.github/CODEOWNERS` with a single line: `* private-maintainer-contact`.
+No CODEOWNERS file is added until the project has a non-personal organization or team owner.
 
 ### 7. Lint CI step
 
