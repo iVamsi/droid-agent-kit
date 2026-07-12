@@ -39,6 +39,14 @@ Preview without changing files:
 ./cli/build/install/droidagent/bin/droidagent install-mcp --dry-run
 ```
 
+For one Android Studio registration that works across every project in a trusted workspace directory:
+
+```bash
+droidagent install-mcp --targets android-studio --projects-root ~/Developer/StudioProjects
+```
+
+Each tool call must identify the active project, and the service rejects paths outside that trusted directory.
+
 After installation, open any Android project in Codex or Claude Code and ask for Android-specific help such as:
 
 - "Inspect this Android project with DroidAgentKit."

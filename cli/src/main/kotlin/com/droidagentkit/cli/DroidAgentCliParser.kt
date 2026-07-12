@@ -32,6 +32,7 @@ class DroidAgentCliParser {
                     host = options["host"] ?: "127.0.0.1",
                     port = options["port"]?.toIntOrNull() ?: 8765,
                     bearerTokenFile = options["bearer-token-file"],
+                    projectsRoot = options["projects-root"],
                 )
             "inspect" ->
                 CliCommand.Inspect(
@@ -75,6 +76,7 @@ class DroidAgentCliParser {
                             .filter { it.isNotBlank() },
                     binPath = options["bin"],
                     project = options["project"] ?: ".",
+                    projectsRoot = options["projects-root"],
                     dryRun = options.containsKey("dry-run"),
                     applyClaude = !options.containsKey("dry-run") && !options.containsKey("no-claude-apply"),
                 )

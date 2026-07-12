@@ -30,15 +30,28 @@ data class McpTool(
     val outputSchema: Map<String, Any>,
 )
 
+interface McpDispatcher {
+    val instructions: String
+
+    fun listTools(): List<McpTool>
+
+    fun call(
+        name: String,
+        arguments: Map<String, Any?>,
+    ): Map<String, Any>
+}
+
 class DroidAgentMcpDispatcher(
     private val config: DroidAgentConfig,
     projectRoot: Path = Path.of("."),
     private val inspector: AndroidProjectInspector = AndroidProjectInspector(),
-) {
+) : McpDispatcher {
     private val projectRoot = projectRoot.toAbsolutePath().normalize()
     private val realProjectRoot = this.projectRoot.toRealPath()
 
-    fun listTools(): List<McpTool> =
+    override val instructions: String = "Use DroidAgentKit only for the project root selected when this server started."
+
+    override fun listTools(): List<McpTool> =
         listOf(
             McpTool(
                 name = "android_project_inspect",
@@ -237,7 +250,7 @@ class DroidAgentMcpDispatcher(
             ),
         )
 
-    fun call(
+    override fun call(
         name: String,
         arguments: Map<String, Any?>,
     ): Map<String, Any> =

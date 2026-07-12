@@ -24,7 +24,7 @@ private val ERROR_STATUSES = setOf("failed", "blocked", "unsupported")
 private val SUPPORTED_PROTOCOL_VERSIONS = setOf(MCP_PROTOCOL_VERSION)
 
 class McpJsonRpcHandler(
-    private val dispatcher: DroidAgentMcpDispatcher,
+    private val dispatcher: McpDispatcher,
 ) {
     fun handle(rawMessage: String): String? {
         val root =
@@ -64,7 +64,7 @@ class McpJsonRpcHandler(
             "protocolVersion" to protocolVersion,
             "capabilities" to mapOf("tools" to emptyMap<String, Any?>()),
             "serverInfo" to mapOf("name" to SERVER_NAME, "version" to SERVER_VERSION),
-            "instructions" to "Use DroidAgentKit only for the project root selected when this server started.",
+            "instructions" to dispatcher.instructions,
         )
     }
 
