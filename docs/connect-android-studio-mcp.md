@@ -1,27 +1,41 @@
 # Connect Android Studio to DroidAgentKit MCP
 
-For Codex, Claude Code, and other stdio-capable local agents, prefer the one-command user installer:
+Build and register DroidAgentKit for Android Studio with one command:
 
 ```bash
 ./gradlew :cli:installDist
-./cli/build/install/droidagent/bin/droidagent install-mcp
+./cli/build/install/droidagent/bin/droidagent install-mcp --targets android-studio --project .
 ```
 
-See [Easy MCP Installation](easy-mcp-installation.md).
+On macOS this command:
 
-Android Studio uses HTTP MCP configuration today, so start the local HTTP server when using it directly from Android Studio.
+- discovers installed `AndroidStudio*` configuration directories;
+- merges the server into each `mcp.json` without removing unrelated servers;
+- creates an owner-only persistent bearer token; and
+- installs and starts a user LaunchAgent so no terminal has to remain open.
+
+Restart Android Studio after the first registration, or reload its MCP configuration from Settings.
+Rerun the command with a different `--project` path to switch the project root exposed to Studio.
+
+See [Easy MCP Installation](easy-mcp-installation.md) for every supported client and Linux/Windows
+service notes.
+
+Android Studio uses streamable HTTP MCP configuration today. It does not support stdio MCP servers,
+MCP resources, or MCP prompts. DroidAgentKit therefore exposes its tools through an authenticated
+loopback HTTP endpoint for this target. See the official
+[Add an MCP server to Android Studio](https://developer.android.com/studio/gemini/add-mcp-server)
+documentation.
 
 DroidAgentKit negotiates MCP protocol version `2025-11-25`. Tool definitions expose JSON input and
 output schemas; calls return both readable JSON text and structured MCP result content.
 
-Start the local HTTP MCP server from an Android project:
+For manual or non-macOS setup, create a token file containing at least 32 URL-safe characters and
+start the local HTTP MCP server from an Android project:
 
 ```bash
-droidagent serve-mcp --project . --transport http --host 127.0.0.1 --port 8765
+droidagent serve-mcp --project . --transport http --host 127.0.0.1 --port 8765 \
+  --bearer-token-file ~/.droidagentkit/android-studio/bearer-token
 ```
-
-The server prints a randomly generated bearer token at startup. Copy it into the configuration below;
-each server start uses a new token.
 
 Use this Android Studio MCP configuration:
 
@@ -31,8 +45,10 @@ Use this Android Studio MCP configuration:
     "droidagentkit": {
       "httpUrl": "http://127.0.0.1:8765/mcp",
       "headers": {
-        "Authorization": "Bearer <TOKEN_PRINTED_BY_DROIDAGENT>"
-      }
+        "Authorization": "Bearer <TOKEN_FROM_FILE>"
+      },
+      "timeout": 30000,
+      "enabled": true
     }
   }
 }

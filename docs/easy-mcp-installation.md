@@ -27,6 +27,7 @@ For only one target:
 ./cli/build/install/droidagent/bin/droidagent install-mcp --targets cursor
 ./cli/build/install/droidagent/bin/droidagent install-mcp --targets zed
 ./cli/build/install/droidagent/bin/droidagent install-mcp --targets vscode
+./cli/build/install/droidagent/bin/droidagent install-mcp --targets android-studio --project /path/to/android/project
 ./cli/build/install/droidagent/bin/droidagent install-mcp --targets generic
 ```
 
@@ -129,6 +130,49 @@ which GitHub Copilot Chat's agent mode reads:
 }
 ```
 
+### Android Studio
+
+Android Studio supports MCP tools through streamable HTTP rather than stdio. The installer discovers
+each installed Android Studio configuration directory and merges an authenticated `droidagentkit`
+entry into its `mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "droidagentkit": {
+      "httpUrl": "http://127.0.0.1:8765/mcp",
+      "headers": {
+        "Authorization": "Bearer <generated-local-token>"
+      },
+      "timeout": 30000,
+      "enabled": true
+    }
+  }
+}
+```
+
+On macOS, the same command installs and starts
+`~/Library/LaunchAgents/com.droidagentkit.mcp.android-studio.plist`. It keeps the server available
+after login and reads its bearer token from an owner-only file under
+`~/.droidagentkit/android-studio/`. Rerunning the command updates the registered project and service
+without duplicating the MCP entry.
+
+Android Studio's MCP configuration is IDE-wide while DroidAgentKit deliberately confines each HTTP
+service to one explicit project root. Run the Android Studio target again with `--project` when you
+want to switch the registered root:
+
+```bash
+droidagent install-mcp --targets android-studio --project /path/to/another/android/project
+```
+
+On Linux and Windows, the installer writes the official Android Studio `mcp.json` location and prints
+the authenticated service command to run after sign-in. Automatic login service installation is
+currently macOS-only.
+
+These paths and the `httpUrl`, `headers`, `timeout`, and `enabled` fields follow the official
+[Android Studio MCP documentation](https://developer.android.com/studio/gemini/add-mcp-server) and
+[Android Studio configuration directory documentation](https://developer.android.com/studio/troubleshoot#directories).
+
 ## How Project Auto-Detection Works
 
 `--project auto` resolves the active Android project in this order:
@@ -150,7 +194,7 @@ This lets one user-wide MCP registration adapt to whichever project the agent is
 
 ## Safety Defaults
 
-- The MCP server uses stdio for local agent tools.
+- The MCP server uses stdio for capable local agent tools and authenticated loopback HTTP for Android Studio.
 - No arbitrary shell tool is exposed.
 - Gradle tasks are allowlisted by `.droidagentkit/config.yaml`.
 - Command output is redacted before returning summaries to agents.

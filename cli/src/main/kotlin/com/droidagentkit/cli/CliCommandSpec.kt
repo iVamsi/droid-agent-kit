@@ -25,6 +25,7 @@ object CliCommandRegistry {
                     CliOption("--transport", "Transport: stdio or http. Defaults to http."),
                     CliOption("--host", "Bind host for http transport. Defaults to 127.0.0.1."),
                     CliOption("--port", "Bind port for http transport. Defaults to 8765."),
+                    CliOption("--bearer-token-file", "Read the HTTP bearer token from a local file."),
                 ),
             ),
             CliCommandSpec(
@@ -81,8 +82,12 @@ object CliCommandRegistry {
                 "install-mcp",
                 "Register DroidAgentKit as a user-scope MCP server.",
                 listOf(
-                    CliOption("--targets", "Comma-separated: codex, claude, generic, cursor, zed, vscode, all. Defaults to all."),
+                    CliOption(
+                        "--targets",
+                        "Comma-separated: codex, claude, generic, cursor, zed, vscode, android-studio, all. Defaults to all.",
+                    ),
                     CliOption("--bin", "Override path to the droidagent binary."),
+                    CliOption("--project", "Project root used by Android Studio's local HTTP server. Defaults to cwd."),
                     CliOption("--dry-run", "Preview changes without writing files.", takesValue = false),
                     CliOption("--no-claude-apply", "Skip running the Claude Code apply step.", takesValue = false),
                 ),
