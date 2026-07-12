@@ -7,6 +7,9 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.attribute.PosixFilePermission
+import java.security.SecureRandom
+import java.util.Base64
 import kotlin.io.path.exists
 
 enum class McpInstallTarget {
@@ -16,11 +19,13 @@ enum class McpInstallTarget {
     CURSOR,
     ZED,
     VSCODE,
+    ANDROID_STUDIO,
 }
 
 data class McpInstallOptions(
     val targets: Set<McpInstallTarget>,
     val binPath: Path,
+    val projectRoot: Path = Path.of("").toAbsolutePath().normalize(),
     val dryRun: Boolean,
     val applyClaude: Boolean,
 )
@@ -109,6 +114,10 @@ class McpInstaller(
                 messages,
                 changed,
             )
+        }
+
+        if (McpInstallTarget.ANDROID_STUDIO in options.targets) {
+            installAndroidStudio(options, messages, changed)
         }
 
         return McpInstallResult(messages, changed, generic)
@@ -216,6 +225,188 @@ class McpInstaller(
 
     private fun appDataPath(): Path = home.resolve("AppData/Roaming")
 
+    private fun installAndroidStudio(
+        options: McpInstallOptions,
+        messages: MutableList<String>,
+        changed: MutableList<Path>,
+    ) {
+        val projectRoot = options.projectRoot.toAbsolutePath().normalize()
+        val port = 8765
+        val stateDirectory = home.resolve(".droidagentkit/android-studio")
+        val tokenFile = stateDirectory.resolve("bearer-token")
+        val configPaths = androidStudioConfigPaths()
+
+        if (configPaths.isEmpty()) {
+            messages += "No Android Studio configuration directory was found. Open Android Studio once, then rerun install-mcp."
+            return
+        }
+
+        val token = readOrCreateToken(tokenFile, options.dryRun, changed)
+        val serverConfig = androidStudioServerConfig(port, token)
+        configPaths.forEach { path ->
+            installJsonTarget(
+                "Android Studio",
+                path,
+                "mcpServers",
+                serverConfig,
+                options.dryRun,
+                messages,
+                changed,
+            )
+        }
+
+        if (osName.lowercase().contains("mac")) {
+            installMacLaunchAgent(
+                options,
+                projectRoot,
+                port,
+                tokenFile,
+                stateDirectory,
+                messages,
+                changed,
+            )
+        } else {
+            val command = androidStudioServeCommand(options.binPath, projectRoot, port, tokenFile)
+            messages += "Start the Android Studio MCP service after sign-in: ${command.joinToString(" ")}"
+        }
+    }
+
+    private fun androidStudioConfigPaths(): List<Path> {
+        val googleDirectory =
+            when {
+                osName.lowercase().contains("win") -> appDataPath().resolve("Google")
+                osName.lowercase().contains("mac") -> home.resolve("Library/Application Support/Google")
+                else -> home.resolve(".config/Google")
+            }
+        if (!googleDirectory.exists()) return emptyList()
+        return Files.list(googleDirectory).use { paths ->
+            paths
+                .filter { Files.isDirectory(it) && it.fileName.toString().startsWith("AndroidStudio") }
+                .map { it.resolve("mcp.json") }
+                .sorted()
+                .toList()
+        }
+    }
+
+    private fun readOrCreateToken(
+        tokenFile: Path,
+        dryRun: Boolean,
+        changed: MutableList<Path>,
+    ): String {
+        val existing =
+            if (tokenFile.exists()) {
+                Files.readString(tokenFile).trim().takeIf { it.matches(Regex("[A-Za-z0-9_-]{32,}")) }
+            } else {
+                null
+            }
+        if (existing != null) return existing
+
+        val bytes = ByteArray(32).also(SecureRandom()::nextBytes)
+        val token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
+        if (!dryRun) {
+            Files.createDirectories(tokenFile.parent)
+            Files.writeString(tokenFile, "$token\n")
+            runCatching {
+                Files.setPosixFilePermissions(
+                    tokenFile,
+                    setOf(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE),
+                )
+            }
+            changed.add(tokenFile)
+        }
+        return token
+    }
+
+    private fun installMacLaunchAgent(
+        options: McpInstallOptions,
+        projectRoot: Path,
+        port: Int,
+        tokenFile: Path,
+        stateDirectory: Path,
+        messages: MutableList<String>,
+        changed: MutableList<Path>,
+    ) {
+        val label = "com.droidagentkit.mcp.android-studio"
+        val plist = home.resolve("Library/LaunchAgents/$label.plist")
+        val arguments = androidStudioServeCommand(options.binPath, projectRoot, port, tokenFile)
+        val xmlArguments = arguments.joinToString("\n") { "        <string>${it.escapeXml()}</string>" }
+        val logFile = stateDirectory.resolve("service.log")
+        val content =
+            """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+            <plist version="1.0">
+            <dict>
+                <key>Label</key>
+                <string>$label</string>
+                <key>ProgramArguments</key>
+                <array>
+            $xmlArguments
+                </array>
+                <key>WorkingDirectory</key>
+                <string>${projectRoot.toString().escapeXml()}</string>
+                <key>RunAtLoad</key>
+                <true/>
+                <key>KeepAlive</key>
+                <true/>
+                <key>StandardOutPath</key>
+                <string>${logFile.toString().escapeXml()}</string>
+                <key>StandardErrorPath</key>
+                <string>${logFile.toString().escapeXml()}</string>
+            </dict>
+            </plist>
+            """.trimIndent() + "\n"
+
+        if (options.dryRun) {
+            messages += "Android Studio launch agent would be installed at $plist"
+            return
+        }
+
+        Files.createDirectories(plist.parent)
+        Files.createDirectories(stateDirectory)
+        Files.writeString(plist, content)
+        changed.add(plist)
+        runCatching { commandExecutor(listOf("launchctl", "unload", plist.toString())) }
+        val exit = runCatching { commandExecutor(listOf("launchctl", "load", "-w", plist.toString())) }.getOrElse { -1 }
+        if (exit == 0) {
+            messages += "Android Studio MCP service installed and started for $projectRoot on 127.0.0.1:$port."
+        } else {
+            messages += "Android Studio launch agent was written but could not be started. Run: launchctl load -w $plist"
+        }
+    }
+
+    private fun androidStudioServeCommand(
+        binPath: Path,
+        projectRoot: Path,
+        port: Int,
+        tokenFile: Path,
+    ): List<String> =
+        listOf(
+            binPath.toString(),
+            "serve-mcp",
+            "--transport",
+            "http",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            port.toString(),
+            "--project",
+            projectRoot.toString(),
+            "--bearer-token-file",
+            tokenFile.toString(),
+        )
+
+    private fun androidStudioServerConfig(
+        port: Int,
+        token: String,
+    ): JsonObject =
+        buildJsonObject {
+            put("httpUrl", "http://127.0.0.1:$port/mcp")
+            put("headers", buildJsonObject { put("Authorization", "Bearer $token") })
+            put("timeout", 30_000)
+            put("enabled", true)
+        }
+
     private fun serveArgsArray(): JsonArray =
         JsonArray(listOf("serve-mcp", "--transport", "stdio", "--project", "auto").map(::JsonPrimitive))
 
@@ -242,11 +433,25 @@ class McpInstaller(
     private fun String.escapeToml(): String = replace("\\", "\\\\").replace("\"", "\\\"")
 
     private fun String.escapeJson(): String = replace("\\", "\\\\").replace("\"", "\\\"")
+
+    private fun String.escapeXml(): String =
+        replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("\"", "&quot;")
+            .replace("'", "&apos;")
 }
 
 object McpInstallTargets {
     fun parse(values: List<String>): Set<McpInstallTarget> {
-        val expanded = values.flatMap { if (it == "all") listOf("codex", "claude", "generic", "cursor", "zed", "vscode") else listOf(it) }
+        val expanded =
+            values.flatMap {
+                if (it == "all") {
+                    listOf("codex", "claude", "generic", "cursor", "zed", "vscode", "android-studio")
+                } else {
+                    listOf(it)
+                }
+            }
         return expanded
             .mapNotNull {
                 when (it.lowercase()) {
@@ -256,6 +461,7 @@ object McpInstallTargets {
                     "cursor" -> McpInstallTarget.CURSOR
                     "zed" -> McpInstallTarget.ZED
                     "vscode" -> McpInstallTarget.VSCODE
+                    "android-studio", "androidstudio", "studio" -> McpInstallTarget.ANDROID_STUDIO
                     else -> null
                 }
             }.toSet()
@@ -267,6 +473,7 @@ object McpInstallTargets {
                     McpInstallTarget.CURSOR,
                     McpInstallTarget.ZED,
                     McpInstallTarget.VSCODE,
+                    McpInstallTarget.ANDROID_STUDIO,
                 )
             }
     }

@@ -134,10 +134,28 @@ class DroidAgentCli(
                 stdio.runOnce(line)?.let { println(it) }
             }
         } else {
-            val server = DroidAgentMcpHttpServer(dispatcher, command.host, command.port)
+            val configuredToken =
+                command.bearerTokenFile?.let { tokenFile ->
+                    val token =
+                        runCatching { Files.readString(Path.of(tokenFile)).trim() }
+                            .getOrElse {
+                                System.err.println("Could not read bearer token file '$tokenFile': ${it.message}")
+                                return 1
+                            }
+                    if (!token.matches(Regex("[A-Za-z0-9_-]{32,}"))) {
+                        System.err.println("Bearer token file '$tokenFile' does not contain a valid token.")
+                        return 1
+                    }
+                    token
+                }
+            val server = DroidAgentMcpHttpServer(dispatcher, command.host, command.port, configuredToken)
             server.start()
             println("DroidAgentKit MCP server listening at http://${command.host}:${command.port}/mcp")
-            println("Set Authorization: Bearer ${server.bearerToken} in the MCP client configuration.")
+            if (configuredToken == null) {
+                println("Set Authorization: Bearer ${server.bearerToken} in the MCP client configuration.")
+            } else {
+                println("Using the bearer token from ${command.bearerTokenFile}.")
+            }
             Thread.currentThread().join()
         }
         return 0
@@ -201,10 +219,12 @@ class DroidAgentCli(
 
     private fun installMcp(command: CliCommand.InstallMcp): Int {
         val binPath = command.binPath?.let(Path::of) ?: defaultDroidAgentBin()
+        val projectRoot = ProjectLocator.resolve(command.project)
         val options =
             McpInstallOptions(
                 targets = McpInstallTargets.parse(command.targets),
                 binPath = binPath.toAbsolutePath().normalize(),
+                projectRoot = projectRoot,
                 dryRun = command.dryRun,
                 applyClaude = command.applyClaude,
             )

@@ -264,6 +264,78 @@ class McpInstallerTest {
     }
 
     @Test
+    fun `android studio installer writes authenticated http config and mac launch agent idempotently`() {
+        val home = Files.createTempDirectory("dak-home-studio")
+        val studioDirectory = home.resolve("Library/Application Support/Google/AndroidStudio2026.1.1")
+        val project = Files.createTempDirectory("dak-project-studio")
+        Files.createDirectories(studioDirectory)
+        val executed = mutableListOf<List<String>>()
+        val installer =
+            McpInstaller(
+                home = home,
+                osName = "Mac OS X",
+                commandExecutor = { command ->
+                    executed += command
+                    0
+                },
+            )
+        val options =
+            McpInstallOptions(
+                targets = setOf(McpInstallTarget.ANDROID_STUDIO),
+                binPath = Path.of("/opt/droidagent/bin/droidagent"),
+                projectRoot = project,
+                dryRun = false,
+                applyClaude = false,
+            )
+
+        installer.install(options)
+        val tokenFile = home.resolve(".droidagentkit/android-studio/bearer-token")
+        val firstToken = Files.readString(tokenFile).trim()
+        val result = installer.install(options)
+
+        val root = Json.parseToJsonElement(Files.readString(studioDirectory.resolve("mcp.json"))).jsonObject
+        val servers = root["mcpServers"]!!.jsonObject
+        val server = servers["droidagentkit"]!!.jsonObject
+        assertEquals(1, servers.size)
+        assertTrue(server["httpUrl"]!!.jsonPrimitive.content.matches(Regex("http://127\\.0\\.0\\.1:\\d{4,5}/mcp")))
+        assertEquals("Bearer $firstToken", server["headers"]!!.jsonObject["Authorization"]!!.jsonPrimitive.content)
+        assertEquals(firstToken, Files.readString(tokenFile).trim())
+        assertTrue(firstToken.length >= 32)
+
+        val plist = Files.list(home.resolve("Library/LaunchAgents")).use { paths -> paths.findFirst().orElseThrow() }
+        val plistText = Files.readString(plist)
+        assertTrue(plistText.contains("/opt/droidagent/bin/droidagent"))
+        assertTrue(plistText.contains(project.toString()))
+        assertTrue(plistText.contains("--bearer-token-file"))
+        assertTrue(executed.any { it.take(3) == listOf("launchctl", "load", "-w") })
+        assertTrue(result.messages.any { it.contains("installed and started") })
+    }
+
+    @Test
+    fun `android studio dry run does not write registration or service files`() {
+        val home = Files.createTempDirectory("dak-home-studio-dry")
+        val studioDirectory = home.resolve("Library/Application Support/Google/AndroidStudio2026.1.1")
+        Files.createDirectories(studioDirectory)
+        val installer = McpInstaller(home = home, osName = "Mac OS X", commandExecutor = { error("launchctl should not run") })
+
+        val result =
+            installer.install(
+                McpInstallOptions(
+                    targets = setOf(McpInstallTarget.ANDROID_STUDIO),
+                    binPath = Path.of("/opt/droidagent/bin/droidagent"),
+                    projectRoot = Files.createTempDirectory("dak-project-studio-dry"),
+                    dryRun = true,
+                    applyClaude = false,
+                ),
+            )
+
+        assertFalse(Files.exists(studioDirectory.resolve("mcp.json")))
+        assertFalse(Files.exists(home.resolve(".droidagentkit")))
+        assertFalse(Files.exists(home.resolve("Library/LaunchAgents")))
+        assertTrue(result.messages.any { it.contains("would be installed") })
+    }
+
+    @Test
     fun `all target expansion includes the new ide targets`() {
         assertEquals(
             setOf(
@@ -273,6 +345,7 @@ class McpInstallerTest {
                 McpInstallTarget.CURSOR,
                 McpInstallTarget.ZED,
                 McpInstallTarget.VSCODE,
+                McpInstallTarget.ANDROID_STUDIO,
             ),
             McpInstallTargets.parse(listOf("all")),
         )
