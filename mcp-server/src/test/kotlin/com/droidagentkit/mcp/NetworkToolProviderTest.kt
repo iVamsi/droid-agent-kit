@@ -118,8 +118,7 @@ class NetworkToolProviderTest {
 
         val result = dispatcher.call("android_network_capture_start", startArgs(root, confirm = true))
         val jobId = result["jobId"] as String
-        // Give the proxy a moment to install before cancelling.
-        Thread.sleep(300)
+        waitForProxyInstall(log)
         val cancel = dispatcher.call("android_job_cancel", mapOf("rootPath" to root.toString(), "jobId" to jobId))
         assertEquals("cancelled", cancel["status"])
         waitForTerminal(dispatcher, jobId)
@@ -274,6 +273,15 @@ class NetworkToolProviderTest {
             val state = snap["jobState"] as String
             if (state != "running" && state != "pending") return
             Thread.sleep(150)
+        }
+    }
+
+    private fun waitForProxyInstall(log: Path) {
+        val deadline = System.currentTimeMillis() + 5000
+        while (System.currentTimeMillis() < deadline) {
+            val lines = runCatching { Files.readAllLines(log) }.getOrDefault(emptyList())
+            if (lines.any { it.startsWith("10.0.2.2:") }) return
+            Thread.sleep(50)
         }
     }
 
