@@ -21,8 +21,10 @@ jobs:
           distribution: temurin
           java-version: ${{ matrix.java }}
       - name: Public repository hygiene
-        run: ./scripts/check-public-hygiene.sh
+        run: bash scripts/check-public-hygiene.sh
       - name: Lint
-        run: ./gradlew ktlintCheck
+        run: |
+          chmod +x gradlew
+          ./gradlew ktlintCheck --no-configuration-cache --stacktrace
       - name: Test
-        run: ./gradlew test
+        run: ./gradlew test --no-configuration-cache --stacktrace
