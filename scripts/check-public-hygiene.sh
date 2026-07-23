@@ -9,5 +9,9 @@ if git grep -n -I -E "$private_content_pattern" -- . ':!scripts/check-public-hyg
 fi
 
 if command -v gitleaks >/dev/null 2>&1; then
-  gitleaks git --redact --no-banner --log-opts=-1 .
+  if [ -f .gitleaks.toml ]; then
+    gitleaks detect --no-banner --redact --config .gitleaks.toml --source . --log-opts=-1
+  else
+    gitleaks git --redact --no-banner --log-opts=-1 .
+  fi
 fi
