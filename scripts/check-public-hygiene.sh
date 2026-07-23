@@ -10,7 +10,7 @@ fi
 
 if command -v gitleaks >/dev/null 2>&1; then
   if [ -f .gitleaks.toml ]; then
-    gitleaks detect --no-banner --redact --config .gitleaks.toml --source . --log-opts=-1
+    gitleaks git --redact --no-banner --config .gitleaks.toml --log-opts=-1 .
   else
     gitleaks git --redact --no-banner --log-opts=-1 .
   fi
