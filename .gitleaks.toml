@@ -1,0 +1,10 @@
+title = "droid-agent-kit"
+
+[allowlist]
+description = "Intentional fake secrets in tests, docs, and sample fixtures"
+paths = [
+  '''(?i).*/test/.*''',
+  '''(?i).*Test\.kt$''',
+  '''(?i).*Tests\.kt$''',
+  '''^docs/''',
+]
