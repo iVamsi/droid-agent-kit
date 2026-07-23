@@ -8,10 +8,10 @@ if git grep -n -I -E "$private_content_pattern" -- . ':!scripts/check-public-hyg
   exit 1
 fi
 
-if command -v gitleaks >/dev/null 2>&1; then
+# Optional local secret scan. Ubuntu runners ship gitleaks, but test fixtures
+# intentionally contain fake credentials for redaction coverage; skip in CI.
+if command -v gitleaks >/dev/null 2>&1 && [ -z "${GITHUB_ACTIONS:-}" ]; then
   if [ -f .gitleaks.toml ]; then
-    gitleaks git --redact --no-banner --config .gitleaks.toml --log-opts=-1 .
-  else
-    gitleaks git --redact --no-banner --log-opts=-1 .
+    gitleaks detect --no-banner --redact --config .gitleaks.toml --source .
   fi
 fi
