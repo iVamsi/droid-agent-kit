@@ -37,6 +37,12 @@ class DroidAgentMcpHttpServer(
                 exchange.responseBody.close()
                 return@createContext
             }
+            val accept = exchange.requestHeaders.getFirst("Accept")
+            if (accept != null && !accept.contains("application/json") && !accept.contains("*/*")) {
+                exchange.sendResponseHeaders(406, -1)
+                exchange.responseBody.close()
+                return@createContext
+            }
             if (exchange.requestHeaders.getFirst("Authorization") != "Bearer $bearerToken") {
                 exchange.sendResponseHeaders(401, 0)
                 exchange.responseBody.close()

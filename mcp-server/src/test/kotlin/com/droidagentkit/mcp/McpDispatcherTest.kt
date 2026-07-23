@@ -23,6 +23,7 @@ class McpDispatcherTest {
                 "android_app_launch",
                 "android_logcat_capture",
                 "android_screen_snapshot",
+                "android_accessibility_snapshot",
                 "android_report_bundle",
                 "android_lint_run",
                 "android_crash_triage",
@@ -72,13 +73,24 @@ class McpDispatcherTest {
     }
 
     @Test
+    fun `accessibility snapshot is blocked when device serial is missing`() {
+        val root = Files.createTempDirectory("dak-accessibility")
+        val dispatcher = DroidAgentMcpDispatcher(DroidAgentConfig.default(), root)
+
+        val result = dispatcher.call("android_accessibility_snapshot", mapOf("rootPath" to root.toString()))
+
+        assertEquals("blocked", result["status"])
+        assertTrue(result["summary"].toString().contains("deviceSerial"))
+    }
+
+    @Test
     fun `each tool exposes an input schema with type object and properties`() {
         val root = Files.createTempDirectory("dak-tool-schema")
         val dispatcher = DroidAgentMcpDispatcher(DroidAgentConfig.default(), root)
 
         val tools = dispatcher.listTools()
 
-        assertEquals(14, tools.size)
+        assertEquals(15, tools.size)
         tools.forEach { tool ->
             assertEquals("tool ${tool.name} missing type:object", "object", tool.inputSchema["type"])
             assertTrue(

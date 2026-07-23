@@ -3,7 +3,10 @@ package com.droidagentkit.visuals
 import com.droidagentkit.core.ResultStatus
 
 class VisualReportBuilder {
-    fun build(cases: List<VisualCaseResult>): VisualReport {
+    fun build(
+        cases: List<VisualCaseResult>,
+        warnings: List<String> = emptyList(),
+    ): VisualReport {
         val findings = cases.flatMap { it.findings }
         val status =
             when {
@@ -40,6 +43,7 @@ class VisualReportBuilder {
             findings = findings,
             artifacts = findings.flatMap { it.evidence },
             agentFixPacket = fixPacket,
+            warnings = warnings,
         )
     }
 }

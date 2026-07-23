@@ -1,33 +1,15 @@
 package com.droidagentkit.visuals.android
 
+import com.droidagentkit.visuals.CaptureEnvironment
 import com.droidagentkit.visuals.VisualCapture
 import com.droidagentkit.visuals.VisualCaptureEngine
+import com.droidagentkit.visuals.VisualMatrix
 import java.nio.file.Path
 
-data class VisualMatrix(
-    val devices: List<String>,
-    val themes: List<String>,
-    val fontScales: List<Float>,
-    val locales: List<String>,
-) {
-    companion object {
-        fun standard() =
-            VisualMatrix(
-                devices = listOf("phone_412x915"),
-                themes = listOf("light"),
-                fontScales = listOf(1.0f),
-                locales = listOf("en"),
-            )
-    }
-}
-
-data class CaptureEnvironment(
-    val device: String,
-    val theme: String,
-    val fontScale: Float,
-    val locale: String,
-)
-
+/**
+ * JVM byte-capture adapter. This is NOT an Android JUnit/instrumentation lifecycle rule; target
+ * projects own Compose rendering and call this helper to persist capture bytes for diffing.
+ */
 class DroidAgentVisualRule(
     private val outputDir: Path = Path.of("build/droidagentkit/visuals"),
 ) {
@@ -37,13 +19,8 @@ class DroidAgentVisualRule(
         semantics: List<String> = emptyList(),
         render: () -> ByteArray,
     ): VisualCapture {
-        val environment =
-            CaptureEnvironment(
-                device = matrix.devices.firstOrNull() ?: "phone_412x915",
-                theme = matrix.themes.firstOrNull() ?: "light",
-                fontScale = matrix.fontScales.firstOrNull() ?: 1.0f,
-                locale = matrix.locales.firstOrNull() ?: "en",
-            )
+        matrix.validate()
+        val environment = matrix.cartesian().first()
         return VisualCaptureEngine.persistCapture(
             outputDir = outputDir,
             caseName = name,
@@ -54,5 +31,30 @@ class DroidAgentVisualRule(
             pngBytes = render(),
             semanticsDump = semantics.joinToString(separator = "\n"),
         )
+    }
+
+    /**
+     * Caller-owned full Cartesian capture: renders one PNG per environment in [matrix] and returns
+     * every capture. Empty axes and cardinality above [VisualMatrix.MAX_CARDINALITY] are rejected
+     * before any rendering happens.
+     */
+    fun captureMatrix(
+        name: String,
+        matrix: VisualMatrix,
+        render: (CaptureEnvironment) -> ByteArray,
+    ): List<VisualCapture> {
+        matrix.validate()
+        return matrix.cartesian().map { environment ->
+            VisualCaptureEngine.persistCapture(
+                outputDir = outputDir,
+                caseName = name,
+                device = environment.device,
+                theme = environment.theme,
+                fontScale = environment.fontScale,
+                locale = environment.locale,
+                pngBytes = render(environment),
+                semanticsDump = "",
+            )
+        }
     }
 }

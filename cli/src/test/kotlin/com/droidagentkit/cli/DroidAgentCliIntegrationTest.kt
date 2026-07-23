@@ -60,6 +60,26 @@ class DroidAgentCliIntegrationTest {
         assertEquals(1, exitCode)
     }
 
+    @Test
+    fun `audit --write-agents populates generatedDocuments in the readiness report`() {
+        val root = Files.createTempDirectory("dak-cli-audit-docs")
+        Files.writeString(root.resolve("settings.gradle.kts"), "rootProject.name = \"Audit\"\ninclude(\":app\")")
+        Files.createDirectories(root.resolve("app/src/test/java"))
+        Files.writeString(
+            root.resolve("app/build.gradle.kts"),
+            "plugins { id(\"com.android.application\") }\nandroid { namespace = \"com.example.audit\" }",
+        )
+
+        val exitCode = DroidAgentCli().run(arrayOf("audit", "--project", root.toString(), "--write-agents"))
+
+        assertEquals(0, exitCode)
+        val reportJson = Files.readString(root.resolve("build/droidagentkit/audit/readiness-report.json"))
+        assertTrue(reportJson.contains("generatedDocuments"))
+        assertTrue(reportJson.contains("AGENTS"))
+        assertTrue(Files.exists(root.resolve("AGENTS.md")))
+        assertTrue(Files.exists(root.resolve(".agents/skills/android-project/SKILL.md")))
+    }
+
     private fun solidColorPng(
         color: Color,
         size: Int = 10,

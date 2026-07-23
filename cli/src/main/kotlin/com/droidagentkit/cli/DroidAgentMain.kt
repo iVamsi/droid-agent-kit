@@ -64,7 +64,7 @@ class DroidAgentCli(
             is CliCommand.Audit -> audit(command)
             is CliCommand.ServeMcp -> serveMcp(command)
             is CliCommand.Gradle -> mcpCall(command.project, "android_gradle_run", mapOf("task" to command.task))
-            is CliCommand.Devices -> mcpCall(command.project, "android_devices_list", emptyMap())
+            is CliCommand.Devices -> devices(command)
             is CliCommand.Snapshot ->
                 mcpCall(
                     ".",
@@ -111,15 +111,28 @@ class DroidAgentCli(
 
     private fun audit(command: CliCommand.Audit): Int {
         val root = Path.of(command.project).toAbsolutePath().normalize()
-        val report = ReadinessAuditor(AndroidProjectInspector()).audit(root, command.redactPublic)
-        if (command.writeAgents) AgentDocumentWriter().write(root, report, mergeAgents = false)
+        val baseReport = ReadinessAuditor(AndroidProjectInspector()).audit(root, command.redactPublic)
+        val generated =
+            if (command.writeAgents) {
+                AgentDocumentWriter().write(root, baseReport, mergeAgents = false)
+            } else {
+                emptyList()
+            }
+        val report = baseReport.copy(generatedDocuments = generated)
         val markdown = AgentsDocumentGenerator().generate(report)
         val outDir = root.resolve("build/droidagentkit/audit")
         Files.createDirectories(outDir)
         Files.writeString(outDir.resolve("readiness-report.md"), markdown)
         Files.writeString(
             outDir.resolve("readiness-report.json"),
-            Json.write(mapOf("score" to report.score, "level" to report.level.name.lowercase(), "risks" to report.risks.map { it.id })),
+            Json.write(
+                mapOf(
+                    "score" to report.score,
+                    "level" to report.level.name.lowercase(),
+                    "risks" to report.risks.map { it.id },
+                    "generatedDocuments" to report.generatedDocuments.map { it.path },
+                ),
+            ),
         )
         println("Readiness ${report.score}/100 (${report.level})")
         return if (command.failUnder != null && report.score < command.failUnder) 2 else 0
@@ -173,6 +186,40 @@ class DroidAgentCli(
             Thread.currentThread().join()
         }
         return 0
+    }
+
+    private fun devices(command: CliCommand.Devices): Int {
+        val root = ProjectLocator.resolve(command.project)
+        val config =
+            when (val configResult = DroidAgentConfigLoader.load(root)) {
+                is ConfigLoadResult.Loaded -> {
+                    configResult.warnings.forEach { System.err.println("droidagentkit config warning: $it") }
+                    configResult.config
+                }
+                is ConfigLoadResult.Invalid -> {
+                    configResult.errors.forEach {
+                        System.err.println("droidagentkit config error: line ${it.line}: ${it.key} — ${it.message}")
+                    }
+                    return 1
+                }
+            }
+        val result = DroidAgentMcpDispatcher(config, root).call("android_devices_list", mapOf("rootPath" to root.toString()))
+        val adbOutput = readAdbDevicesOutput(result)
+        val output =
+            if (command.format == "markdown") {
+                renderDevicesMarkdown(adbOutput)
+            } else {
+                Json.write(result)
+            }
+        println(output)
+        return if (result["status"] == "failed" || result["status"] == "blocked") 2 else 0
+    }
+
+    private fun readAdbDevicesOutput(result: Map<String, Any>): String {
+        val artifacts = result["artifacts"] as? List<*> ?: emptyList<Any>()
+        val firstArtifact = artifacts.firstOrNull() as? Map<*, *> ?: return ""
+        val path = firstArtifact["path"]?.toString() ?: return ""
+        return runCatching { Files.readString(Path.of(path)) }.getOrDefault("")
     }
 
     private fun mcpCall(
@@ -294,6 +341,54 @@ class DroidAgentCli(
                     val marker = if (option.required) " (required)" else ""
                     appendLine("  ${option.flag}$marker — ${option.description}")
                 }
+            }
+        }
+    }
+}
+
+internal data class AdbDeviceRow(
+    val serial: String,
+    val state: String,
+    val details: Map<String, String>,
+)
+
+internal fun parseAdbDevices(adbOutput: String): List<AdbDeviceRow> {
+    val rows = mutableListOf<AdbDeviceRow>()
+    adbOutput.lineSequence().forEach { rawLine ->
+        val line = rawLine.trim()
+        if (line.isEmpty()) return@forEach
+        if (line.startsWith("List of devices attached")) return@forEach
+        if (line.startsWith("*")) return@forEach
+        val tokens = line.split(Regex("\\s+"))
+        if (tokens.size < 2) return@forEach
+        val serial = tokens[0]
+        val state = tokens[1]
+        val details = mutableMapOf<String, String>()
+        tokens.drop(2).forEach { token ->
+            val eq = token.indexOf(':')
+            if (eq > 0) details[token.substring(0, eq)] = token.substring(eq + 1)
+        }
+        rows.add(AdbDeviceRow(serial, state, details))
+    }
+    return rows
+}
+
+internal fun renderDevicesMarkdown(adbOutput: String): String {
+    val devices = parseAdbDevices(adbOutput)
+    return buildString {
+        appendLine("# Connected adb devices")
+        appendLine()
+        if (devices.isEmpty()) {
+            appendLine("_(no devices)_")
+        } else {
+            appendLine("| Serial | State | Product | Model | Device | Transport |")
+            appendLine("|--------|-------|---------|-------|--------|-----------|")
+            devices.forEach { line ->
+                appendLine(
+                    "| ${line.serial} | ${line.state} | ${line.details["product"] ?: "-"}" +
+                        " | ${line.details["model"] ?: "-"} | ${line.details["device"] ?: "-"}" +
+                        " | ${line.details["transport_id"] ?: "-"} |",
+                )
             }
         }
     }

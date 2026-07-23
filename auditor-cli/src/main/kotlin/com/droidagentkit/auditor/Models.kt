@@ -33,6 +33,20 @@ data class RecommendedAction(
     val command: String?,
 )
 
+/**
+ * Server-side capability summary surfaced in report bundles. Reflects the DroidAgentKit MCP
+ * server's own configuration (not the target project): which tool groups are exposed, which
+ * capabilities are enabled, what optional executables are configured, and which dangerous flags
+ * are on. Capability enablement is reported as a fact, never rewarded in readiness scoring.
+ */
+data class CapabilitySummary(
+    val exposedToolGroups: List<String>,
+    val enabledCapabilities: List<String>,
+    val dangerousFlags: List<String>,
+    val optionalExecutables: Map<String, String>,
+    val prerequisites: List<String>,
+)
+
 data class ReadinessRisk(
     val id: String,
     val severity: Severity,
@@ -56,4 +70,5 @@ data class ReadinessReport(
     val recommendedActions: List<RecommendedAction>,
     val profile: ReadinessProfile = ReadinessProfile.MIXED_REPOSITORY,
     val policyVersion: String = "2026-07-11",
+    val capabilitySummary: CapabilitySummary? = null,
 )
