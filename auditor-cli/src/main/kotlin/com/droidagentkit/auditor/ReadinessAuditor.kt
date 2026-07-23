@@ -98,7 +98,6 @@ class ReadinessAuditor(
 
         if (hasVisualHooks(root)) score += 5
 
-        // Version catalog (previously implicit, now named)
         if (root.resolve("gradle/libs.versions.toml").exists()) {
             score += 5
         } else {
@@ -112,7 +111,6 @@ class ReadinessAuditor(
                 )
         }
 
-        // Static analysis config
         val hasStaticAnalysis =
             root.resolve("detekt.yml").exists() ||
                 root.resolve(".detekt/config.yml").exists() ||
@@ -139,7 +137,6 @@ class ReadinessAuditor(
         if (profile == ReadinessProfile.ANDROID_APP || profile == ReadinessProfile.MIXED_REPOSITORY) {
             score += appReleaseReadinessScore(project.modules, risks)
         } else {
-            // Preserve the denominator without applying app-only requirements to libraries and tooling.
             score += 10
         }
 
@@ -223,7 +220,12 @@ class ReadinessAuditor(
             project = report.project.copy(rootPath = "."),
             moduleMap =
                 report.moduleMap.map { module ->
-                    module.copy(directory = root.relativize(Path.of(module.directory).toAbsolutePath().normalize()).toString())
+                    val modulePath = Path.of(module.directory).toAbsolutePath().normalize()
+                    val rootPath = root.toAbsolutePath().normalize()
+                    val relative =
+                        runCatching { rootPath.relativize(modulePath).toString() }
+                            .getOrElse { modulePath.fileName?.toString() ?: module.directory }
+                    module.copy(directory = relative)
                 },
             risks =
                 report.risks.map { risk ->
