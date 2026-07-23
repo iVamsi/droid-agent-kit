@@ -189,15 +189,46 @@ class ReadinessAuditor(
                 score >= 50 -> ReadinessLevel.SMALL_TASKS_ONLY
                 else -> ReadinessLevel.UNSAFE_FOR_AUTONOMY
             }
-        return ReadinessReport(
-            project = ProjectSummary(project.projectName, project.rootPath, project.support),
-            score = score.coerceIn(0, 100),
-            level = level,
-            commandMatrix = project.commandMatrix,
-            moduleMap = project.modules,
-            risks = risks,
-            recommendedActions = risks.map { RecommendedAction(it.id, it.fix, null) },
-            profile = profile,
+        val report =
+            ReadinessReport(
+                project = ProjectSummary(project.projectName, project.rootPath, project.support),
+                score = score.coerceIn(0, 100),
+                level = level,
+                commandMatrix = project.commandMatrix,
+                moduleMap = project.modules,
+                risks = risks,
+                recommendedActions = risks.map { RecommendedAction(it.id, it.fix, null) },
+                profile = profile,
+            )
+        return if (redactPublic) redactPublic(report, root) else report
+    }
+
+    private fun redactPublic(
+        report: ReadinessReport,
+        root: Path,
+    ): ReadinessReport {
+        val home = System.getProperty("user.home") ?: ""
+        val user = System.getProperty("user.name") ?: ""
+        val rootAbs = root.toAbsolutePath().normalize().toString()
+        val scrub: (String) -> String = { value ->
+            var v = value
+            if (rootAbs.isNotBlank()) v = v.replace(rootAbs, ".")
+            if (home.isNotBlank()) v = v.replace(home, "~")
+            if (user.isNotBlank()) v = v.replace(user, "[user]")
+            v
+                .replace(Regex("\\bemulator-\\d+\\b"), "[serial]")
+                .replace(Regex("\\b\\d{1,3}(?:\\.\\d{1,3}){3}:\\d+\\b"), "[serial]")
+        }
+        return report.copy(
+            project = report.project.copy(rootPath = "."),
+            moduleMap =
+                report.moduleMap.map { module ->
+                    module.copy(directory = root.relativize(Path.of(module.directory).toAbsolutePath().normalize()).toString())
+                },
+            risks =
+                report.risks.map { risk ->
+                    risk.copy(evidence = risk.evidence.map(scrub))
+                },
         )
     }
 
@@ -426,6 +457,8 @@ class AgentDocumentWriter {
             - ":*:test*UnitTest"
             - ":*:lint*"
             - ":*:assemble*Debug"
+            - ":*:*AndroidTest"
+            - ":*:validate*ScreenshotTest"
           allowAdbInput: false
           allowAppInstall: true
           allowEmulatorStart: false

@@ -15,6 +15,8 @@ import kotlinx.serialization.json.Json as KJson
 private const val PARSE_ERROR = -32700
 private const val INVALID_REQUEST = -32600
 private const val METHOD_NOT_FOUND = -32601
+private const val RESOURCE_NOT_FOUND = -32002
+private const val INVALID_PARAMS = -32602
 
 private const val SERVER_NAME = "droidagentkit"
 private const val SERVER_VERSION = "0.1.0-alpha"
@@ -53,6 +55,11 @@ class McpJsonRpcHandler(
             "ping" -> successResponse(id, emptyMap())
             "tools/list" -> successResponse(id, handleToolsList())
             "tools/call" -> handleToolsCall(id, root["params"] as? JsonObject)
+            "resources/list" -> successResponse(id, handleResourcesList())
+            "resources/templates/list" -> successResponse(id, handleResourcesTemplatesList())
+            "resources/read" -> handleResourcesRead(id, root["params"] as? JsonObject)
+            "prompts/list" -> successResponse(id, handlePromptsList())
+            "prompts/get" -> handlePromptsGet(id, root["params"] as? JsonObject)
             else -> if (hasId) errorResponse(id, METHOD_NOT_FOUND, "Method not found: $method") else null
         }
     }
@@ -62,7 +69,12 @@ class McpJsonRpcHandler(
         val protocolVersion = requestedVersion?.takeIf { it in SUPPORTED_PROTOCOL_VERSIONS } ?: MCP_PROTOCOL_VERSION
         return mapOf(
             "protocolVersion" to protocolVersion,
-            "capabilities" to mapOf("tools" to emptyMap<String, Any?>()),
+            "capabilities" to
+                mapOf(
+                    "tools" to emptyMap<String, Any?>(),
+                    "resources" to mapOf("list" to true, "read" to true),
+                    "prompts" to mapOf("list" to true, "get" to true),
+                ),
             "serverInfo" to mapOf("name" to SERVER_NAME, "version" to SERVER_VERSION),
             "instructions" to dispatcher.instructions,
         )
@@ -72,15 +84,100 @@ class McpJsonRpcHandler(
         mapOf(
             "tools" to
                 dispatcher.listTools().map {
+                    val tool =
+                        mapOf(
+                            "name" to it.name,
+                            "title" to it.title,
+                            "description" to it.description,
+                            "inputSchema" to it.inputSchema,
+                            "outputSchema" to it.outputSchema,
+                        )
+                    if (it.annotations.isNotEmpty()) tool + ("annotations" to it.annotations) else tool
+                },
+        )
+
+    private fun handleResourcesList(): Map<String, Any?> =
+        mapOf(
+            "resources" to
+                dispatcher.resourceRegistry().list().map {
                     mapOf(
+                        "uri" to it.uri,
                         "name" to it.name,
-                        "title" to it.title,
                         "description" to it.description,
-                        "inputSchema" to it.inputSchema,
-                        "outputSchema" to it.outputSchema,
+                        "mimeType" to it.mimeType,
                     )
                 },
         )
+
+    private fun handleResourcesTemplatesList(): Map<String, Any?> =
+        mapOf(
+            "resourceTemplates" to
+                dispatcher.resourceRegistry().listTemplates().map {
+                    mapOf(
+                        "uriTemplate" to it.uriTemplate,
+                        "name" to it.name,
+                        "description" to it.description,
+                        "mimeType" to it.mimeType,
+                    )
+                },
+        )
+
+    private fun handleResourcesRead(
+        id: Any?,
+        params: JsonObject?,
+    ): String {
+        val uri =
+            (params?.get("uri") as? JsonPrimitive)?.content
+                ?: return errorResponse(id, INVALID_PARAMS, "Invalid Request: params.uri is required")
+        return when (val result = dispatcher.resourceRegistry().read(uri)) {
+            is ResourceReadResult.Found ->
+                successResponse(
+                    id,
+                    mapOf(
+                        "contents" to
+                            listOf(
+                                mapOf(
+                                    "uri" to result.uri,
+                                    "mimeType" to result.mimeType,
+                                    "text" to result.text,
+                                ),
+                            ),
+                    ),
+                )
+            is ResourceReadResult.NotFound -> errorResponse(id, RESOURCE_NOT_FOUND, "Resource not found: ${result.uri}")
+        }
+    }
+
+    private fun handlePromptsList(): Map<String, Any?> =
+        mapOf(
+            "prompts" to
+                dispatcher.promptRegistry().list(dispatcher.exposedToolNames()).map {
+                    mapOf(
+                        "name" to it.name,
+                        "description" to it.description,
+                        "arguments" to
+                            it.arguments.map { a ->
+                                mapOf("name" to a.name, "description" to a.description, "required" to a.required)
+                            },
+                    )
+                },
+        )
+
+    private fun handlePromptsGet(
+        id: Any?,
+        params: JsonObject?,
+    ): String {
+        val name =
+            (params?.get("name") as? JsonPrimitive)?.content
+                ?: return errorResponse(id, INVALID_PARAMS, "Invalid Request: params.name is required")
+        val prompt =
+            dispatcher.promptRegistry().get(name, dispatcher.exposedToolNames())
+                ?: return errorResponse(id, METHOD_NOT_FOUND, "Prompt not found: $name")
+        val args =
+            (params["arguments"] as? JsonObject)?.entries?.associate { it.key to (it.value as? JsonPrimitive)?.content.orEmpty() }
+                ?: emptyMap()
+        return successResponse(id, mapOf("description" to prompt.description, "messages" to prompt.build(args)))
+    }
 
     private fun handleToolsCall(
         id: Any?,

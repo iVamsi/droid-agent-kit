@@ -159,6 +159,37 @@ class VisualCaptureEngineTest {
     }
 
     @Test
+    fun `generateReport detects missing captures against the expected matrix`() {
+        val outputDir = Files.createTempDirectory("dak-report-missing")
+        val goldensDir = Files.createTempDirectory("dak-goldens-missing")
+        VisualCaptureEngine.persistCapture(outputDir, "home_screen", "phone_412x915", "light", 1.0f, "en", solidColorPng(Color.WHITE), "")
+        val expectedMatrix =
+            VisualMatrix(
+                devices = listOf("phone_412x915"),
+                themes = listOf("light", "dark"),
+                fontScales = listOf(1.0f),
+                locales = listOf("en"),
+            )
+
+        val report = VisualCaptureEngine.generateReport(outputDir, goldensDir, VisualTolerance(), expectedMatrix)
+
+        assertTrue(report.warnings.any { it.startsWith("missing-capture:home_screen:") && it.contains("dark") })
+        assertTrue(report.findings.any { it.category == VisualFindingCategory.MISSING_CAPTURE })
+        assertEquals(ResultStatus.PARTIAL, report.status)
+    }
+
+    @Test
+    fun `generateReport without an expected matrix does not emit missing-capture warnings`() {
+        val outputDir = Files.createTempDirectory("dak-report-no-matrix")
+        val goldensDir = Files.createTempDirectory("dak-goldens-no-matrix")
+        VisualCaptureEngine.persistCapture(outputDir, "home_screen", "phone_412x915", "light", 1.0f, "en", solidColorPng(Color.WHITE), "")
+
+        val report = VisualCaptureEngine.generateReport(outputDir, goldensDir, VisualTolerance())
+
+        assertTrue(report.warnings.none { it.startsWith("missing-capture") })
+    }
+
+    @Test
     fun `renderMarkdown includes case name package name and status`() {
         val outputDir = Files.createTempDirectory("dak-markdown")
         val goldensDir = Files.createTempDirectory("dak-markdown-goldens")

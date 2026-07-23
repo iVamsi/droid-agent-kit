@@ -63,13 +63,50 @@ object VisualCaptureEngine {
         outputDir: Path,
         goldensDir: Path,
         tolerance: VisualTolerance,
+        expectedMatrix: VisualMatrix? = null,
     ): VisualReport {
         val capturesDir = outputDir.resolve("captures")
         val manifest = capturesDir.resolve("manifest.tsv")
         val entries = if (Files.exists(manifest)) Files.readAllLines(manifest).mapNotNull(::parseManifestLine) else emptyList()
-        val cases = entries.map { entry -> buildCaseResult(entry, capturesDir, goldensDir, tolerance, outputDir) }
-        return VisualReportBuilder().build(cases)
+        val cases = entries.map { entry -> buildCaseResult(entry, capturesDir, goldensDir, tolerance, outputDir) }.toMutableList()
+        val warnings = mutableListOf<String>()
+        if (expectedMatrix != null) {
+            expectedMatrix.validate()
+            val expectedKeys = expectedMatrix.cartesian().map { envKey(it.device, it.theme, it.fontScale, it.locale) }.toSet()
+            val actualByCase = entries.groupBy({ it.caseName }) { envKey(it.device, it.theme, it.fontScale, it.locale) }
+            actualByCase.forEach { (caseName, actualKeys) ->
+                val missing = (expectedKeys - actualKeys.toSet()).sorted()
+                for (key in missing) {
+                    warnings += "missing-capture:$caseName:$key"
+                    cases.add(missingCaptureCase(caseName, key))
+                }
+            }
+        }
+        return VisualReportBuilder().build(cases, warnings)
     }
+
+    private fun missingCaptureCase(
+        caseName: String,
+        key: String,
+    ): VisualCaseResult =
+        VisualCaseResult(
+            caseName = caseName,
+            environment = VisualEnvironment(device = key.substringBefore('_'), theme = "", fontScale = 1.0f, locale = ""),
+            status = ResultStatus.PARTIAL,
+            findings =
+                listOf(
+                    VisualFinding(
+                        id = "$caseName-$key-missing-capture",
+                        category = VisualFindingCategory.MISSING_CAPTURE,
+                        severity = VisualSeverity.WARNING,
+                        caseName = caseName,
+                        title = "Missing capture for $key",
+                        evidence = emptyList(),
+                        likelyCause = "Matrix expected a capture for environment $key but none was recorded.",
+                        suggestedFixPrompt = "Add a captureMatrix entry for $caseName at $key.",
+                    ),
+                ),
+        )
 
     fun updateGoldens(
         outputDir: Path,
@@ -99,6 +136,11 @@ object VisualCaptureEngine {
             appendLine("Package: $packageName")
             appendLine("Status: ${report.status.wireName}")
             appendLine()
+            if (report.warnings.isNotEmpty()) {
+                appendLine("Warnings:")
+                report.warnings.forEach { appendLine("- $it") }
+                appendLine()
+            }
             if (report.cases.isEmpty()) {
                 appendLine("No visual cases were collected. Add DroidAgentVisualRule-based tests to produce case artifacts.")
             } else {
