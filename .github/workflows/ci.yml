@@ -12,6 +12,8 @@ jobs:
       fail-fast: false
       matrix:
         java: ["17", "21"]
+    env:
+      JAVA_TOOL_OPTIONS: -Djava.awt.headless=true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
