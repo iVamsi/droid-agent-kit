@@ -7,15 +7,21 @@ DroidAgentKit is a Kotlin/JVM monorepo for Android agentic developer tooling. It
 ## Safe Commands
 
 - `gradle test`
+- `gradle ktlintCheck`
 - `gradle :toolbox-core:test`
 - `gradle :android-inspector:test`
+- `gradle :android-device-core:test`
 - `gradle :mcp-server:test`
 - `gradle :auditor-cli:test`
+- `gradle :perfetto-core:test`
 - `gradle :visuals-core:test`
 - `gradle :visuals-gradle-plugin:test`
 - `gradle :visuals-android-test:test`
+- `gradle :storage-inspector:test`
+- `gradle :network-core:test`
 - `gradle :cli:test`
 - `gradle :cli:installDist`
+- `bash distribution/smoke-test.sh` (launcher smoke; `DROIDAGENT_E2E=1` for JVM stdio round-trip)
 
 ## Agent Boundaries
 
@@ -25,6 +31,8 @@ DroidAgentKit is a Kotlin/JVM monorepo for Android agentic developer tooling. It
 - Do not introduce telemetry.
 - Keep `install-mcp` idempotent and user-scope by default.
 - Use JDK/Kotlin dependencies already declared in Gradle unless a feature explicitly requires more.
+- Do not publish `distribution/server.json` until clean-machine smoke tests pass.
+- Capability enablement is reported, never rewarded in readiness scoring.
 
 ## Definition of Done
 

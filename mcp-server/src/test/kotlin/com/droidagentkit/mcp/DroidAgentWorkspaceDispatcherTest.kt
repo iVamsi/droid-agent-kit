@@ -90,6 +90,19 @@ class DroidAgentWorkspaceDispatcherTest {
         assertEquals(listOf("project-root-denied"), result["warnings"])
     }
 
+    @Test
+    fun `workspace advertises no resources or prompts so Android Studio stays tools-only`() {
+        val workspace = Files.createTempDirectory("dak-workspace")
+        val templateRoot = createGradleProject(workspace.resolve("template"))
+        val dispatcher =
+            DroidAgentWorkspaceDispatcher(workspace, DroidAgentMcpDispatcher(DroidAgentConfig.default(), templateRoot)) { root ->
+                DroidAgentMcpDispatcher(DroidAgentConfig.default(), root)
+            }
+
+        assertTrue(dispatcher.resourceRegistry().list().isEmpty())
+        assertTrue(dispatcher.promptRegistry().list(dispatcher.exposedToolNames()).isEmpty())
+    }
+
     private fun createGradleProject(root: Path): Path {
         Files.createDirectories(root)
         Files.writeString(root.resolve("settings.gradle.kts"), "rootProject.name = \"sample\"\n")

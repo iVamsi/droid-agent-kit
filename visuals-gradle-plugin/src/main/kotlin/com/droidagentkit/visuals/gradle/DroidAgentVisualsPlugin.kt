@@ -2,6 +2,7 @@ package com.droidagentkit.visuals.gradle
 
 import com.droidagentkit.core.ResultStatus
 import com.droidagentkit.visuals.VisualCaptureEngine
+import com.droidagentkit.visuals.VisualMatrix
 import com.droidagentkit.visuals.VisualTolerance
 import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
@@ -32,6 +33,11 @@ class DroidAgentVisualsPlugin : Plugin<Project> {
             task.maxChangedPixelPercent.set(extension.tolerance.maxChangedPixelPercent)
             task.maxColorDistance.set(extension.tolerance.maxColorDistance)
             task.failOnChangedGoldens.set(extension.failOnChangedGoldens)
+            task.failOnAccessibilityWarnings.set(extension.failOnAccessibilityWarnings)
+            task.matrixDevices.set(extension.matrix.devices)
+            task.matrixThemes.set(extension.matrix.themes)
+            task.matrixFontScales.set(extension.matrix.fontScales)
+            task.matrixLocales.set(extension.matrix.locales)
         }
         project.tasks.register("droidAgentVisualsUpdateGoldens", DroidAgentVisualsUpdateGoldensTask::class.java) { task ->
             task.group = "verification"
@@ -57,6 +63,12 @@ abstract class DroidAgentVisualsExtension
                 .convention(project.layout.projectDirectory.dir("src/test/resources/droidagentkit/goldens"))
         val packageName: Property<String> = project.objects.property(String::class.java).convention("")
         val failOnChangedGoldens: Property<Boolean> = project.objects.property(Boolean::class.java).convention(true)
+
+        @Deprecated(
+            "failOnAccessibilityWarnings is deprecated: no evidence-producing accessibility adapter exists yet. " +
+                "The flag is a no-op and emits a deterministic config warning; never silently ignored.",
+            level = DeprecationLevel.WARNING,
+        )
         val failOnAccessibilityWarnings: Property<Boolean> = project.objects.property(Boolean::class.java).convention(false)
         val matrix: VisualMatrixSpec = project.objects.newInstance(VisualMatrixSpec::class.java)
         val tolerance: VisualToleranceSpec = project.objects.newInstance(VisualToleranceSpec::class.java)
@@ -111,20 +123,49 @@ abstract class DroidAgentVisualsReportTask : DefaultTask() {
     @get:Input
     abstract val failOnChangedGoldens: Property<Boolean>
 
+    @get:Input
+    abstract val failOnAccessibilityWarnings: Property<Boolean>
+
+    @get:Input
+    abstract val matrixDevices: ListProperty<String>
+
+    @get:Input
+    abstract val matrixThemes: ListProperty<String>
+
+    @get:Input
+    abstract val matrixFontScales: ListProperty<Float>
+
+    @get:Input
+    abstract val matrixLocales: ListProperty<String>
+
     @TaskAction
     fun writeReport() {
         val tolerance = VisualTolerance(maxChangedPixelPercent.get(), maxColorDistance.get())
+        val expectedMatrix =
+            VisualMatrix(
+                devices = matrixDevices.get(),
+                themes = matrixThemes.get(),
+                fontScales = matrixFontScales.get(),
+                locales = matrixLocales.get(),
+            )
         val report =
             VisualCaptureEngine.generateReport(
                 outputDir.get().asFile.toPath(),
                 goldensDir.get().asFile.toPath(),
                 tolerance,
+                expectedMatrix,
             )
+        val warnings = report.warnings.toMutableList()
+        @Suppress("DEPRECATION")
+        if (failOnAccessibilityWarnings.get()) {
+            warnings += "fail-on-accessibility-warnings-deprecated"
+        }
+        val finalReport = if (warnings != report.warnings) report.copy(warnings = warnings) else report
         val file = outputDir.file("visual-report.md").get().asFile
         file.parentFile.mkdirs()
-        file.writeText(VisualCaptureEngine.renderMarkdown(report, packageName.orNull ?: "unknown"))
-        if (failOnChangedGoldens.get() && report.status == ResultStatus.FAILED) {
-            throw GradleException("DroidAgentKit visual regression detected: ${report.findings.size} finding(s). See $file")
+        file.writeText(VisualCaptureEngine.renderMarkdown(finalReport, packageName.orNull ?: "unknown"))
+        if (failOnChangedGoldens.get() && finalReport.status == ResultStatus.FAILED) {
+            throw GradleException("DroidAgentKit visual regression detected: ${finalReport.findings.size} finding(s). See $file")
         }
     }
 }

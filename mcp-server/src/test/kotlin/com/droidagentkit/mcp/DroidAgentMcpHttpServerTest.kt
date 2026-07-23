@@ -102,4 +102,31 @@ class DroidAgentMcpHttpServerTest {
 
         assertEquals(400, connection.responseCode)
     }
+
+    @Test
+    fun `request with non-json accept header is rejected with 406`() {
+        val port = server.boundPort ?: error("server did not bind a port")
+        val connection = URI("http://127.0.0.1:$port/mcp").toURL().openConnection() as HttpURLConnection
+        connection.requestMethod = "POST"
+        connection.doOutput = true
+        connection.setRequestProperty("Authorization", "Bearer test-token")
+        connection.setRequestProperty("Accept", "text/plain")
+        connection.outputStream.use { it.write("{}".toByteArray(StandardCharsets.UTF_8)) }
+
+        assertEquals(406, connection.responseCode)
+    }
+
+    @Test
+    fun `notification without id returns 202`() {
+        val port = server.boundPort ?: error("server did not bind a port")
+        val connection = URI("http://127.0.0.1:$port/mcp").toURL().openConnection() as HttpURLConnection
+        connection.requestMethod = "POST"
+        connection.doOutput = true
+        connection.setRequestProperty("Authorization", "Bearer test-token")
+        connection.setRequestProperty("Content-Type", "application/json")
+        val body = """{"jsonrpc":"2.0","method":"notifications/initialized"}"""
+        connection.outputStream.use { it.write(body.toByteArray(StandardCharsets.UTF_8)) }
+
+        assertEquals(202, connection.responseCode)
+    }
 }

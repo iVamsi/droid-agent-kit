@@ -19,6 +19,10 @@ object Json {
             "path" to artifact.path,
             "mimeType" to artifact.mimeType,
             "description" to artifact.description,
+            "sizeBytes" to artifact.sizeBytes,
+            "sha256" to artifact.sha256,
+            "sensitivity" to artifact.sensitivity.wireName,
+            "opaqueId" to artifact.opaqueId,
         )
 
     fun write(value: Any?): String =

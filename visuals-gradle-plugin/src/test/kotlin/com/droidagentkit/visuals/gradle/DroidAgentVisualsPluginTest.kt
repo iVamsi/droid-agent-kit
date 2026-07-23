@@ -93,6 +93,52 @@ class DroidAgentVisualsPluginTest {
         assertTrue(Files.exists(goldensDir.resolve("home_screen/phone_412x915_light_1.0_en.png")))
     }
 
+    @Test
+    fun `report task writes missing-capture warnings when the matrix expects more environments`() {
+        val outputDir = Files.createTempDirectory("dak-plugin-missing")
+        val goldensDir = Files.createTempDirectory("dak-plugin-missing-goldens")
+        VisualCaptureEngine.persistCapture(outputDir, "home_screen", "phone_412x915", "light", 1.0f, "en", solidColorPng(Color.WHITE), "")
+
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply(DroidAgentVisualsPlugin::class.java)
+        val extension = project.extensions.getByType(DroidAgentVisualsExtension::class.java)
+        extension.outputDir.set(outputDir.toFile())
+        extension.goldensDir.set(goldensDir.toFile())
+        extension.failOnChangedGoldens.set(false)
+        extension.matrix.themes.set(listOf("light", "dark"))
+        extension.matrix.fontScales.set(listOf(1.0f))
+        extension.matrix.locales.set(listOf("en"))
+        extension.matrix.devices.set(listOf("phone_412x915"))
+        val task = project.tasks.getByName("droidAgentVisualsReport") as DroidAgentVisualsReportTask
+
+        task.writeReport()
+
+        val markdown = Files.readString(outputDir.resolve("visual-report.md"))
+        assertTrue(markdown.contains("missing-capture:home_screen:phone_412x915_dark_1.0_en"))
+    }
+
+    @Test
+    @Suppress("DEPRECATION")
+    fun `report task emits deprecated config warning when failOnAccessibilityWarnings is true`() {
+        val outputDir = Files.createTempDirectory("dak-plugin-a11y")
+        val goldensDir = Files.createTempDirectory("dak-plugin-a11y-goldens")
+        VisualCaptureEngine.persistCapture(outputDir, "home_screen", "phone_412x915", "light", 1.0f, "en", solidColorPng(Color.WHITE), "")
+
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply(DroidAgentVisualsPlugin::class.java)
+        val extension = project.extensions.getByType(DroidAgentVisualsExtension::class.java)
+        extension.outputDir.set(outputDir.toFile())
+        extension.goldensDir.set(goldensDir.toFile())
+        extension.failOnChangedGoldens.set(false)
+        extension.failOnAccessibilityWarnings.set(true)
+        val task = project.tasks.getByName("droidAgentVisualsReport") as DroidAgentVisualsReportTask
+
+        task.writeReport()
+
+        val markdown = Files.readString(outputDir.resolve("visual-report.md"))
+        assertTrue(markdown.contains("fail-on-accessibility-warnings-deprecated"))
+    }
+
     private fun solidColorPng(
         color: Color,
         size: Int = 10,

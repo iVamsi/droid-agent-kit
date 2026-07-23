@@ -1,6 +1,5 @@
 package com.droidagentkit.core
 
-import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.nio.file.Path
 import java.time.Duration
@@ -12,7 +11,10 @@ class ProcessRunner(
     private val redactor: Redactor,
     private val artifactWriter: ArtifactWriter,
 ) {
-    fun run(spec: CommandSpec): ToolResult {
+    fun run(
+        spec: CommandSpec,
+        onProcessStarted: ((Process) -> Unit)? = null,
+    ): ToolResult {
         val started = Instant.now()
         val process =
             try {
@@ -27,49 +29,38 @@ class ProcessRunner(
                     warnings = listOf("command-start-failed"),
                 )
             }
+        onProcessStarted?.invoke(process)
 
         val outputExecutor = Executors.newSingleThreadExecutor()
-        val output = outputExecutor.submit<CapturedOutput> { readOutput(process.inputStream) }
+        val captured = outputExecutor.submit<CapturedOutput> { readOutput(process.inputStream) }
         val completed: Boolean
-        val captured: CapturedOutput
+        val capturedOutput: CapturedOutput
         try {
             completed = process.waitFor(spec.timeoutSeconds, TimeUnit.SECONDS)
             if (!completed) terminate(process)
-            captured = output.get()
+            capturedOutput = captured.get()
         } finally {
             outputExecutor.shutdownNow()
         }
         val durationMs = Duration.between(started, Instant.now()).toMillis()
 
         if (spec.outputMode == OutputMode.BINARY) {
-            val artifact =
-                artifactWriter.writeBytes(
-                    "${spec.id}.bin",
-                    captured.bytes,
-                    ArtifactType.SCREENSHOT,
-                    "${spec.id} binary capture",
-                )
-            val status =
-                when {
-                    !completed -> ResultStatus.PARTIAL
-                    captured.truncated -> ResultStatus.PARTIAL
-                    process.exitValue() == 0 -> ResultStatus.SUCCESS
-                    else -> ResultStatus.FAILED
-                }
-            return ToolResult(
-                status = status,
-                summary = "${spec.id} captured ${captured.bytes.size} bytes in ${durationMs}ms",
-                artifacts = listOf(artifact),
-                warnings = warnings(completed, captured.truncated),
-            )
+            return writeBinaryArtifact(spec, process, capturedOutput, completed, durationMs)
         }
 
-        val redacted = redactor.redact(captured.bytes.toString(Charsets.UTF_8))
-        val artifact = artifactWriter.writeText("${spec.id}.log", redacted.text)
+        val redacted = redactor.redact(capturedOutput.bytes.toString(Charsets.UTF_8))
+        val artifact =
+            artifactWriter.writeText(
+                "${spec.id}.log",
+                redacted.text,
+                ArtifactType.LOG,
+                "${spec.id} command output",
+                spec.sensitivity,
+            )
         val status =
             when {
                 !completed -> ResultStatus.PARTIAL
-                captured.truncated -> ResultStatus.PARTIAL
+                capturedOutput.truncated -> ResultStatus.PARTIAL
                 process.exitValue() == 0 -> ResultStatus.SUCCESS
                 else -> ResultStatus.FAILED
             }
@@ -91,7 +82,40 @@ class ProcessRunner(
             summary = summary,
             artifacts = listOf(artifact),
             redactionsApplied = redacted.applied,
-            warnings = warnings(completed, captured.truncated),
+            warnings = warnings(completed, capturedOutput.truncated),
+        )
+    }
+
+    private fun writeBinaryArtifact(
+        spec: CommandSpec,
+        process: Process,
+        captured: CapturedOutput,
+        completed: Boolean,
+        durationMs: Long,
+    ): ToolResult {
+        val artifactName = spec.artifactName ?: "${spec.id}.bin"
+        val artifactType = spec.artifactType ?: ArtifactType.SCREENSHOT
+        val sensitivity = spec.sensitivity
+        val result =
+            artifactWriter.writeStream(
+                name = artifactName,
+                type = artifactType,
+                description = "${spec.id} binary capture",
+                sensitivity = sensitivity,
+                maxBytes = spec.maxCaptureBytes,
+            ) { sink -> sink.write(captured.bytes) }
+        val status =
+            when {
+                !completed -> ResultStatus.PARTIAL
+                captured.truncated -> ResultStatus.PARTIAL
+                process.exitValue() == 0 -> ResultStatus.SUCCESS
+                else -> ResultStatus.FAILED
+            }
+        return ToolResult(
+            status = status,
+            summary = "${spec.id} captured ${result.artifact.sizeBytes} bytes in ${durationMs}ms",
+            artifacts = listOf(result.artifact),
+            warnings = warnings(completed, captured.truncated || result.truncated),
         )
     }
 
@@ -106,13 +130,13 @@ class ProcessRunner(
     }
 
     private fun readOutput(input: InputStream): CapturedOutput {
-        val bytes = ByteArrayOutputStream()
+        val bytes = java.io.ByteArrayOutputStream()
         val buffer = ByteArray(BUFFER_SIZE)
         var truncated = false
         while (true) {
             val count = input.read(buffer)
             if (count == -1) break
-            val remaining = MAX_CAPTURE_BYTES - bytes.size()
+            val remaining = MAX_TEXT_CAPTURE_BYTES - bytes.size()
             if (remaining > 0) bytes.write(buffer, 0, minOf(count, remaining))
             if (count > remaining) truncated = true
         }
@@ -135,6 +159,6 @@ class ProcessRunner(
 
     private companion object {
         const val BUFFER_SIZE = 8 * 1024
-        const val MAX_CAPTURE_BYTES = 10 * 1024 * 1024
+        const val MAX_TEXT_CAPTURE_BYTES = 10 * 1024 * 1024
     }
 }

@@ -12,8 +12,19 @@ enum class ArtifactType(
     JSON("json"),
     MARKDOWN("markdown"),
     ZIP("zip"),
+    BUGREPORT("bugreport"),
     IMAGE_DIFF("image_diff"),
+    PERFETTO_TRACE("perfetto_trace"),
+    SQLITE_SNAPSHOT("sqlite_snapshot"),
+    NETWORK_CAPTURE("network_capture"),
     OTHER("other"),
+}
+
+enum class ArtifactSensitivity(
+    val wireName: String,
+) {
+    PUBLIC("public"),
+    SENSITIVE("sensitive"),
 }
 
 enum class ResultStatus(
@@ -40,6 +51,10 @@ data class ArtifactRef(
     val path: String,
     val mimeType: String,
     val description: String,
+    val sizeBytes: Long = 0,
+    val sha256: String = "",
+    val sensitivity: ArtifactSensitivity = ArtifactSensitivity.PUBLIC,
+    val opaqueId: String = "",
 )
 
 data class DiagnosticFinding(
@@ -58,7 +73,15 @@ data class CommandSpec(
     val requiresDevice: Boolean,
     val timeoutSeconds: Long,
     val outputMode: OutputMode = OutputMode.TEXT,
-)
+    val artifactType: ArtifactType? = null,
+    val artifactName: String? = null,
+    val sensitivity: ArtifactSensitivity = ArtifactSensitivity.PUBLIC,
+    val maxCaptureBytes: Long = DEFAULT_BINARY_CAPTURE_BYTES,
+) {
+    private companion object {
+        const val DEFAULT_BINARY_CAPTURE_BYTES = 256L * 1024 * 1024
+    }
+}
 
 data class ToolResult(
     val schemaVersion: String = "1.0",

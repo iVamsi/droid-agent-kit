@@ -7,6 +7,7 @@ plugins {
 dependencies {
     implementation(project(":toolbox-core"))
     implementation(project(":android-inspector"))
+    implementation(project(":android-device-core"))
     implementation(project(":mcp-server"))
     implementation(project(":auditor-cli"))
     implementation(project(":visuals-core"))
