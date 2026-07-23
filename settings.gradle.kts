@@ -19,10 +19,14 @@ rootProject.name = "droid-agent-kit"
 include(
     "toolbox-core",
     "android-inspector",
+    "android-device-core",
     "mcp-server",
     "auditor-cli",
     "visuals-core",
     "visuals-gradle-plugin",
     "visuals-android-test",
+    "perfetto-core",
+    "storage-inspector",
+    "network-core",
     "cli",
 )

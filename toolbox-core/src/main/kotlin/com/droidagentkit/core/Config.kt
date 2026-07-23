@@ -32,9 +32,23 @@ data class SafetyConfig(
     val allowAdbInput: Boolean = false,
     val allowAppInstall: Boolean = true,
     val allowEmulatorStart: Boolean = false,
+    val allowCapabilities: Set<Capability> = emptySet(),
+    val adbPath: String = "adb",
+    val emulatorPath: String = "emulator",
+    val traceProcessorPath: String = "",
+    val mitmProxyPath: String = "",
     val maxCommandSeconds: Long = 600,
 ) {
     fun isGradleTaskAllowed(task: String): Boolean = allowGradleTasks.any { pattern -> globToRegex(pattern).matches(task) }
+
+    fun allowedCapabilities(): Set<Capability> {
+        if (allowCapabilities.isNotEmpty()) return allowCapabilities
+        val fromAliases = mutableSetOf<Capability>()
+        if (allowAdbInput) fromAliases.add(Capability.DEVICE_INPUT)
+        if (allowAppInstall) fromAliases.add(Capability.APP_INSTALL)
+        if (allowEmulatorStart) fromAliases.add(Capability.EMULATOR_CONTROL)
+        return fromAliases
+    }
 
     private fun globToRegex(pattern: String): Regex {
         val builder = StringBuilder("^")
@@ -87,6 +101,11 @@ object DroidAgentConfigLoader {
             "safety.allowAdbInput",
             "safety.allowAppInstall",
             "safety.allowEmulatorStart",
+            "safety.allowCapabilities",
+            "safety.adbPath",
+            "safety.emulatorPath",
+            "safety.traceProcessorPath",
+            "safety.mitmProxyPath",
             "safety.maxCommandSeconds",
             "reports.outputDir",
             "redaction.enabled",
@@ -126,7 +145,13 @@ object DroidAgentConfigLoader {
         var allowAdbInput = false
         var allowAppInstall = true
         var allowEmulatorStart = false
+        val allowCapabilities = mutableSetOf<Capability>()
+        var aliasUsedWithCapabilities = false
         var maxCommandSeconds = 600L
+        var adbPath = "adb"
+        var emulatorPath = "emulator"
+        var traceProcessorPath = ""
+        var mitmProxyPath = ""
         var outputDir = "build/droidagentkit"
         var outputDirLine: Int? = null
         var redactionEnabled = true
@@ -151,6 +176,10 @@ object DroidAgentConfigLoader {
                 val value = line.removePrefix("- ").unquote()
                 when (listTarget) {
                     "safety.allowGradleTasks" -> allowGradleTasks.add(value)
+                    "safety.allowCapabilities" -> {
+                        val capability = parseCapability(value, lineNumber, errors)
+                        if (capability != null) allowCapabilities.add(capability)
+                    }
                     "redaction.extraPatterns" -> extraPatterns.add(value)
                 }
                 continue
@@ -160,12 +189,22 @@ object DroidAgentConfigLoader {
             val fullKey = "$section.$key"
             when (fullKey) {
                 "project.name" -> projectName = value
-                "safety.allowAdbInput" -> allowAdbInput = value.toStrictBooleanOrError(lineNumber, fullKey, errors) ?: allowAdbInput
-                "safety.allowAppInstall" -> allowAppInstall = value.toStrictBooleanOrError(lineNumber, fullKey, errors) ?: allowAppInstall
+                "safety.allowAdbInput" -> {
+                    allowAdbInput = value.toStrictBooleanOrError(lineNumber, fullKey, errors) ?: allowAdbInput
+                    if (allowAdbInput && allowCapabilities.isNotEmpty()) aliasUsedWithCapabilities = true
+                }
+                "safety.allowAppInstall" -> {
+                    allowAppInstall = value.toStrictBooleanOrError(lineNumber, fullKey, errors) ?: allowAppInstall
+                    if (allowAppInstall && allowCapabilities.isNotEmpty()) aliasUsedWithCapabilities = true
+                }
                 "safety.allowEmulatorStart" ->
                     allowEmulatorStart =
                         value.toStrictBooleanOrError(lineNumber, fullKey, errors) ?: allowEmulatorStart
                 "safety.maxCommandSeconds" -> maxCommandSeconds = value.toLongOrError(lineNumber, fullKey, errors) ?: maxCommandSeconds
+                "safety.adbPath" -> adbPath = value
+                "safety.emulatorPath" -> emulatorPath = value
+                "safety.traceProcessorPath" -> traceProcessorPath = value
+                "safety.mitmProxyPath" -> mitmProxyPath = value
                 "reports.outputDir" -> {
                     outputDir = value
                     outputDirLine = lineNumber
@@ -186,12 +225,22 @@ object DroidAgentConfigLoader {
 
         if (errors.isNotEmpty()) return ConfigLoadResult.Invalid(errors)
 
+        if (aliasUsedWithCapabilities) {
+            warnings +=
+                "safety.allowCapabilities takes precedence over deprecated allowAdbInput/allowAppInstall/allowEmulatorStart aliases; aliases ignored"
+        }
+
         val safety =
             SafetyConfig(
                 allowGradleTasks = allowGradleTasks.ifEmpty { SafetyConfig().allowGradleTasks },
                 allowAdbInput = allowAdbInput,
                 allowAppInstall = allowAppInstall,
                 allowEmulatorStart = allowEmulatorStart,
+                allowCapabilities = allowCapabilities.toSet(),
+                adbPath = adbPath,
+                emulatorPath = emulatorPath,
+                traceProcessorPath = traceProcessorPath,
+                mitmProxyPath = mitmProxyPath,
                 maxCommandSeconds = maxCommandSeconds,
             )
         return ConfigLoadResult.Loaded(
@@ -206,6 +255,17 @@ object DroidAgentConfigLoader {
     }
 
     private fun String.unquote(): String = trim().removeSurrounding("\"").removeSurrounding("'")
+
+    private fun parseCapability(
+        value: String,
+        line: Int,
+        errors: MutableList<ConfigError>,
+    ): Capability? =
+        Capability.entries.firstOrNull { it.name.lowercase() == value.lowercase() }
+            ?: run {
+                errors += ConfigError(line, "safety.allowCapabilities", "unknown capability '$value'")
+                null
+            }
 
     private fun String.toStrictBooleanOrError(
         line: Int,

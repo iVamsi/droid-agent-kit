@@ -1,23 +1,43 @@
 package com.droidagentkit.mcp
 
+import com.droidagentkit.auditor.CapabilitySummaryBuilder
 import com.droidagentkit.core.ArtifactRef
+import com.droidagentkit.core.ArtifactSensitivity
 import com.droidagentkit.core.ArtifactType
 import com.droidagentkit.core.ArtifactWriter
+import com.droidagentkit.core.AuthorizationDecision
+import com.droidagentkit.core.CommandSpec
+import com.droidagentkit.core.DefaultOperationPolicy
 import com.droidagentkit.core.DiagnosticFinding
 import com.droidagentkit.core.DroidAgentConfig
+import com.droidagentkit.core.InProcessManagedJobRunner
 import com.droidagentkit.core.Json
+import com.droidagentkit.core.ManagedJobRunner
+import com.droidagentkit.core.OperationPolicy
+import com.droidagentkit.core.OperationRequest
 import com.droidagentkit.core.ProcessRunner
 import com.droidagentkit.core.Redactor
 import com.droidagentkit.core.ResultStatus
 import com.droidagentkit.core.Severity
+import com.droidagentkit.core.ToolGroup
 import com.droidagentkit.core.ToolResult
+import com.droidagentkit.device.DeviceToolContext
 import com.droidagentkit.inspector.AndroidProjectInspector
 import com.droidagentkit.mcp.tools.BuildFailureParser
 import com.droidagentkit.mcp.tools.BuildProfileParser
+import com.droidagentkit.mcp.tools.CoreToolProvider
 import com.droidagentkit.mcp.tools.CrashLogTriage
 import com.droidagentkit.mcp.tools.DependencyVersionChecker
+import com.droidagentkit.mcp.tools.DeviceControlToolProvider
+import com.droidagentkit.mcp.tools.DeviceReadToolProvider
 import com.droidagentkit.mcp.tools.LintResultParser
+import com.droidagentkit.mcp.tools.McpToolProvider
+import com.droidagentkit.mcp.tools.NetworkToolProvider
+import com.droidagentkit.mcp.tools.PerfettoToolProvider
+import com.droidagentkit.mcp.tools.StorageToolProvider
 import com.droidagentkit.mcp.tools.TestResultParser
+import com.droidagentkit.mcp.tools.ToolProviderRegistry
+import com.droidagentkit.mcp.tools.VisualsToolProvider
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.exists
@@ -28,6 +48,7 @@ data class McpTool(
     val description: String,
     val inputSchema: Map<String, Any>,
     val outputSchema: Map<String, Any>,
+    val annotations: Map<String, Boolean> = emptyMap(),
 )
 
 interface McpDispatcher {
@@ -39,19 +60,149 @@ interface McpDispatcher {
         name: String,
         arguments: Map<String, Any?>,
     ): Map<String, Any>
+
+    /** MCP resources/prompts are advertised only to hosts that support them; AS stays tools-only. */
+    fun resourceRegistry(): McpResourceRegistry = McpResourceRegistry()
+
+    fun promptRegistry(): McpPromptRegistry = McpPromptRegistry()
+
+    fun exposedToolNames(): Set<String> = listTools().map { it.name }.toSet()
 }
 
 class DroidAgentMcpDispatcher(
-    private val config: DroidAgentConfig,
+    override val config: DroidAgentConfig,
     projectRoot: Path = Path.of("."),
     private val inspector: AndroidProjectInspector = AndroidProjectInspector(),
-) : McpDispatcher {
+    private val exposedGroups: Set<ToolGroup> = setOf(ToolGroup.CORE),
+    private val extraProviders: List<McpToolProvider> = emptyList(),
+) : McpDispatcher,
+    DeviceToolContext {
     private val projectRoot = projectRoot.toAbsolutePath().normalize()
     private val realProjectRoot = this.projectRoot.toRealPath()
 
     override val instructions: String = "Use DroidAgentKit only for the project root selected when this server started."
 
-    override fun listTools(): List<McpTool> =
+    private val operationPolicy: OperationPolicy =
+        DefaultOperationPolicy(config.safety, listOf(projectRoot))
+
+    private val managedJobRunner: ManagedJobRunner by lazy {
+        InProcessManagedJobRunner(
+            ProcessRunner(Redactor(config.redaction), ArtifactWriter(artifactOutputDir(projectRoot))),
+        )
+    }
+
+    private val toolResultSchema: Map<String, Any> =
+        mapOf(
+            "type" to "object",
+            "properties" to
+                mapOf(
+                    "schemaVersion" to mapOf("type" to "string"),
+                    "status" to mapOf("type" to "string"),
+                    "summary" to mapOf("type" to "string"),
+                    "artifacts" to mapOf("type" to "array"),
+                    "redactionsApplied" to mapOf("type" to "array"),
+                    "warnings" to mapOf("type" to "array"),
+                ),
+            "required" to listOf("schemaVersion", "status", "summary"),
+        )
+
+    private val coreAnnotations: Map<String, Map<String, Boolean>> =
+        mapOf(
+            "android_project_inspect" to mapOf("readOnlyHint" to true),
+            "android_gradle_run" to mapOf("idempotentHint" to true, "openWorldHint" to true),
+            "android_devices_list" to mapOf("readOnlyHint" to true),
+            "android_app_install" to mapOf("idempotentHint" to true, "openWorldHint" to true),
+            "android_app_launch" to mapOf("idempotentHint" to true, "openWorldHint" to true),
+            "android_logcat_capture" to mapOf("readOnlyHint" to true),
+            "android_screen_snapshot" to mapOf("readOnlyHint" to true),
+            "android_accessibility_snapshot" to mapOf("readOnlyHint" to true),
+            "android_report_bundle" to mapOf("readOnlyHint" to true),
+            "android_lint_run" to mapOf("readOnlyHint" to true, "idempotentHint" to true),
+            "android_crash_triage" to mapOf("readOnlyHint" to true),
+            "android_dependency_check" to mapOf("readOnlyHint" to true),
+            "android_build_performance" to mapOf("readOnlyHint" to true),
+            "android_test_run" to mapOf("idempotentHint" to true, "openWorldHint" to true),
+            "android_build_diagnose" to mapOf("readOnlyHint" to true),
+        )
+
+    private val coreTools: List<McpTool> = buildCoreTools().map { it.copy(annotations = coreAnnotations[it.name] ?: it.annotations) }
+    private val coreToolNames: Set<String> = coreTools.map { it.name }.toSet()
+    private val registry: ToolProviderRegistry =
+        ToolProviderRegistry(
+            providers =
+                listOf(
+                    CoreToolProvider(coreTools, coreToolNames) { name, args -> dispatchCore(name, args) },
+                    DeviceReadToolProvider(this),
+                    DeviceControlToolProvider(this),
+                    PerfettoToolProvider(this),
+                    VisualsToolProvider(this),
+                    StorageToolProvider(this),
+                    NetworkToolProvider(this),
+                ) + extraProviders,
+            exposedGroups = exposedGroups,
+        )
+
+    override fun listTools(): List<McpTool> = registry.listTools()
+
+    override fun resourceRegistry(): McpResourceRegistry = resourceRegistryInstance
+
+    override fun promptRegistry(): McpPromptRegistry = promptRegistryInstance
+
+    private val resourceRegistryInstance: McpResourceRegistry by lazy {
+        McpResourceRegistry().also { reg ->
+            McpProjectResources.registerProject(
+                registry = reg,
+                projectRoot = projectRoot,
+                inspect = { Json.write(inspect(emptyMap())) },
+                readiness = { readinessMarkdown() },
+            )
+            reg.registerTemplate(
+                McpResourceTemplate(
+                    uriTemplate = McpProjectResources.ARTIFACT_TEMPLATE,
+                    name = "artifact-by-id",
+                    description = "Resolve a captured artifact by its opaque, project-scoped id.",
+                    mimeType = "application/octet-stream",
+                    variables = listOf("id"),
+                    reader = { _ -> null },
+                ),
+            )
+            reg.registerTemplate(
+                McpResourceTemplate(
+                    uriTemplate = McpProjectResources.GOLDEN_TEMPLATE,
+                    name = "golden-by-case",
+                    description = "Resolve a golden screenshot image by test case name.",
+                    mimeType = "image/png",
+                    variables = listOf("case"),
+                    reader = { _ -> null },
+                ),
+            )
+        }
+    }
+
+    private val promptRegistryInstance: McpPromptRegistry by lazy {
+        McpPromptRegistry().also { McpPrompts.registerAll(it) }
+    }
+
+    private fun readinessMarkdown(): String {
+        val auditorReport =
+            com.droidagentkit.auditor
+                .ReadinessAuditor(inspector)
+                .audit(projectRoot)
+        return buildString {
+            appendLine("# Readiness — ${auditorReport.score}/100 (${auditorReport.level})")
+            appendLine()
+            if (auditorReport.risks.isNotEmpty()) {
+                appendLine("## Risks")
+                auditorReport.risks.forEach { risk ->
+                    appendLine("- [${risk.severity.wireName.uppercase()}] ${risk.id} — ${risk.title}")
+                }
+            } else {
+                appendLine("_(no risks detected)_")
+            }
+        }
+    }
+
+    private fun buildCoreTools(): List<McpTool> =
         listOf(
             McpTool(
                 name = "android_project_inspect",
@@ -139,14 +290,32 @@ class DroidAgentMcpDispatcher(
             McpTool(
                 name = "android_screen_snapshot",
                 title = "Capture Android screen",
-                description = "Capture screenshot and UIAutomator XML from an explicit device.",
+                description = "Capture a PNG screenshot from an explicit device. Use android_accessibility_snapshot for the UI hierarchy.",
                 inputSchema =
                     schema(
                         "deviceSerial",
                         props =
                             mapOf(
                                 "deviceSerial" to deviceSerialProp,
-                                "outputName" to str("Base name for the output artifact. Optional."),
+                                "outputName" to str("Base name for the output PNG artifact. Optional."),
+                            ),
+                    ),
+                outputSchema = toolResultSchema,
+            ),
+            McpTool(
+                name = "android_accessibility_snapshot",
+                title = "Capture Android accessibility tree",
+                description =
+                    "Capture the UIAutomator accessibility hierarchy (not Layout Inspector) from an explicit device " +
+                        "and return structured nodes plus the raw XML artifact.",
+                inputSchema =
+                    schema(
+                        "deviceSerial",
+                        props =
+                            mapOf(
+                                "deviceSerial" to deviceSerialProp,
+                                "outputName" to str("Base name for the output XML artifact. Optional."),
+                                "compressed" to bool("Pass --compressed to uiautomator dump. Default true."),
                             ),
                     ),
                 outputSchema = toolResultSchema,
@@ -255,6 +424,22 @@ class DroidAgentMcpDispatcher(
         arguments: Map<String, Any?>,
     ): Map<String, Any> =
         try {
+            registry.call(name, arguments)
+        } catch (error: ProjectRootViolation) {
+            resultMap(
+                ToolResult(
+                    status = ResultStatus.BLOCKED,
+                    summary = error.message ?: "Requested project root is not allowed.",
+                    warnings = listOf("project-root-denied"),
+                ),
+            )
+        }
+
+    private fun dispatchCore(
+        name: String,
+        arguments: Map<String, Any?>,
+    ): Map<String, Any> =
+        try {
             when (name) {
                 "android_project_inspect" -> inspect(arguments)
                 "android_gradle_run" -> runGradle(arguments)
@@ -263,6 +448,7 @@ class DroidAgentMcpDispatcher(
                 "android_app_launch" -> launch(arguments)
                 "android_logcat_capture" -> logcat(arguments)
                 "android_screen_snapshot" -> snapshot(arguments)
+                "android_accessibility_snapshot" -> accessibilitySnapshot(arguments)
                 "android_report_bundle" -> reportBundle(arguments)
                 "android_lint_run" -> lintRun(arguments)
                 "android_crash_triage" -> crashTriage(arguments)
@@ -395,7 +581,7 @@ class DroidAgentMcpDispatcher(
             }
         return runner(
             root,
-        ).run(com.droidagentkit.core.CommandSpec("gradle-${task.safeId()}", command, root.toString(), false, false, timeoutSeconds))
+        ).run(com.droidagentkit.core.CommandSpec("gradle-${task.sanitizeId()}", command, root.toString(), false, false, timeoutSeconds))
     }
 
     private fun lintRun(arguments: Map<String, Any?>): Map<String, Any> {
@@ -519,7 +705,7 @@ class DroidAgentMcpDispatcher(
         return candidates.maxByOrNull { Files.getLastModifiedTime(it).toMillis() }
     }
 
-    private fun resultMapWithFindings(
+    override fun resultMapWithFindings(
         result: ToolResult,
         findings: List<DiagnosticFinding>,
     ): Map<String, Any> = resultMap(result) + mapOf("findings" to findings.map(::findingToMap))
@@ -630,6 +816,7 @@ class DroidAgentMcpDispatcher(
                     ),
                 )
         val root = rootPath(arguments)
+        val outputName = (arguments["outputName"]?.toString()?.takeIf { it.isNotBlank() } ?: "adb-screenshot").sanitizeId()
         return resultMap(
             runner(root).run(
                 com.droidagentkit.core.CommandSpec(
@@ -640,9 +827,73 @@ class DroidAgentMcpDispatcher(
                     requiresDevice = true,
                     timeoutSeconds = 60,
                     outputMode = com.droidagentkit.core.OutputMode.BINARY,
+                    artifactType = ArtifactType.SCREENSHOT,
+                    artifactName = "$outputName.png",
+                    sensitivity = com.droidagentkit.core.ArtifactSensitivity.SENSITIVE,
                 ),
             ),
         )
+    }
+
+    private fun accessibilitySnapshot(arguments: Map<String, Any?>): Map<String, Any> {
+        val serial =
+            arguments["deviceSerial"]?.toString()
+                ?: return resultMap(
+                    ToolResult(
+                        status = ResultStatus.BLOCKED,
+                        summary = "deviceSerial is required for the accessibility snapshot.",
+                        warnings = listOf("missing-device-serial"),
+                    ),
+                )
+        val root = rootPath(arguments)
+        val outputName = (arguments["outputName"]?.toString()?.takeIf { it.isNotBlank() } ?: "adb-accessibility").sanitizeId()
+        val compressed = arguments["compressed"] != false
+        val dumpCommand =
+            buildList {
+                add("adb")
+                add("-s")
+                add(serial)
+                add("exec-out")
+                add("uiautomator")
+                add("dump")
+                if (compressed) add("--compressed")
+            }
+        val runResult =
+            runner(root).run(
+                com.droidagentkit.core.CommandSpec(
+                    id = "adb-accessibility",
+                    command = dumpCommand,
+                    workingDirectory = root.toString(),
+                    mutatesProject = false,
+                    requiresDevice = true,
+                    timeoutSeconds = 60,
+                    outputMode = com.droidagentkit.core.OutputMode.TEXT,
+                ),
+            )
+        if (runResult.status == ResultStatus.BLOCKED) return resultMap(runResult)
+        val xmlArtifact = runResult.artifacts.firstOrNull() ?: return resultMap(runResult)
+        val xml = runCatching { Files.readString(Path.of(xmlArtifact.path)) }.getOrElse { "" }
+        if (xml.isBlank()) {
+            return resultMapWithFindings(
+                runResult.copy(status = ResultStatus.PARTIAL, warnings = runResult.warnings + "empty-accessibility-dump"),
+                emptyList(),
+            )
+        }
+        val parsed =
+            com.droidagentkit.device.UiHierarchyParser
+                .parse(xml)
+        val rawRef =
+            com.droidagentkit.core.ArtifactRef(
+                type = ArtifactType.UI_HIERARCHY,
+                path = xmlArtifact.path,
+                mimeType = "application/xml",
+                description = "Raw UIAutomator accessibility XML (accessibility hierarchy, not Layout Inspector)",
+                sensitivity = com.droidagentkit.core.ArtifactSensitivity.SENSITIVE,
+            )
+        return resultMapWithFindings(
+            runResult.copy(artifacts = runResult.artifacts + rawRef, summary = "Captured accessibility tree: ${parsed.nodeCount} node(s)."),
+            parsed.findings,
+        ) + mapOf("accessibilityTree" to parsed.nodes)
     }
 
     private fun reportBundle(arguments: Map<String, Any?>): Map<String, Any> {
@@ -652,6 +903,7 @@ class DroidAgentMcpDispatcher(
             com.droidagentkit.auditor
                 .ReadinessAuditor(inspector)
                 .audit(root)
+                .copy(capabilitySummary = CapabilitySummaryBuilder.build(config, exposedGroups))
         val timestamp =
             java.time.Instant
                 .now()
@@ -699,10 +951,36 @@ class DroidAgentMcpDispatcher(
                 } else {
                     appendLine("_(none detected)_")
                 }
+                appendLine()
+                appendLine("## Capability Summary")
+                val summary = auditorReport.capabilitySummary
+                if (summary == null) {
+                    appendLine("_(not reported)_")
+                } else {
+                    appendLine("- Exposed tool groups: ${summary.exposedToolGroups.joinToString(", ")}")
+                    appendLine("- Enabled capabilities: ${summary.enabledCapabilities.joinToString(", ").ifBlank { "_(none)_" }}")
+                    appendLine("- Dangerous flags: ${summary.dangerousFlags.joinToString(", ").ifBlank { "_(none)_" }}")
+                    appendLine("- Optional executables: ${summary.optionalExecutables.entries.joinToString(", ") { (k, v) -> "$k=$v" }}")
+                    if (summary.prerequisites.isNotEmpty()) {
+                        appendLine("- Prerequisites:")
+                        summary.prerequisites.forEach { appendLine("  - $it") }
+                    }
+                }
             }
 
         val writer = ArtifactWriter(artifactOutputDir(root))
         val ref = writer.writeText("android-report.md", markdown, ArtifactType.MARKDOWN, "Android project report")
+
+        val capabilitySummaryMap: Map<String, Any> =
+            auditorReport.capabilitySummary?.let { s ->
+                mapOf(
+                    "exposedToolGroups" to s.exposedToolGroups,
+                    "enabledCapabilities" to s.enabledCapabilities,
+                    "dangerousFlags" to s.dangerousFlags,
+                    "optionalExecutables" to s.optionalExecutables,
+                    "prerequisites" to s.prerequisites,
+                )
+            } ?: emptyMap()
 
         return resultMap(
             ToolResult(
@@ -710,7 +988,7 @@ class DroidAgentMcpDispatcher(
                 summary = "Wrote enriched report bundle to ${ref.path} (${auditorReport.score}/100 ${auditorReport.level})",
                 artifacts = listOf(ref),
             ),
-        )
+        ) + mapOf("capabilitySummary" to capabilitySummaryMap)
     }
 
     private fun runAdb(
@@ -824,7 +1102,7 @@ class DroidAgentMcpDispatcher(
             ArtifactWriter(artifactOutputDir(root)),
         )
 
-    private fun artifactOutputDir(root: Path): Path {
+    override fun artifactOutputDir(root: Path): Path {
         val output = root.resolve(config.reports.outputDir).normalize()
         if (!output.startsWith(root)) {
             throw ProjectRootViolation("Configured report output must stay inside the server project root.")
@@ -836,7 +1114,28 @@ class DroidAgentMcpDispatcher(
         return output
     }
 
-    private fun resultMap(result: ToolResult): Map<String, Any> =
+    override fun run(
+        root: Path,
+        spec: CommandSpec,
+    ): ToolResult = runner(root).run(spec)
+
+    override fun registerExistingArtifact(
+        root: Path,
+        file: Path,
+        type: ArtifactType,
+        description: String,
+        sensitivity: ArtifactSensitivity,
+    ): ArtifactRef = ArtifactWriter(artifactOutputDir(root)).registerExistingFile(file, type, description, sensitivity)
+
+    override fun authorize(request: OperationRequest): AuthorizationDecision = operationPolicy.authorize(request)
+
+    override fun jobRunner(): ManagedJobRunner = managedJobRunner
+
+    override fun safeId(value: String): String = value.sanitizeId()
+
+    override fun resolveRoot(arguments: Map<String, Any?>): Path = rootPath(arguments)
+
+    override fun resultMap(result: ToolResult): Map<String, Any> =
         mapOf(
             "schemaVersion" to result.schemaVersion,
             "status" to result.status.wireName,
@@ -854,7 +1153,7 @@ class DroidAgentMcpDispatcher(
         return projectRoot
     }
 
-    private fun String.safeId(): String = replace(Regex("[^A-Za-z0-9._-]"), "-").trim('-').ifBlank { "task" }
+    private fun String.sanitizeId(): String = replace(Regex("[^A-Za-z0-9._-]"), "-").trim('-').ifBlank { "task" }
 
     private fun schema(
         vararg required: String,
@@ -876,20 +1175,6 @@ class DroidAgentMcpDispatcher(
 
     private val rootPathProp get() = str("Android project root bound when this MCP server started. Defaults to that root.")
     private val deviceSerialProp get() = str("adb device serial from `adb devices`.")
-    private val toolResultSchema: Map<String, Any> =
-        mapOf(
-            "type" to "object",
-            "properties" to
-                mapOf(
-                    "schemaVersion" to mapOf("type" to "string"),
-                    "status" to mapOf("type" to "string"),
-                    "summary" to mapOf("type" to "string"),
-                    "artifacts" to mapOf("type" to "array"),
-                    "redactionsApplied" to mapOf("type" to "array"),
-                    "warnings" to mapOf("type" to "array"),
-                ),
-            "required" to listOf("schemaVersion", "status", "summary"),
-        )
 
     private class ProjectRootViolation(
         message: String,
