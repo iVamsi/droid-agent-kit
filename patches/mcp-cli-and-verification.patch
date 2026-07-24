@@ -1,14 +1,15 @@
 diff --git a/cli/src/main/kotlin/com/droidagentkit/cli/DroidAgentMain.kt b/cli/src/main/kotlin/com/droidagentkit/cli/DroidAgentMain.kt
 --- a/cli/src/main/kotlin/com/droidagentkit/cli/DroidAgentMain.kt
 +++ b/cli/src/main/kotlin/com/droidagentkit/cli/DroidAgentMain.kt
-@@ -9,7 +9,6 @@ import com.droidagentkit.core.Json
+@@ -9,7 +9,6 @@
+ import com.droidagentkit.core.Json
  import com.droidagentkit.core.ResultStatus
  import com.droidagentkit.inspector.AndroidProjectInspector
 -import com.droidagentkit.mcp.DroidAgentMcpDispatcher
  import com.droidagentkit.mcp.DroidAgentMcpHttpServer
  import com.droidagentkit.mcp.DroidAgentStdioServer
  import com.droidagentkit.mcp.DroidAgentWorkspaceDispatcher
-@@ -141,7 +140,7 @@ class DroidAgentCli(
+@@ -141,7 +140,7 @@
      private fun serveMcp(command: CliCommand.ServeMcp): Int {
          val projectRoot = ProjectLocator.resolve(command.project)
          val config = resolveServerConfig(DroidAgentConfigLoader.load(projectRoot)) { System.err.println(it) }
@@ -17,7 +18,7 @@ diff --git a/cli/src/main/kotlin/com/droidagentkit/cli/DroidAgentMain.kt b/cli/s
          val dispatcher =
              command.projectsRoot?.let { configuredRoot ->
                  val projectsRoot = Path.of(configuredRoot).toAbsolutePath().normalize()
-@@ -152,7 +151,7 @@ class DroidAgentCli(
+@@ -152,7 +151,7 @@
                  DroidAgentWorkspaceDispatcher(projectsRoot, projectDispatcher) { root ->
                      val projectConfig =
                          resolveServerConfig(DroidAgentConfigLoader.load(root)) { System.err.println(it) }
@@ -26,7 +27,7 @@ diff --git a/cli/src/main/kotlin/com/droidagentkit/cli/DroidAgentMain.kt b/cli/s
                  }
              } ?: projectDispatcher
          if (command.transport == "stdio") {
-@@ -203,7 +202,7 @@ class DroidAgentCli(
+@@ -203,7 +202,7 @@
                      return 1
                  }
              }
@@ -35,7 +36,7 @@ diff --git a/cli/src/main/kotlin/com/droidagentkit/cli/DroidAgentMain.kt b/cli/s
          val adbOutput = readAdbDevicesOutput(result)
          val output =
              if (command.format == "markdown") {
-@@ -241,7 +240,7 @@ class DroidAgentCli(
+@@ -241,7 +240,7 @@
                      return 1
                  }
              }
@@ -47,7 +48,7 @@ diff --git a/cli/src/main/kotlin/com/droidagentkit/cli/DroidAgentMain.kt b/cli/s
 diff --git a/mcp-server/src/main/kotlin/com/droidagentkit/mcp/DroidAgentMcpDispatcher.kt b/mcp-server/src/main/kotlin/com/droidagentkit/mcp/DroidAgentMcpDispatcher.kt
 --- a/mcp-server/src/main/kotlin/com/droidagentkit/mcp/DroidAgentMcpDispatcher.kt
 +++ b/mcp-server/src/main/kotlin/com/droidagentkit/mcp/DroidAgentMcpDispatcher.kt
-@@ -73,7 +73,7 @@ class DroidAgentMcpDispatcher(
+@@ -73,7 +73,7 @@
      override val config: DroidAgentConfig,
      projectRoot: Path = Path.of("."),
      private val inspector: AndroidProjectInspector = AndroidProjectInspector(),
