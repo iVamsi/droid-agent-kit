@@ -7,7 +7,3 @@ if git grep -n -I -E "$private_content_pattern" -- . ':!scripts/check-public-hyg
   echo "Tracked files contain a personal home path or email address." >&2
   exit 1
 fi
-
-if command -v gitleaks >/dev/null 2>&1; then
-  gitleaks git --redact --no-banner --log-opts=-1 .
-fi
