@@ -8,12 +8,19 @@ data class DroidAgentConfig(
     val schemaVersion: Int = 1,
     val project: ProjectConfig = ProjectConfig(),
     val safety: SafetyConfig = SafetyConfig(),
+    val mcp: McpConfig = McpConfig(),
     val reports: ReportsConfig = ReportsConfig(),
     val redaction: RedactionConfig = RedactionConfig(),
 ) {
     companion object {
         fun default() = DroidAgentConfig()
     }
+
+    fun resolvedExposedToolGroups(): Set<ToolGroup> =
+        buildSet {
+            add(ToolGroup.CORE)
+            addAll(mcp.exposedGroups)
+        }
 }
 
 data class ProjectConfig(
@@ -66,6 +73,10 @@ data class SafetyConfig(
     }
 }
 
+data class McpConfig(
+    val exposedGroups: Set<ToolGroup> = emptySet(),
+)
+
 data class ReportsConfig(
     val outputDir: String = "build/droidagentkit",
 )
@@ -93,7 +104,7 @@ sealed interface ConfigLoadResult {
 }
 
 object DroidAgentConfigLoader {
-    private val knownSections = setOf("project", "safety", "reports", "redaction")
+    private val knownSections = setOf("project", "safety", "mcp", "reports", "redaction")
     private val knownKeys =
         setOf(
             "project.name",
@@ -107,6 +118,7 @@ object DroidAgentConfigLoader {
             "safety.traceProcessorPath",
             "safety.mitmProxyPath",
             "safety.maxCommandSeconds",
+            "mcp.exposedGroups",
             "reports.outputDir",
             "redaction.enabled",
             "redaction.extraPatterns",
@@ -146,6 +158,7 @@ object DroidAgentConfigLoader {
         var allowAppInstall = true
         var allowEmulatorStart = false
         val allowCapabilities = mutableSetOf<Capability>()
+        val exposedGroups = mutableSetOf<ToolGroup>()
         var aliasUsedWithCapabilities = false
         var maxCommandSeconds = 600L
         var adbPath = "adb"
@@ -179,6 +192,10 @@ object DroidAgentConfigLoader {
                     "safety.allowCapabilities" -> {
                         val capability = parseCapability(value, lineNumber, errors)
                         if (capability != null) allowCapabilities.add(capability)
+                    }
+                    "mcp.exposedGroups" -> {
+                        val group = parseToolGroup(value, lineNumber, errors)
+                        if (group != null) exposedGroups.add(group)
                     }
                     "redaction.extraPatterns" -> extraPatterns.add(value)
                 }
@@ -247,6 +264,7 @@ object DroidAgentConfigLoader {
             DroidAgentConfig(
                 project = ProjectConfig(projectName),
                 safety = safety,
+                mcp = McpConfig(exposedGroups = exposedGroups.toSet()),
                 reports = ReportsConfig(outputDir),
                 redaction = RedactionConfig(redactionEnabled, extraPatterns),
             ),
@@ -266,6 +284,19 @@ object DroidAgentConfigLoader {
                 errors += ConfigError(line, "safety.allowCapabilities", "unknown capability '$value'")
                 null
             }
+
+    private fun parseToolGroup(
+        value: String,
+        line: Int,
+        errors: MutableList<ConfigError>,
+    ): ToolGroup? {
+        val normalized = value.lowercase().replace('-', '_')
+        return ToolGroup.entries.firstOrNull { it.name.lowercase() == normalized }
+            ?: run {
+                errors += ConfigError(line, "mcp.exposedGroups", "unknown tool group '$value'")
+                null
+            }
+    }
 
     private fun String.toStrictBooleanOrError(
         line: Int,
