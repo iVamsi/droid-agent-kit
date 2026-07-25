@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-cd /Users/vamsi/Developer/StudioProjects/droid-agent-kit
+cd "$(dirname "$0")/.."
 git pull origin main
 git apply patches/mcp-cli-and-verification.patch
 ./gradlew test :cli:installDist --no-configuration-cache
