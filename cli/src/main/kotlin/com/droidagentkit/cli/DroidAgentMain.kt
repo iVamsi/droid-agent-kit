@@ -77,6 +77,66 @@ class DroidAgentCli(
             is CliCommand.InstallMcp -> installMcp(command)
         }
 
+    private fun inspect(command: CliCommand.Inspect): Int {
+        val root = Path.of(command.project).toAbsolutePath().normalize()
+        val report = AndroidProjectInspector().inspect(root)
+        val output =
+            if (command.format == "json") {
+                Json.write(
+                    mapOf(
+                        "projectName" to report.projectName,
+                        "support" to report.support.name.lowercase(),
+                        "modules" to report.modules.map { it.path },
+                        "warnings" to report.warnings,
+                    ),
+                )
+            } else {
+                buildString {
+                    appendLine("# DroidAgentKit Project Inspection")
+                    appendLine()
+                    appendLine("Project: ${report.projectName}")
+                    appendLine("Support: ${report.support}")
+                    appendLine()
+                    appendLine("## Modules")
+                    report.modules.forEach { appendLine("- `${it.path}` ${it.type} namespace=${it.namespace ?: "unknown"}") }
+                    appendLine()
+                    appendLine("## Safe Commands")
+                    report.commandMatrix.forEach { appendLine("- `${it.command.joinToString(" ")}`") }
+                }
+            }
+        writeOrPrint(command.output, output)
+        return 0
+    }
+
+    private fun audit(command: CliCommand.Audit): Int {
+        val root = Path.of(command.project).toAbsolutePath().normalize()
+        val baseReport = ReadinessAuditor(AndroidProjectInspector()).audit(root, command.redactPublic)
+        val generated =
+            if (command.writeAgents) {
+                AgentDocumentWriter().write(root, baseReport, mergeAgents = false)
+            } else {
+                emptyList()
+            }
+        val report = baseReport.copy(generatedDocuments = generated)
+        val markdown = AgentsDocumentGenerator().generate(report)
+        val outDir = root.resolve("build/droidagentkit/audit")
+        Files.createDirectories(outDir)
+        Files.writeString(outDir.resolve("readiness-report.md"), markdown)
+        Files.writeString(
+            outDir.resolve("readiness-report.json"),
+            Json.write(
+                mapOf(
+                    "score" to report.score,
+                    "level" to report.level.name.lowercase(),
+                    "risks" to report.risks.map { it.id },
+                    "generatedDocuments" to report.generatedDocuments.map { it.path },
+                ),
+            ),
+        )
+        println("Readiness ${report.score}/100 (${report.level})")
+        return if (command.failUnder != null && report.score < command.failUnder) 2 else 0
+    }
+
     private fun serveMcp(command: CliCommand.ServeMcp): Int {
         val projectRoot = ProjectLocator.resolve(command.project)
         val config = resolveServerConfig(DroidAgentConfigLoader.load(projectRoot)) { System.err.println(it) }
