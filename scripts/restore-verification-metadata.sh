@@ -2,7 +2,15 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
-curl -fsSL "https://raw.githubusercontent.com/iVamsi/droid-agent-kit/d19d517f09e79ad234ab6ceaa9aee87e7769f96c/gradle/verification-metadata.xml" -o gradle/verification-metadata.xml
+REF="${RESTORE_REF:-d19d517f09e79ad234ab6ceaa9aee87e7769f96c}"
+
+if ! git rev-parse --verify "${REF}^{commit}" >/dev/null 2>&1; then
+  echo "Commit ${REF} not in local repo. Run: git fetch origin main" >&2
+  exit 1
+fi
+
+git show "${REF}:gradle/verification-metadata.xml" > gradle/verification-metadata.xml
+
 python3 - <<'PY'
 from pathlib import Path
 path = Path("gradle/verification-metadata.xml")
@@ -22,7 +30,7 @@ insert = """         <artifact name="junit-bom-5.12.2.pom">
       <component group="org.slf4j"""
 if "junit-bom-5.12.2.module" not in text:
     if needle not in text:
-        raise SystemExit("junit-bom anchor not found")
+        raise SystemExit("junit-bom anchor not found in verification-metadata.xml")
     path.write_text(text.replace(needle, insert, 1))
 PY
 echo "Restored gradle/verification-metadata.xml with junit-bom-5.12.2.module"
