@@ -24,7 +24,6 @@ class DeviceControlToolProvider(
 
     private val adbPath: String get() = context.config.safety.adbPath
     private val emulatorPath: String get() = context.config.safety.emulatorPath
-    private val launchedEmulators = mutableSetOf<String>()
 
     private val toolNames: Set<String> =
         setOf(
@@ -143,7 +142,7 @@ class DeviceControlToolProvider(
             root,
             CommandSpec(
                 id = id,
-                command = listOf(adbPath, "-s", serial, "shell") + shellArgs,
+                command = listOf(adbPath, "-s", serial, "shell") + shellArgs.map(::shellQuote),
                 workingDirectory = root.toString(),
                 mutatesProject = false,
                 requiresDevice = true,
@@ -152,6 +151,15 @@ class DeviceControlToolProvider(
                 sensitivity = ArtifactSensitivity.SENSITIVE,
             ),
         )
+
+    /**
+     * `adb shell arg1 arg2 ...` re-joins every post-`shell` argument with spaces into a single
+     * string that the device executes via `/system/bin/sh -c`, independent of how the host-side
+     * argv list was built. Single-quoting each argument (with embedded quotes escaped) makes it
+     * always parse as one literal shell word on the device, closing shell-metacharacter injection
+     * through agent-supplied strings (permission names, URIs, typed text, etc).
+     */
+    private fun shellQuote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
 
     private fun runAdb(
         args: List<String>,
@@ -295,7 +303,7 @@ class DeviceControlToolProvider(
             tool(
                 "android_emulator_stop",
                 "Stop an Android emulator",
-                "Stop a running emulator. Requires the emulator-control capability and confirmDestructive for emulators not launched by this server.",
+                "Stop a running emulator. Requires the emulator-control capability and confirmDestructive.",
                 schema(
                     "deviceSerial",
                     props =
@@ -515,16 +523,18 @@ class DeviceControlToolProvider(
             tool(
                 "android_file_pull",
                 "Pull a file from a device",
-                "Pull a device file into artifact storage. Private app paths require a package name and run-as. Requires the file-export capability.",
+                "Pull a device file into artifact storage. Restricted to public/external storage " +
+                    "(e.g. /sdcard); app-private storage under /data/data is not accessible here " +
+                    "— use the storage tool group for read-only access to a debuggable app's own " +
+                    "data. Requires the file-export capability.",
                 schema(
                     "deviceSerial",
-                    "devicePath",
+                    "remotePath",
                     props =
                         mapOf(
                             "rootPath" to rootPathProp,
                             "deviceSerial" to deviceSerialProp,
-                            "devicePath" to str("Device path to pull."),
-                            "packageName" to str("Required for private app paths under /data/data."),
+                            "remotePath" to str("Absolute device path to pull (must be under public/external storage)."),
                         ),
                 ),
                 annotations = mapOf("readOnlyHint" to true, "openWorldHint" to true),
@@ -532,18 +542,20 @@ class DeviceControlToolProvider(
             tool(
                 "android_file_push",
                 "Push a file to a device",
-                "Push a host file to a device. Host files must be under the project root; private app paths require a package name and run-as. Requires the file-import capability and confirmDestructive.",
+                "Push a host file to a device. Host files must be under the project root; device " +
+                    "paths are restricted to public/external storage (e.g. /sdcard) — app-private " +
+                    "storage under /data/data is not accessible here. Requires the file-import " +
+                    "capability and confirmDestructive.",
                 schema(
                     "deviceSerial",
-                    "hostPath",
-                    "devicePath",
+                    "localPath",
+                    "remotePath",
                     props =
                         mapOf(
                             "rootPath" to rootPathProp,
                             "deviceSerial" to deviceSerialProp,
-                            "hostPath" to str("Host file path under the project root."),
-                            "devicePath" to str("Target device path."),
-                            "packageName" to str("Required for private app paths under /data/data."),
+                            "localPath" to str("Host file path under the project root."),
+                            "remotePath" to str("Absolute target device path (must be under public/external storage)."),
                             "confirmDestructive" to confirmProp,
                         ),
                 ),
@@ -627,24 +639,22 @@ class DeviceControlToolProvider(
                 ),
             )
         }
-        launchedEmulators.add(jobId)
         return context.resultMap(ToolResult(status = ResultStatus.SUCCESS, summary = "Started emulator AVD '$avdName' as job $jobId.")) +
             mapOf("jobId" to jobId, "jobState" to snapshot.state.name.lowercase())
     }
 
     private fun emulatorStop(arguments: Map<String, Any?>): Map<String, Any> {
-        val (_, denied) = authorize("android_emulator_stop", setOf(Capability.EMULATOR_CONTROL), false, arguments)
+        val (_, denied) = authorize("android_emulator_stop", setOf(Capability.EMULATOR_CONTROL), true, arguments)
         if (denied != null) return denied
         val serial = requireSerial(arguments) ?: return missingSerial("android_emulator_stop")
         val result = runAdb(arguments, listOf("-s", serial, "emu", "kill"), "Stop emulator $serial", false)
-        launchedEmulators.clear()
         return context.resultMap(result)
     }
 
     private fun emulatorSnapshotSave(arguments: Map<String, Any?>): Map<String, Any> {
         val name =
-            arguments["name"]?.toString()?.takeIf { it.isNotBlank() }
-                ?: return blocked("missing-snapshot-name", "name is required for android_emulator_snapshot_save.")
+            arguments["snapshotName"]?.toString()?.takeIf { it.isNotBlank() }
+                ?: return blocked("missing-snapshot-name", "snapshotName is required for android_emulator_snapshot_save.")
         val (_, denied) = authorize("android_emulator_snapshot_save", setOf(Capability.EMULATOR_CONTROL), false, arguments)
         if (denied != null) return denied
         val serial = requireSerial(arguments) ?: return missingSerial("android_emulator_snapshot_save")
@@ -655,9 +665,9 @@ class DeviceControlToolProvider(
 
     private fun emulatorSnapshotRestore(arguments: Map<String, Any?>): Map<String, Any> {
         val name =
-            arguments["name"]?.toString()?.takeIf { it.isNotBlank() }
-                ?: return blocked("missing-snapshot-name", "name is required for android_emulator_snapshot_restore.")
-        val (_, denied) = authorize("android_emulator_snapshot_restore", setOf(Capability.EMULATOR_RESTORE), false, arguments)
+            arguments["snapshotName"]?.toString()?.takeIf { it.isNotBlank() }
+                ?: return blocked("missing-snapshot-name", "snapshotName is required for android_emulator_snapshot_restore.")
+        val (_, denied) = authorize("android_emulator_snapshot_restore", setOf(Capability.EMULATOR_RESTORE), true, arguments)
         if (denied != null) return denied
         val serial = requireSerial(arguments) ?: return missingSerial("android_emulator_snapshot_restore")
         val result =
@@ -697,11 +707,11 @@ class DeviceControlToolProvider(
                 ?: return blocked("missing-uri", "uri is required for android_deep_link.")
         val (_, denied) = authorize("android_deep_link", setOf(Capability.APP_CONTROL), false, arguments)
         if (denied != null) return denied
-        val serial = requireSerial(arguments) ?: return missingSerial("android_deep_link")
-        val pkg = arguments["packageName"]?.toString()
-        val args = mutableListOf("-s", serial, "shell", "am", "start", "-W", "-a", "android.intent.action.VIEW", "-d", uri)
-        if (pkg != null) args.add(pkg)
-        val result = runAdb(arguments, args, "Open deep link $uri", false)
+        requireSerial(arguments) ?: return missingSerial("android_deep_link")
+        val pkg = arguments["packageName"]?.toString()?.takeIf { it.isNotBlank() }
+        val shellArgs = mutableListOf("am", "start", "-W", "-a", "android.intent.action.VIEW", "-d", uri)
+        if (pkg != null) shellArgs.add(pkg)
+        val result = runAdbShell(arguments, shellArgs, "Open deep link $uri", false)
         return context.resultMap(result)
     }
 
@@ -711,12 +721,12 @@ class DeviceControlToolProvider(
                 ?: return blocked("missing-action", "action is required for android_intent_invoke.")
         val (_, denied) = authorize("android_intent_invoke", setOf(Capability.APP_CONTROL), false, arguments)
         if (denied != null) return denied
-        val serial = requireSerial(arguments) ?: return missingSerial("android_intent_invoke")
-        val args = mutableListOf("-s", serial, "shell", "am", "start", "-a", action)
-        arguments["data"]?.toString()?.takeIf { it.isNotBlank() }?.let { args.addAll(listOf("-d", it)) }
-        arguments["mimeType"]?.toString()?.takeIf { it.isNotBlank() }?.let { args.addAll(listOf("-t", it)) }
-        arguments["packageName"]?.toString()?.takeIf { it.isNotBlank() }?.let { args.addAll(listOf("-n", "$it/.MainActivity")) }
-        val result = runAdb(arguments, args, "Invoke intent action $action", false)
+        requireSerial(arguments) ?: return missingSerial("android_intent_invoke")
+        val shellArgs = mutableListOf("am", "start", "-a", action)
+        arguments["data"]?.toString()?.takeIf { it.isNotBlank() }?.let { shellArgs.addAll(listOf("-d", it)) }
+        arguments["mimeType"]?.toString()?.takeIf { it.isNotBlank() }?.let { shellArgs.addAll(listOf("-t", it)) }
+        arguments["packageName"]?.toString()?.takeIf { it.isNotBlank() }?.let { shellArgs.addAll(listOf("-n", "$it/.MainActivity")) }
+        val result = runAdbShell(arguments, shellArgs, "Invoke intent action $action", false)
         return context.resultMap(result)
     }
 
@@ -741,7 +751,7 @@ class DeviceControlToolProvider(
         val perm =
             arguments["permission"]?.toString()?.takeIf { it.isNotBlank() }
                 ?: return blocked("missing-permission", "permission is required for android_permission_revoke.")
-        val (_, denied) = authorize("android_permission_revoke", setOf(Capability.PERMISSION_MUTATION), false, arguments)
+        val (_, denied) = authorize("android_permission_revoke", setOf(Capability.PERMISSION_MUTATION), true, arguments)
         if (denied != null) return denied
         val serial = requireSerial(arguments) ?: return missingSerial("android_permission_revoke")
         val result = runAdbShell(arguments, listOf("pm", "revoke", pkg, perm), "Revoke $perm from $pkg on $serial", false)
@@ -785,6 +795,7 @@ class DeviceControlToolProvider(
         val text =
             arguments["text"]?.toString()
                 ?: return blocked("missing-text", "text is required for android_input_type.")
+        if (text.length > 1024) return blocked("text-too-long", "text must be at most 1024 characters for android_input_type.")
         val (_, denied) = authorize("android_input_type", setOf(Capability.DEVICE_INPUT), false, arguments)
         if (denied != null) return denied
         val serial = requireSerial(arguments) ?: return missingSerial("android_input_type")
@@ -811,7 +822,8 @@ class DeviceControlToolProvider(
         val remote =
             arguments["remotePath"]?.toString()?.takeIf { it.isNotBlank() }
                 ?: return blocked("missing-remote-path", "remotePath is required for android_file_pull.")
-        val (_, denied) = authorize("android_file_pull", setOf(Capability.FILE_EXPORT), false, arguments)
+        val (_, denied) =
+            authorize("android_file_pull", setOf(Capability.FILE_EXPORT), false, arguments, devicePaths = listOf(remote))
         if (denied != null) return denied
         val serial = requireSerial(arguments) ?: return missingSerial("android_file_pull")
         val root = context.resolveRoot(arguments)
@@ -839,10 +851,18 @@ class DeviceControlToolProvider(
         val remote =
             arguments["remotePath"]?.toString()?.takeIf { it.isNotBlank() }
                 ?: return blocked("missing-remote-path", "remotePath is required for android_file_push.")
-        val (_, denied) = authorize("android_file_push", setOf(Capability.FILE_IMPORT), false, arguments)
+        val localFile = Path.of(localPath)
+        val (_, denied) =
+            authorize(
+                "android_file_push",
+                setOf(Capability.FILE_IMPORT),
+                true,
+                arguments,
+                devicePaths = listOf(remote),
+                hostPaths = listOf(localFile),
+            )
         if (denied != null) return denied
         val serial = requireSerial(arguments) ?: return missingSerial("android_file_push")
-        val localFile = Path.of(localPath)
         if (!Files.exists(localFile)) return blocked("missing-local-file", "Local file does not exist: $localPath")
         val result = runAdb(arguments, listOf("-s", serial, "push", localPath, remote), "Push $localPath to $serial:$remote", false)
         return context.resultMap(result)
