@@ -4,6 +4,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.ByteArrayOutputStream
+import java.io.PrintStream
 import java.nio.file.Files
 
 class InitCommandTest {
@@ -62,10 +64,19 @@ class InitCommandTest {
         Files.createDirectories(configPath.parent)
         Files.writeString(configPath, "schemaVersion: 1\n")
 
-        val exitCode = DroidAgentCli().run(arrayOf("init", "--project", root.toString(), "--list-profiles"))
+        val originalOut = System.out
+        val captured = ByteArrayOutputStream()
+        System.setOut(PrintStream(captured))
+        val exitCode =
+            try {
+                DroidAgentCli().run(arrayOf("init", "--project", root.toString(), "--list-profiles"))
+            } finally {
+                System.setOut(originalOut)
+            }
 
         assertEquals(0, exitCode)
         assertEquals("schemaVersion: 1\n", Files.readString(configPath))
+        assertTrue(captured.toString().contains(ProfileCatalog.description("core")))
     }
 
     @Test

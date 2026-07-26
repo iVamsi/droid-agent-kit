@@ -22,7 +22,7 @@ object ConfigYaml {
             lines += "  allowEmulatorStart: false"
         } else {
             lines += "  allowCapabilities:"
-            capabilities.map { it.name.lowercase() }.sorted().forEach { lines += "    - $it" }
+            (capabilities + Capability.APP_INSTALL).map { it.name.lowercase() }.sorted().forEach { lines += "    - $it" }
         }
         lines += "  maxCommandSeconds: 600"
         if (groups.isNotEmpty()) {

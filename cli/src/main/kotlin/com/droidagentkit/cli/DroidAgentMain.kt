@@ -347,7 +347,7 @@ class DroidAgentCli(
     private fun profileListing(): String =
         buildString {
             appendLine("Available profiles:")
-            ProfileCatalog.names().forEach { appendLine("  $it") }
+            ProfileCatalog.names().forEach { name -> appendLine("  $name — ${ProfileCatalog.description(name)}") }
         }
 
     private fun defaultDroidAgentBin(): Path {

@@ -98,4 +98,11 @@ class ProfileCatalogTest {
             ProfileCatalog.names(),
         )
     }
+
+    @Test
+    fun `description returns non-blank text for every known profile`() {
+        ProfileCatalog.names().forEach { name ->
+            assertTrue("expected a description for '$name'", ProfileCatalog.description(name).isNotBlank())
+        }
+    }
 }
