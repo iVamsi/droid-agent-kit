@@ -80,6 +80,17 @@ class DroidAgentCliParser {
                     dryRun = options.containsKey("dry-run"),
                     applyClaude = !options.containsKey("dry-run") && !options.containsKey("no-claude-apply"),
                 )
+            "init" ->
+                CliCommand.Init(
+                    profiles =
+                        (options["profile"] ?: "")
+                            .split(',')
+                            .map { it.trim() }
+                            .filter { it.isNotBlank() },
+                    force = options.containsKey("force"),
+                    listProfiles = options.containsKey("list-profiles"),
+                    project = options["project"] ?: ".",
+                )
             else -> CliCommand.Help(error = "Unknown command '$commandName'.")
         }
     }

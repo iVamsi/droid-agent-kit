@@ -53,6 +53,13 @@ sealed class CliCommand {
         val applyClaude: Boolean,
     ) : CliCommand()
 
+    data class Init(
+        val profiles: List<String>,
+        val force: Boolean,
+        val listProfiles: Boolean,
+        val project: String,
+    ) : CliCommand()
+
     data class Help(
         val error: String? = null,
         val commandName: String? = null,
