@@ -171,4 +171,41 @@ class CliParserTest {
 
         assertEquals(CliCommand.Snapshot(device = "emulator-5554", output = "build/droidagentkit/snapshot"), command)
     }
+
+    @Test
+    fun `parser understands init with a single profile`() {
+        val command = DroidAgentCliParser().parse(arrayOf("init", "--profile", "device-control", "--project", "."))
+
+        assertEquals(
+            CliCommand.Init(profiles = listOf("device-control"), force = false, listProfiles = false, project = "."),
+            command,
+        )
+    }
+
+    @Test
+    fun `parser splits comma-separated init profiles`() {
+        val command = DroidAgentCliParser().parse(arrayOf("init", "--profile", "storage,network-experimental"))
+
+        assertEquals(
+            CliCommand.Init(profiles = listOf("storage", "network-experimental"), force = false, listProfiles = false, project = "."),
+            command,
+        )
+    }
+
+    @Test
+    fun `parser understands init force and list-profiles flags`() {
+        val force = DroidAgentCliParser().parse(arrayOf("init", "--profile", "full", "--force"))
+        val list = DroidAgentCliParser().parse(arrayOf("init", "--list-profiles"))
+
+        assertEquals(CliCommand.Init(profiles = listOf("full"), force = true, listProfiles = false, project = "."), force)
+        assertEquals(CliCommand.Init(profiles = emptyList(), force = false, listProfiles = true, project = "."), list)
+    }
+
+    @Test
+    fun `parser rejects unknown flag on init`() {
+        val command = DroidAgentCliParser().parse(arrayOf("init", "--profil", "full"))
+
+        assertTrue(command is CliCommand.Help)
+        assertTrue((command as CliCommand.Help).error!!.contains("--profil"))
+    }
 }
