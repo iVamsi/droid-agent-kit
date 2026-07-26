@@ -2,6 +2,7 @@ package com.droidagentkit.auditor
 
 import com.droidagentkit.core.ArtifactRef
 import com.droidagentkit.core.ArtifactType
+import com.droidagentkit.core.ConfigYaml
 import com.droidagentkit.core.RedactionConfig
 import com.droidagentkit.core.Redactor
 import com.droidagentkit.core.Severity
@@ -449,26 +450,5 @@ class AgentDocumentWriter {
         return artifacts
     }
 
-    private fun defaultConfigYaml(): String =
-        """
-        schemaVersion: 1
-        project:
-          name: inferred
-        safety:
-          allowGradleTasks:
-            - ":*:test*UnitTest"
-            - ":*:lint*"
-            - ":*:assemble*Debug"
-            - ":*:*AndroidTest"
-            - ":*:validate*ScreenshotTest"
-          allowAdbInput: false
-          allowAppInstall: true
-          allowEmulatorStart: false
-          maxCommandSeconds: 600
-        reports:
-          outputDir: "build/droidagentkit"
-        redaction:
-          enabled: true
-          extraPatterns: []
-        """.trimIndent()
+    private fun defaultConfigYaml(): String = ConfigYaml.render(emptySet(), emptySet())
 }
