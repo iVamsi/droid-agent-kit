@@ -4,6 +4,7 @@ import com.droidagentkit.auditor.AgentDocumentWriter
 import com.droidagentkit.auditor.AgentsDocumentGenerator
 import com.droidagentkit.auditor.ReadinessAuditor
 import com.droidagentkit.core.ConfigLoadResult
+import com.droidagentkit.core.ConfigYaml
 import com.droidagentkit.core.DroidAgentConfig
 import com.droidagentkit.core.DroidAgentConfigLoader
 import com.droidagentkit.core.Json
@@ -75,6 +76,7 @@ class DroidAgentCli(
                 )
             is CliCommand.Visuals -> visuals(command)
             is CliCommand.InstallMcp -> installMcp(command)
+            is CliCommand.Init -> init(command)
         }
 
     private fun inspect(command: CliCommand.Inspect): Int {
@@ -298,6 +300,55 @@ class DroidAgentCli(
         }
         return 0
     }
+
+    private fun init(command: CliCommand.Init): Int {
+        if (command.listProfiles) {
+            println(profileListing())
+            return 0
+        }
+        val root = Path.of(command.project).toAbsolutePath().normalize()
+        val configPath = root.resolve(".droidagentkit/config.yaml")
+        if (Files.exists(configPath) && !command.force) {
+            System.err.println("$configPath already exists. Rerun with --force to regenerate it.")
+            return 1
+        }
+
+        val expansion: ProfileExpansion
+        if (command.profiles.isNotEmpty()) {
+            val result = ProfileCatalog.expand(command.profiles)
+            if (result.isFailure) {
+                System.err.println("Unknown profile(s): ${result.exceptionOrNull()?.message}")
+                println(profileListing())
+                return 1
+            }
+            expansion = result.getOrThrow()
+        } else {
+            if (System.console() == null) {
+                System.err.println(
+                    "No terminal detected and no --profile given. Run 'droidagent init --list-profiles' to see " +
+                        "options, or 'droidagent init --profile <name>'.",
+                )
+                return 1
+            }
+            val wizardResult = InitWizard(readLine = ::readlnOrNull, print = ::println).run()
+            if (wizardResult == null) {
+                println("Aborted, no file written.")
+                return 0
+            }
+            expansion = wizardResult
+        }
+
+        Files.createDirectories(configPath.parent)
+        Files.writeString(configPath, ConfigYaml.render(expansion.groups, expansion.capabilities))
+        println("Wrote $configPath")
+        return 0
+    }
+
+    private fun profileListing(): String =
+        buildString {
+            appendLine("Available profiles:")
+            ProfileCatalog.names().forEach { appendLine("  $it") }
+        }
 
     private fun defaultDroidAgentBin(): Path {
         System.getenv("DROIDAGENT_BIN")?.takeIf { it.isNotBlank() }?.let { return Path.of(it) }
