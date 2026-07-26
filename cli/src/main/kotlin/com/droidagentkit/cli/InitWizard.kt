@@ -47,8 +47,18 @@ class InitWizard(
             expansion = ProfileCatalog.union(expansion, ProfileCatalog.Q6_NETWORK)
         }
 
-        val groupsText = expansion.groups.map { it.name.lowercase() }.sorted().ifEmpty { listOf("(none)") }.joinToString(", ")
-        val capsText = expansion.capabilities.map { it.name.lowercase() }.sorted().ifEmpty { listOf("(none)") }.joinToString(", ")
+        val groupsText =
+            expansion.groups
+                .map { it.name.lowercase() }
+                .sorted()
+                .ifEmpty { listOf("(none)") }
+                .joinToString(", ")
+        val capsText =
+            expansion.capabilities
+                .map { it.name.lowercase() }
+                .sorted()
+                .ifEmpty { listOf("(none)") }
+                .joinToString(", ")
         print("This will enable groups: $groupsText")
         print("and capabilities: $capsText")
 
