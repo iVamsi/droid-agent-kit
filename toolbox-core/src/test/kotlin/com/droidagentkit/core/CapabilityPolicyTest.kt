@@ -97,6 +97,65 @@ class CapabilityPolicyTest {
     }
 
     @Test
+    fun `denies device paths under app-private storage`() {
+        val request =
+            OperationRequest(
+                operationId = "file-pull",
+                requiredCapabilities = setOf(Capability.FILE_EXPORT),
+                destructive = false,
+                devicePaths = listOf("/data/data/com.other.app/databases/accounts.db"),
+            )
+        val config = SafetyConfig(allowCapabilities = setOf(Capability.FILE_EXPORT))
+        val decision = policy(config).authorize(request)
+        assertTrue(decision is AuthorizationDecision.Denied)
+        assertEquals("device-path-denied", (decision as AuthorizationDecision.Denied).code)
+    }
+
+    @Test
+    fun `denies device path traversal that resolves into a forbidden prefix`() {
+        val request =
+            OperationRequest(
+                operationId = "file-pull",
+                requiredCapabilities = setOf(Capability.FILE_EXPORT),
+                destructive = false,
+                devicePaths = listOf("/sdcard/../data/data/com.other.app/shared_prefs/x.xml"),
+            )
+        val config = SafetyConfig(allowCapabilities = setOf(Capability.FILE_EXPORT))
+        val decision = policy(config).authorize(request)
+        assertTrue(decision is AuthorizationDecision.Denied)
+        assertEquals("device-path-denied", (decision as AuthorizationDecision.Denied).code)
+    }
+
+    @Test
+    fun `denies non-absolute device paths`() {
+        val request =
+            OperationRequest(
+                operationId = "file-pull",
+                requiredCapabilities = setOf(Capability.FILE_EXPORT),
+                destructive = false,
+                devicePaths = listOf(".."),
+            )
+        val config = SafetyConfig(allowCapabilities = setOf(Capability.FILE_EXPORT))
+        val decision = policy(config).authorize(request)
+        assertTrue(decision is AuthorizationDecision.Denied)
+        assertEquals("device-path-denied", (decision as AuthorizationDecision.Denied).code)
+    }
+
+    @Test
+    fun `allows device paths under public storage`() {
+        val request =
+            OperationRequest(
+                operationId = "file-pull",
+                requiredCapabilities = setOf(Capability.FILE_EXPORT),
+                destructive = false,
+                devicePaths = listOf("/sdcard/Download/report.pdf"),
+            )
+        val config = SafetyConfig(allowCapabilities = setOf(Capability.FILE_EXPORT))
+        val decision = policy(config).authorize(request)
+        assertTrue(decision is AuthorizationDecision.Allowed)
+    }
+
+    @Test
     fun `deprecated aliases map to capabilities when allowCapabilities is empty`() {
         val config = SafetyConfig(allowAdbInput = true, allowAppInstall = true, allowEmulatorStart = true)
         val enabled = config.allowedCapabilities()

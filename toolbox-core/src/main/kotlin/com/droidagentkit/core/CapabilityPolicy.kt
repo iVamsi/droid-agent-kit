@@ -88,10 +88,17 @@ class DefaultOperationPolicy(
             }
         }
         request.devicePaths.forEach { devicePath ->
-            if (FORBIDDEN_DEVICE_PATHS.any { devicePath.startsWith(it) }) {
+            if (!devicePath.startsWith("/")) {
                 return AuthorizationDecision.Denied(
                     "device-path-denied",
-                    "Device path '$devicePath' is outside the allowed package-private scope.",
+                    "Device path '$devicePath' must be an absolute path.",
+                )
+            }
+            val normalized = normalizeDevicePath(devicePath)
+            if (FORBIDDEN_DEVICE_PATH_PREFIXES.any { normalized == it.removeSuffix("/") || normalized.startsWith(it) }) {
+                return AuthorizationDecision.Denied(
+                    "device-path-denied",
+                    "Device path '$devicePath' is outside the allowed public-storage scope.",
                 )
             }
         }
@@ -99,6 +106,23 @@ class DefaultOperationPolicy(
     }
 
     private companion object {
-        val FORBIDDEN_DEVICE_PATHS = listOf("/system/", "/proc/", "/sys/", "/data/local/tmp/../")
+        // App-private storage (/data/data, /data/user) is intentionally excluded: the `storage`
+        // tool group provides scoped, run-as-based read access to a debuggable app's own data.
+        // Generic file push/pull is for public/external storage only.
+        val FORBIDDEN_DEVICE_PATH_PREFIXES =
+            listOf("/system/", "/proc/", "/sys/", "/data/data/", "/data/user/", "/data/app/")
+
+        fun normalizeDevicePath(path: String): String {
+            val segments = path.split("/")
+            val normalized = mutableListOf<String>()
+            for (segment in segments) {
+                when (segment) {
+                    "", "." -> {}
+                    ".." -> if (normalized.isNotEmpty()) normalized.removeAt(normalized.size - 1)
+                    else -> normalized.add(segment)
+                }
+            }
+            return "/" + normalized.joinToString("/")
+        }
     }
 }
