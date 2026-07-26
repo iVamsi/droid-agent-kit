@@ -81,6 +81,16 @@ class ConfigYamlTest {
         val loaded = result as ConfigLoadResult.Loaded
         assertTrue(loaded.warnings.isEmpty())
         assertEquals(setOf(ToolGroup.DEVICE_READ, ToolGroup.DEVICE_CONTROL), loaded.config.mcp.exposedGroups)
-        assertEquals(setOf(Capability.DEVICE_INPUT, Capability.APP_CONTROL), loaded.config.safety.allowCapabilities)
+        assertEquals(
+            setOf(Capability.DEVICE_INPUT, Capability.APP_CONTROL, Capability.APP_INSTALL),
+            loaded.config.safety.allowCapabilities,
+        )
+    }
+
+    @Test
+    fun `render always includes APP_INSTALL when capabilities is non-empty, even if not requested`() {
+        val yaml = ConfigYaml.render(emptySet(), setOf(Capability.DEVICE_INPUT))
+
+        assertTrue(yaml.contains("    - app_install"))
     }
 }
