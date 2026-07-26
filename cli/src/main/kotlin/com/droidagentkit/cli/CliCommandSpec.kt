@@ -94,5 +94,18 @@ object CliCommandRegistry {
                     CliOption("--no-claude-apply", "Skip running the Claude Code apply step.", takesValue = false),
                 ),
             ),
+            CliCommandSpec(
+                "init",
+                "Generate .droidagentkit/config.yaml interactively or from a named profile.",
+                listOf(
+                    CliOption(
+                        "--profile",
+                        "Comma-separated profile name(s): core, device-control, full, storage, network-experimental.",
+                    ),
+                    CliOption("--force", "Overwrite an existing config.yaml.", takesValue = false),
+                    CliOption("--list-profiles", "Print available profiles and exit.", takesValue = false),
+                    CliOption("--project", "Project root path. Defaults to cwd."),
+                ),
+            ),
         )
 }
