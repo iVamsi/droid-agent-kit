@@ -99,6 +99,20 @@ droidagent serve-mcp --transport stdio --project auto
 
 Run `droidagent --help` or `droidagent <command> --help` for flags.
 
+### Generating a config file
+
+```bash
+droidagent init                          # interactive: six yes/no prompts explaining risk per area
+droidagent init --profile device-control # non-interactive, for scripted setup
+droidagent init --profile full           # everything, including storage and network capture
+droidagent init --list-profiles          # see all profile names without writing anything
+```
+
+Only the `core` tool group (safe, read-only) is enabled by default. `droidagent init` is the fastest way to
+turn on more without hand-writing `.droidagentkit/config.yaml` — see
+[docs/security-and-permissions.md](docs/security-and-permissions.md) for what each group and capability
+actually grants an agent.
+
 ## Configuration
 
 Put `.droidagentkit/config.yaml` in your Android project root to tune Gradle allowlists, adb permissions, capability flags, redaction patterns, and report output paths. The auditor can seed a safe default when you run `audit --write-agents`.

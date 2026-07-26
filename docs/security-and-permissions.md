@@ -38,6 +38,26 @@ redaction:
   extraPatterns: []
 ```
 
+## Generating config with `droidagent init`
+
+`droidagent init` generates `.droidagentkit/config.yaml` without hand-writing `ToolGroup`/`Capability` enum
+names. Run it with no flags in a terminal for six yes/no prompts (one per tool group below, each explaining
+the risk in plain language, with follow-ups for bugreport capture, irreversible device-control actions, and
+golden-image overwrites). For scripted/CI setup, use a named profile instead:
+
+| Profile | Enables |
+|---|---|
+| `core` | Nothing extra (the default). |
+| `device-control` | Device diagnostics (excluding bugreport) + device control (excluding uninstall/clear-data/permission mutation). |
+| `full` | Everything below, including `storage` and `network-experimental`. |
+| `storage` | Read-only SQLite/SharedPreferences inspection for a debuggable app, alone. |
+| `network-experimental` | Emulator-only mitmproxy interception, alone. |
+
+`--profile` accepts a comma-separated list (e.g. `--profile device-control,storage`). `init` refuses to
+overwrite an existing `config.yaml` unless `--force` is passed. The generated file is always fully explicit
+— literal group/capability names, never a reference to the profile that produced it — so it stays reviewable
+without needing to know what a profile currently expands to.
+
 ## MCP Tools
 
 | Tool | Description |
