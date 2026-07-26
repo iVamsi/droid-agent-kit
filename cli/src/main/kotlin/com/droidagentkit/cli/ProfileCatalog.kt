@@ -39,24 +39,31 @@ object ProfileCatalog {
             capabilities = expansions.flatMap { it.capabilities }.toSet(),
         )
 
+    private val CORE_EXPANSION = ProfileExpansion(emptySet(), emptySet())
+    private val DEVICE_CONTROL_EXPANSION = union(Q1_DEVICE_READ, Q2_DEVICE_CONTROL)
+    private val STORAGE_EXPANSION = Q5_STORAGE
+    private val NETWORK_EXPERIMENTAL_EXPANSION = Q6_NETWORK
+    private val FULL_EXTRAS =
+        ProfileExpansion(
+            groups = setOf(ToolGroup.PERFETTO, ToolGroup.VISUALS),
+            capabilities =
+                setOf(
+                    Capability.APP_DESTRUCTIVE,
+                    Capability.PERMISSION_MUTATION,
+                    Capability.SENSITIVE_DIAGNOSTICS,
+                    Capability.GOLDEN_UPDATE,
+                ),
+        )
+    private val FULL_EXPANSION =
+        union(CORE_EXPANSION, DEVICE_CONTROL_EXPANSION, STORAGE_EXPANSION, NETWORK_EXPERIMENTAL_EXPANSION, FULL_EXTRAS)
+
     private val PROFILES: Map<String, ProfileExpansion> =
         mapOf(
-            "core" to ProfileExpansion(emptySet(), emptySet()),
-            "device-control" to union(Q1_DEVICE_READ, Q2_DEVICE_CONTROL),
-            "storage" to Q5_STORAGE,
-            "network-experimental" to Q6_NETWORK,
-            "full" to
-                union(
-                    Q1_DEVICE_READ,
-                    Q1_BUGREPORT,
-                    Q2_DEVICE_CONTROL,
-                    Q2_IRREVERSIBLE,
-                    Q3_PERFETTO,
-                    Q4_VISUALS,
-                    Q4_GOLDEN,
-                    Q5_STORAGE,
-                    Q6_NETWORK,
-                ),
+            "core" to CORE_EXPANSION,
+            "device-control" to DEVICE_CONTROL_EXPANSION,
+            "storage" to STORAGE_EXPANSION,
+            "network-experimental" to NETWORK_EXPERIMENTAL_EXPANSION,
+            "full" to FULL_EXPANSION,
         )
 
     fun names(): List<String> = PROFILES.keys.sorted()
