@@ -168,6 +168,116 @@ class DeviceControlToolProviderTest {
     }
 
     @Test
+    fun `permission grant does not allow shell metacharacter injection via the permission argument`() {
+        val root = Files.createTempDirectory("dak-permgrant-injection")
+        val marker = root.resolve("injected.marker")
+        val dispatcher = dispatcher(root, controlConfig(root, setOf(Capability.PERMISSION_MUTATION)))
+
+        val result =
+            dispatcher.call(
+                "android_permission_grant",
+                mapOf(
+                    "rootPath" to root.toString(),
+                    "deviceSerial" to "emulator-5554",
+                    "packageName" to "com.example",
+                    "permission" to "android.permission.CAMERA; touch $marker",
+                ),
+            )
+
+        assertEquals("success", result["status"])
+        assertTrue(!Files.exists(marker))
+    }
+
+    @Test
+    fun `deep link does not allow shell metacharacter injection via the uri argument`() {
+        val root = Files.createTempDirectory("dak-deeplink-injection")
+        val marker = root.resolve("injected.marker")
+        val dispatcher = dispatcher(root, controlConfig(root, setOf(Capability.APP_CONTROL)))
+
+        dispatcher.call(
+            "android_deep_link",
+            mapOf(
+                "rootPath" to root.toString(),
+                "deviceSerial" to "emulator-5554",
+                "uri" to "myapp://home; touch $marker",
+            ),
+        )
+
+        assertTrue(!Files.exists(marker))
+    }
+
+    @Test
+    fun `emulator snapshot save runs with the documented snapshotName argument`() {
+        val root = Files.createTempDirectory("dak-snapshot-save-ok")
+        val dispatcher = dispatcher(root, controlConfig(root, setOf(Capability.EMULATOR_CONTROL)))
+
+        val result =
+            dispatcher.call(
+                "android_emulator_snapshot_save",
+                mapOf(
+                    "rootPath" to root.toString(),
+                    "deviceSerial" to "emulator-5554",
+                    "snapshotName" to "checkpoint-1",
+                ),
+            )
+
+        assertEquals("success", result["status"])
+    }
+
+    @Test
+    fun `emulator snapshot save is blocked when snapshotName is missing`() {
+        val root = Files.createTempDirectory("dak-snapshot-save-missing")
+        val dispatcher = dispatcher(root, controlConfig(root, setOf(Capability.EMULATOR_CONTROL)))
+
+        val result =
+            dispatcher.call(
+                "android_emulator_snapshot_save",
+                mapOf("rootPath" to root.toString(), "deviceSerial" to "emulator-5554"),
+            )
+
+        assertEquals("blocked", result["status"])
+        assertTrue((result["warnings"] as List<*>).contains("missing-snapshot-name"))
+    }
+
+    @Test
+    fun `emulator snapshot restore is blocked without confirmDestructive`() {
+        val root = Files.createTempDirectory("dak-snapshot-restore-confirm")
+        val dispatcher = dispatcher(root, controlConfig(root, setOf(Capability.EMULATOR_RESTORE)))
+
+        val result =
+            dispatcher.call(
+                "android_emulator_snapshot_restore",
+                mapOf(
+                    "rootPath" to root.toString(),
+                    "deviceSerial" to "emulator-5554",
+                    "snapshotName" to "checkpoint-1",
+                ),
+            )
+
+        assertEquals("blocked", result["status"])
+        assertTrue((result["warnings"] as List<*>).contains("destructive-confirmation-required"))
+    }
+
+    @Test
+    fun `emulator snapshot restore runs with the documented snapshotName argument and confirmDestructive`() {
+        val root = Files.createTempDirectory("dak-snapshot-restore-ok")
+        val dispatcher = dispatcher(root, controlConfig(root, setOf(Capability.EMULATOR_RESTORE)))
+
+        val result =
+            dispatcher.call(
+                "android_emulator_snapshot_restore",
+                mapOf(
+                    "rootPath" to root.toString(),
+                    "deviceSerial" to "emulator-5554",
+                    "snapshotName" to "checkpoint-1",
+                    "confirmDestructive" to true,
+                ),
+            )
+
+        assertEquals("success", result["status"])
+    }
+
+    @Test
     fun `emulator list avds returns names from hermetic emulator`() {
         val root = Files.createTempDirectory("dak-avds-ok")
         val dispatcher = dispatcher(root, controlConfig(root, setOf(Capability.EMULATOR_CONTROL)))
@@ -243,6 +353,127 @@ class DeviceControlToolProviderTest {
         assertTrue((result["warnings"] as List<*>).contains("capability-not-enabled"))
     }
 
+    @Test
+    fun `file push is blocked without confirmDestructive even with file_import capability`() {
+        val root = Files.createTempDirectory("dak-push-confirm")
+        val dispatcher = dispatcher(root, controlConfig(root, setOf(Capability.FILE_IMPORT)))
+
+        val result =
+            dispatcher.call(
+                "android_file_push",
+                mapOf(
+                    "rootPath" to root.toString(),
+                    "deviceSerial" to "emulator-5554",
+                    "localPath" to root.toString(),
+                    "remotePath" to "/sdcard/x",
+                ),
+            )
+
+        assertEquals("blocked", result["status"])
+        assertTrue((result["warnings"] as List<*>).contains("destructive-confirmation-required"))
+    }
+
+    @Test
+    fun `file push is blocked when local path escapes the project root`() {
+        val root = Files.createTempDirectory("dak-push-root")
+        val outside = Files.createTempDirectory("dak-push-outside")
+        val dispatcher = dispatcher(root, controlConfig(root, setOf(Capability.FILE_IMPORT)))
+
+        val result =
+            dispatcher.call(
+                "android_file_push",
+                mapOf(
+                    "rootPath" to root.toString(),
+                    "deviceSerial" to "emulator-5554",
+                    "localPath" to outside.toString(),
+                    "remotePath" to "/sdcard/x",
+                    "confirmDestructive" to true,
+                ),
+            )
+
+        assertEquals("blocked", result["status"])
+        assertTrue((result["warnings"] as List<*>).contains("host-path-denied"))
+    }
+
+    @Test
+    fun `file push is blocked when remote path targets app-private storage`() {
+        val root = Files.createTempDirectory("dak-push-private")
+        val dispatcher = dispatcher(root, controlConfig(root, setOf(Capability.FILE_IMPORT)))
+
+        val result =
+            dispatcher.call(
+                "android_file_push",
+                mapOf(
+                    "rootPath" to root.toString(),
+                    "deviceSerial" to "emulator-5554",
+                    "localPath" to root.toString(),
+                    "remotePath" to "/data/data/com.other.app/files/x",
+                    "confirmDestructive" to true,
+                ),
+            )
+
+        assertEquals("blocked", result["status"])
+        assertTrue((result["warnings"] as List<*>).contains("device-path-denied"))
+    }
+
+    @Test
+    fun `file push succeeds inside allowed host and device scopes`() {
+        val root = Files.createTempDirectory("dak-push-ok")
+        val localFile = root.resolve("payload.txt").also { Files.writeString(it, "hi") }
+        val dispatcher = dispatcher(root, controlConfig(root, setOf(Capability.FILE_IMPORT)))
+
+        val result =
+            dispatcher.call(
+                "android_file_push",
+                mapOf(
+                    "rootPath" to root.toString(),
+                    "deviceSerial" to "emulator-5554",
+                    "localPath" to localFile.toString(),
+                    "remotePath" to "/sdcard/x",
+                    "confirmDestructive" to true,
+                ),
+            )
+
+        assertEquals("success", result["status"])
+    }
+
+    @Test
+    fun `file pull is blocked when remote path targets app-private storage`() {
+        val root = Files.createTempDirectory("dak-pull-private")
+        val dispatcher = dispatcher(root, controlConfig(root, setOf(Capability.FILE_EXPORT)))
+
+        val result =
+            dispatcher.call(
+                "android_file_pull",
+                mapOf(
+                    "rootPath" to root.toString(),
+                    "deviceSerial" to "emulator-5554",
+                    "remotePath" to "/data/data/com.other.app/databases/accounts.db",
+                ),
+            )
+
+        assertEquals("blocked", result["status"])
+        assertTrue((result["warnings"] as List<*>).contains("device-path-denied"))
+    }
+
+    @Test
+    fun `file pull succeeds for a public storage path`() {
+        val root = Files.createTempDirectory("dak-pull-ok")
+        val dispatcher = dispatcher(root, controlConfig(root, setOf(Capability.FILE_EXPORT)))
+
+        val result =
+            dispatcher.call(
+                "android_file_pull",
+                mapOf(
+                    "rootPath" to root.toString(),
+                    "deviceSerial" to "emulator-5554",
+                    "remotePath" to "/sdcard/Download/report.pdf",
+                ),
+            )
+
+        assertEquals("success", result["status"])
+    }
+
     private fun fakeAdb(root: java.nio.file.Path): String {
         val script = root.resolve("fake-adb-ctl.sh")
         Files.writeString(
@@ -250,14 +481,17 @@ class DeviceControlToolProviderTest {
             """
             #!/bin/bash
             # argv: ${'$'}1=-s ${'$'}2=serial ${'$'}3=verb ...
+            # The `shell` branch reassembles and re-evaluates the remaining args the way a real
+            # device's `/system/bin/sh -c "joined args"` would, instead of pattern-matching argv
+            # positions directly — otherwise this fake could never exercise shell-injection
+            # regressions, since ProcessBuilder delivers argv to this script pre-split.
             case "${'$'}3" in
               shell)
-                case "${'$'}4" in
-                  pm)    echo "pm ${'$'}5 ok" ;;
-                  am)    echo "am ${'$'}5 ok" ;;
-                  input) echo "input ok" ;;
-                  *)     echo "shell ${'$'}4" ;;
-                esac
+                shift 3
+                pm() { echo "pm ${'$'}* ok"; }
+                am() { echo "am ${'$'}* ok"; }
+                input() { echo "input ok"; }
+                eval "${'$'}@"
                 ;;
               emu)       echo "emu ${'$'}4 ok" ;;
               uninstall) echo "uninstall ok" ;;

@@ -77,4 +77,29 @@ class ToolProviderRegistryTest {
         assertEquals("unsupported", result["status"])
         assertTrue((result["warnings"] as List<*>).contains("unknown-tool"))
     }
+
+    @Test
+    fun `call is blocked for a tool whose group is not exposed, even though the provider knows it`() {
+        val reg =
+            registry(
+                setOf(ToolGroup.CORE),
+                provider(ToolGroup.CORE, listOf("a")),
+                provider(ToolGroup.DEVICE_CONTROL, listOf("b")),
+            )
+        val result = reg.call("b", emptyMap())
+        assertEquals("blocked", result["status"])
+        assertTrue((result["warnings"] as List<*>).contains("group-not-enabled"))
+    }
+
+    @Test
+    fun `call succeeds for a tool whose group is exposed`() {
+        val reg =
+            registry(
+                setOf(ToolGroup.CORE, ToolGroup.DEVICE_CONTROL),
+                provider(ToolGroup.CORE, listOf("a")),
+                provider(ToolGroup.DEVICE_CONTROL, listOf("b")),
+            )
+        val result = reg.call("b", emptyMap())
+        assertEquals("b", result["name"])
+    }
 }

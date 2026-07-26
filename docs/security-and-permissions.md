@@ -94,8 +94,8 @@ These tools are not listed unless the `device_control` tool group is exposed at 
 | `android_input_swipe` | `device_input` | Swipe between two coordinates via `input swipe`. |
 | `android_input_type` | `device_input` | Type text via `input text`. |
 | `android_input_key` | `device_input` | Send a keyevent via `input keyevent`, with optional long-press. |
-| `android_file_pull` | `file_export` | Pull a device file into `build/droidagentkit/pulls` and register it as a sensitive artifact. |
-| `android_file_push` | `file_import` | Push a host file to a device path. Host paths must stay inside an allowed root. |
+| `android_file_pull` | `file_export` | Pull a device file into `build/droidagentkit/pulls` and register it as a sensitive artifact. Device path must be under public/external storage; app-private storage (`/data/data`, `/data/user`, `/data/app`) is rejected — use the `storage` group for a debuggable app's own data. |
+| `android_file_push` | `file_import` | Push a host file to a device path. Host paths must stay inside an allowed root; device paths are restricted the same way as `android_file_pull`. Destructive: requires `confirmDestructive`. |
 | `android_run_flow` | `device_input`, `app_control` | Run a small sequence of primitive device-control actions against one device serial, stopping on the first error by default. Each step is re-authorized individually. |
 
 ### Opt-in `visuals` group
