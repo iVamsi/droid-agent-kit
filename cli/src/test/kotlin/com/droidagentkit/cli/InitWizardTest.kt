@@ -51,8 +51,8 @@ class InitWizardTest {
 
     @Test
     fun `declining the final confirmation returns null regardless of earlier answers`() {
-        // device-control=y, irreversible-followup=y, then no to remaining 4 questions, final-confirm=n
-        val result = wizard(listOf("n", "y", "y", "n", "n", "n", "n")).run()
+        // device-read=n, device-control=y, irreversible-followup=y, perfetto=n, visuals=n, storage=n, network=n, final-confirm=n
+        val result = wizard(listOf("n", "y", "y", "n", "n", "n", "n", "n")).run()
 
         assertNull(result)
     }

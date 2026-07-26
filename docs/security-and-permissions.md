@@ -41,7 +41,7 @@ redaction:
 ## Generating config with `droidagent init`
 
 `droidagent init` generates `.droidagentkit/config.yaml` without hand-writing `ToolGroup`/`Capability` enum
-names. Run it with no flags in a terminal for six yes/no prompts (one per tool group below, each explaining
+names. Run it with no flags in a terminal for six yes/no prompts (one per tool group, each explaining
 the risk in plain language, with follow-ups for bugreport capture, irreversible device-control actions, and
 golden-image overwrites). For scripted/CI setup, use a named profile instead:
 
@@ -49,7 +49,7 @@ golden-image overwrites). For scripted/CI setup, use a named profile instead:
 |---|---|
 | `core` | Nothing extra (the default). |
 | `device-control` | Device diagnostics (excluding bugreport) + device control (excluding uninstall/clear-data/permission mutation). |
-| `full` | Everything below, including `storage` and `network-experimental`. |
+| `full` | Everything: device diagnostics including bugreport + full device control including uninstall/clear-data/permission mutation + performance tracing + visual regression including golden-image overwrite + storage inspection + network capture. |
 | `storage` | Read-only SQLite/SharedPreferences inspection for a debuggable app, alone. |
 | `network-experimental` | Emulator-only mitmproxy interception, alone. |
 

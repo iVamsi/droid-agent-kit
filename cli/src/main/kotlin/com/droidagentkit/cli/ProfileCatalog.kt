@@ -66,7 +66,23 @@ object ProfileCatalog {
             "full" to FULL_EXPANSION,
         )
 
+    private val DESCRIPTIONS: Map<String, String> =
+        mapOf(
+            "core" to "Nothing extra (the default).",
+            "device-control" to
+                "Device diagnostics (excluding bugreport) + device control (excluding " +
+                "uninstall/clear-data/permission mutation).",
+            "full" to
+                "Everything: device diagnostics including bugreport + full device control including " +
+                "uninstall/clear-data/permission mutation + performance tracing + visual regression including " +
+                "golden-image overwrite + storage inspection + network capture.",
+            "storage" to "Read-only SQLite/SharedPreferences inspection for a debuggable app, alone.",
+            "network-experimental" to "Emulator-only mitmproxy interception, alone.",
+        )
+
     fun names(): List<String> = PROFILES.keys.sorted()
+
+    fun description(name: String): String = DESCRIPTIONS[name] ?: ""
 
     fun expand(profileNames: List<String>): Result<ProfileExpansion> {
         val unknown = profileNames.filter { it !in PROFILES }

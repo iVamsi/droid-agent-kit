@@ -6,6 +6,11 @@ pre-release convention `0.y.z-alpha` until a stable 1.0 release.
 
 ## Unreleased
 
+### Added
+
+- `droidagent init` command generates `.droidagentkit/config.yaml` interactively (a six-question wizard) or
+  via named `--profile` presets (`core`, `device-control`, `full`, `storage`, `network-experimental`).
+
 ## [0.1.0-alpha] - 2026-07-04
 
 ### Changed
