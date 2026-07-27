@@ -1,6 +1,8 @@
 # DroidAgentKit
 
 [![CI](https://github.com/iVamsi/droid-agent-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/iVamsi/droid-agent-kit/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/iVamsi/droid-agent-kit/actions/workflows/codeql.yml/badge.svg)](https://github.com/iVamsi/droid-agent-kit/actions/workflows/codeql.yml)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/iVamsi/droid-agent-kit/badge)](https://scorecard.dev/viewer/?uri=github.com/iVamsi/droid-agent-kit)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Kotlin](https://img.shields.io/badge/kotlin-JVM-7f52ff.svg)](https://kotlinlang.org)
 [![MCP](https://img.shields.io/badge/MCP-compatible-informational.svg)](https://modelcontextprotocol.io)
