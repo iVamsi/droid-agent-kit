@@ -8,6 +8,3 @@ local.properties
 
 # DroidAgentKit local artifacts
 **/build/droidagentkit/
-
-# Local superpowers skill working files (task briefs, review diffs) -- not project deliverables
-.superpowers/
