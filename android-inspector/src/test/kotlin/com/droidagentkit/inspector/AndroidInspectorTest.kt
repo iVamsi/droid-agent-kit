@@ -252,6 +252,105 @@ class AndroidInspectorTest {
     }
 
     @Test
+    fun `inspector resolves module type through a chain of two convention plugins`() {
+        val root = Files.createTempDirectory("dak-convention-chain")
+        Files.writeString(
+            root.resolve("settings.gradle.kts"),
+            """
+            pluginManagement { includeBuild("build-logic") }
+            rootProject.name = "ChainApp"
+            include(":feature:api")
+            """.trimIndent(),
+        )
+        Files.createDirectories(root.resolve("gradle"))
+        Files.writeString(
+            root.resolve("gradle/libs.versions.toml"),
+            """
+            [plugins]
+            myapp-android-library = { id = "myapp.android.library" }
+            myapp-feature-api = { id = "myapp.feature.api" }
+            """.trimIndent(),
+        )
+        Files.createDirectories(root.resolve("feature/api/src/main"))
+        Files.writeString(
+            root.resolve("feature/api/build.gradle.kts"),
+            """
+            plugins { alias(libs.plugins.myapp.feature.api) }
+            android { namespace = "com.example.chainapp.feature.api" }
+            """.trimIndent(),
+        )
+
+        val pluginSrcDir = root.resolve("build-logic/convention/src/main/kotlin")
+        Files.createDirectories(pluginSrcDir)
+        Files.writeString(
+            root.resolve("build-logic/convention/build.gradle.kts"),
+            """
+            plugins { `kotlin-dsl` }
+            gradlePlugin {
+                plugins {
+                    register("androidLibrary") {
+                        id = libs.plugins.myapp.android.library.get().pluginId
+                        implementationClass = "AndroidLibraryConventionPlugin"
+                    }
+                    register("featureApi") {
+                        id = libs.plugins.myapp.feature.api.get().pluginId
+                        implementationClass = "FeatureApiConventionPlugin"
+                    }
+                }
+            }
+            """.trimIndent(),
+        )
+        Files.writeString(
+            pluginSrcDir.resolve("AndroidLibraryConventionPlugin.kt"),
+            """
+            class AndroidLibraryConventionPlugin : Plugin<Project> {
+                override fun apply(target: Project) {
+                    target.apply(plugin = "com.android.library")
+                }
+            }
+            """.trimIndent(),
+        )
+        Files.writeString(
+            pluginSrcDir.resolve("FeatureApiConventionPlugin.kt"),
+            """
+            class FeatureApiConventionPlugin : Plugin<Project> {
+                override fun apply(target: Project) {
+                    target.apply(plugin = "myapp.android.library")
+                }
+            }
+            """.trimIndent(),
+        )
+
+        val report = AndroidProjectInspector().inspect(root)
+
+        assertEquals(AndroidModuleType.LIBRARY, report.modules.single().type)
+    }
+
+    @Test
+    fun `inspector recognizes com android test as a standalone test module`() {
+        val root = Files.createTempDirectory("dak-test-module")
+        Files.writeString(
+            root.resolve("settings.gradle.kts"),
+            """
+            rootProject.name = "TestModuleApp"
+            include(":benchmarks")
+            """.trimIndent(),
+        )
+        Files.createDirectories(root.resolve("benchmarks/src/main"))
+        Files.writeString(
+            root.resolve("benchmarks/build.gradle.kts"),
+            """
+            plugins { id("com.android.test") }
+            android { namespace = "com.example.benchmarks" }
+            """.trimIndent(),
+        )
+
+        val report = AndroidProjectInspector().inspect(root)
+
+        assertEquals(AndroidModuleType.TEST_MODULE, report.modules.single().type)
+    }
+
+    @Test
     fun `inspector returns partial report for broken or non android projects`() {
         val root = Files.createTempDirectory("dak-broken-project")
         Files.writeString(root.resolve("README.md"), "not an Android project")

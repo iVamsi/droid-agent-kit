@@ -100,6 +100,7 @@ class AndroidProjectInspector {
                 "com.android.application" in effectivePluginIds -> AndroidModuleType.APPLICATION
                 "com.android.dynamic-feature" in effectivePluginIds -> AndroidModuleType.DYNAMIC_FEATURE
                 "com.android.library" in effectivePluginIds -> AndroidModuleType.LIBRARY
+                "com.android.test" in effectivePluginIds -> AndroidModuleType.TEST_MODULE
                 "org.jetbrains.kotlin.multiplatform" in effectivePluginIds -> AndroidModuleType.KMP_ANDROID
                 "org.jetbrains.kotlin.jvm" in effectivePluginIds ||
                     "java" in effectivePluginIds ||
@@ -417,7 +418,19 @@ class AndroidProjectInspector {
                 }
             }
         }
-        return resolved
+        // Convention plugins can apply other convention plugins (e.g. a "feature api" plugin applying an
+        // "android library" plugin, which itself applies com.android.library); flatten those chains.
+        return resolved.keys.associateWith { expandTransitively(it, resolved) }
+    }
+
+    private fun expandTransitively(
+        id: String,
+        rawApplied: Map<String, Set<String>>,
+        visited: MutableSet<String> = mutableSetOf(),
+    ): Set<String> {
+        if (!visited.add(id)) return emptySet()
+        val direct = rawApplied[id].orEmpty()
+        return direct + direct.filter { it in rawApplied }.flatMap { expandTransitively(it, rawApplied, visited) }
     }
 
     /** Trims trailing Provider/`libs.plugins` accessor segments (`.get`, `.asProvider`, `.pluginId`, ...) until a known catalog alias matches. */
