@@ -1,5 +1,12 @@
 # DroidAgentKit
 
+[![CI](https://github.com/iVamsi/droid-agent-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/iVamsi/droid-agent-kit/actions/workflows/ci.yml)
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![Kotlin](https://img.shields.io/badge/kotlin-JVM-7f52ff.svg)](https://kotlinlang.org)
+[![MCP](https://img.shields.io/badge/MCP-compatible-informational.svg)](https://modelcontextprotocol.io)
+
+Give your AI coding agent real Android tools — Gradle, adb, logcat, lint, crash triage — through a local, permissioned MCP server instead of raw shell access.
+
 DroidAgentKit helps you work on Android projects with AI agents. It runs on your machine, talks to your Gradle tree and (when you allow it) your emulator or device, and gives agents structured answers instead of raw shell output.
 
 Everything stays local. Commands go through allowlists. Output is redacted before it comes back to the agent. Artifacts land under `build/droidagentkit` by default.
