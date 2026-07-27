@@ -192,6 +192,66 @@ class AndroidInspectorTest {
     }
 
     @Test
+    fun `inspector resolves module type through an included build-logic convention plugin`() {
+        val root = Files.createTempDirectory("dak-convention-plugin")
+        Files.writeString(
+            root.resolve("settings.gradle.kts"),
+            """
+            pluginManagement { includeBuild("build-logic") }
+            rootProject.name = "ConventionApp"
+            include(":app")
+            """.trimIndent(),
+        )
+        Files.createDirectories(root.resolve("gradle"))
+        Files.writeString(
+            root.resolve("gradle/libs.versions.toml"),
+            """
+            [plugins]
+            myapp-android-application = { id = "myapp.android.application" }
+            """.trimIndent(),
+        )
+        Files.createDirectories(root.resolve("app/src/main"))
+        Files.writeString(
+            root.resolve("app/build.gradle.kts"),
+            """
+            plugins { alias(libs.plugins.myapp.android.application) }
+            android { namespace = "com.example.conventionapp" }
+            """.trimIndent(),
+        )
+
+        val pluginSrcDir = root.resolve("build-logic/convention/src/main/kotlin")
+        Files.createDirectories(pluginSrcDir)
+        Files.writeString(
+            root.resolve("build-logic/convention/build.gradle.kts"),
+            """
+            plugins { `kotlin-dsl` }
+            gradlePlugin {
+                plugins {
+                    register("androidApplication") {
+                        id = libs.plugins.myapp.android.application.get().pluginId
+                        implementationClass = "AndroidApplicationConventionPlugin"
+                    }
+                }
+            }
+            """.trimIndent(),
+        )
+        Files.writeString(
+            pluginSrcDir.resolve("AndroidApplicationConventionPlugin.kt"),
+            """
+            class AndroidApplicationConventionPlugin : Plugin<Project> {
+                override fun apply(target: Project) {
+                    target.apply(plugin = "com.android.application")
+                }
+            }
+            """.trimIndent(),
+        )
+
+        val report = AndroidProjectInspector().inspect(root)
+
+        assertEquals(AndroidModuleType.APPLICATION, report.modules.single().type)
+    }
+
+    @Test
     fun `inspector returns partial report for broken or non android projects`() {
         val root = Files.createTempDirectory("dak-broken-project")
         Files.writeString(root.resolve("README.md"), "not an Android project")
