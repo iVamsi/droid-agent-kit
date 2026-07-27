@@ -4,11 +4,12 @@ object ConfigYaml {
     fun render(
         groups: Set<ToolGroup>,
         capabilities: Set<Capability>,
+        projectName: String,
     ): String {
         val lines = mutableListOf<String>()
         lines += "schemaVersion: 1"
         lines += "project:"
-        lines += "  name: inferred"
+        lines += "  name: $projectName"
         lines += "safety:"
         lines += "  allowGradleTasks:"
         lines += "    - \":*:test*UnitTest\""

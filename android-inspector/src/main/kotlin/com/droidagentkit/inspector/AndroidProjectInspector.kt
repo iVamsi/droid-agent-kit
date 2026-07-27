@@ -33,10 +33,11 @@ class AndroidProjectInspector {
         val projectName = parseProjectName(settingsText) ?: root.fileName?.toString() ?: "unknown"
         val modulePaths = parseIncludes(settingsText)
         if (modulePaths.isEmpty()) warnings.add("No Gradle modules were found in settings.")
+        val conventionPluginIds = resolveConventionPluginIds(root, settingsText, pluginAliases)
 
         val modules =
             modulePaths.mapNotNull { modulePath ->
-                inspectModule(root, modulePath, warnings, pluginAliases)
+                inspectModule(root, modulePath, warnings, pluginAliases, conventionPluginIds)
             }
         val support = if (modules.isEmpty()) ProjectSupport.PARTIAL else ProjectSupport.SUPPORTED
         return AndroidProjectReport(
@@ -82,6 +83,7 @@ class AndroidProjectInspector {
         modulePath: String,
         warnings: MutableList<String>,
         pluginAliases: Map<String, String>,
+        conventionPluginIds: Map<String, Set<String>>,
     ): AndroidModuleSummary? {
         val dir = root.resolve(modulePath.removePrefix(":").replace(':', '/'))
         if (!dir.exists() || !dir.isDirectory()) {
@@ -91,17 +93,18 @@ class AndroidProjectInspector {
         val buildFile = listOf(dir.resolve("build.gradle.kts"), dir.resolve("build.gradle")).firstOrNull { it.exists() }
         val buildText = buildFile?.let(Files::readString).orEmpty()
         val pluginIds = parsePluginIds(buildText, pluginAliases)
+        val effectivePluginIds = pluginIds + pluginIds.flatMap { conventionPluginIds[it].orEmpty() }
         val type =
             when {
-                "com.android.kotlin.multiplatform.library" in pluginIds -> AndroidModuleType.KMP_ANDROID
-                "com.android.application" in pluginIds -> AndroidModuleType.APPLICATION
-                "com.android.dynamic-feature" in pluginIds -> AndroidModuleType.DYNAMIC_FEATURE
-                "com.android.library" in pluginIds -> AndroidModuleType.LIBRARY
-                "org.jetbrains.kotlin.multiplatform" in pluginIds -> AndroidModuleType.KMP_ANDROID
-                "org.jetbrains.kotlin.jvm" in pluginIds ||
-                    "java" in pluginIds ||
-                    "java-library" in pluginIds ||
-                    "application" in pluginIds -> AndroidModuleType.JVM_TOOLING
+                "com.android.kotlin.multiplatform.library" in effectivePluginIds -> AndroidModuleType.KMP_ANDROID
+                "com.android.application" in effectivePluginIds -> AndroidModuleType.APPLICATION
+                "com.android.dynamic-feature" in effectivePluginIds -> AndroidModuleType.DYNAMIC_FEATURE
+                "com.android.library" in effectivePluginIds -> AndroidModuleType.LIBRARY
+                "org.jetbrains.kotlin.multiplatform" in effectivePluginIds -> AndroidModuleType.KMP_ANDROID
+                "org.jetbrains.kotlin.jvm" in effectivePluginIds ||
+                    "java" in effectivePluginIds ||
+                    "java-library" in effectivePluginIds ||
+                    "application" in effectivePluginIds -> AndroidModuleType.JVM_TOOLING
                 else -> AndroidModuleType.UNKNOWN
             }
         val namespace =
@@ -361,6 +364,75 @@ class AndroidProjectInspector {
             }
         }
         return result
+    }
+
+    /**
+     * Convention-plugin build-logic (e.g. Now in Android's `build-logic` composite build) hides the
+     * real AGP plugin ID inside a compiled plugin class in an `includeBuild(...)` project, invisible to
+     * a per-module plugin-id scan. This resolves, for each such custom plugin ID, the set of real plugin
+     * IDs it applies internally (via `apply(plugin = "...")`), by statically matching `gradlePlugin { ... }`
+     * registrations to their `implementationClass` source file. Best-effort only; an unresolved custom
+     * plugin ID simply leaves the module's type as UNKNOWN, same as before this existed.
+     */
+    private fun resolveConventionPluginIds(
+        root: Path,
+        settingsText: String,
+        aliases: Map<String, String>,
+    ): Map<String, Set<String>> {
+        val includedBuilds = Regex("""includeBuild\s*\(\s*["']([^"']+)["']""").findAll(settingsText).map { it.groupValues[1] }.toList()
+        if (includedBuilds.isEmpty()) return emptyMap()
+
+        val resolved = mutableMapOf<String, MutableSet<String>>()
+        for (buildDir in includedBuilds) {
+            val buildRoot = root.resolve(buildDir)
+            if (!buildRoot.isDirectory()) continue
+            val kotlinFiles =
+                runCatching {
+                    Files.walk(buildRoot).use { stream ->
+                        stream
+                            .filter { (it.toString().endsWith(".kt") || it.toString().endsWith(".kts")) && "/build/" !in it.toString() }
+                            .toList()
+                    }
+                }.getOrElse { emptyList() }
+            val registrationFiles = kotlinFiles.filter { it.toString().endsWith(".gradle.kts") }
+            for (file in registrationFiles) {
+                val text = runCatching { Files.readString(file) }.getOrNull() ?: continue
+                Regex("""register\(\s*"[^"]+"\s*\)\s*\{([^{}]*)\}""").findAll(text).forEach { match ->
+                    val block = match.groupValues[1]
+                    val implClass =
+                        Regex("""implementationClass\s*=\s*["']([^"']+)["']""")
+                            .find(block)
+                            ?.groupValues
+                            ?.get(1)
+                            ?.substringAfterLast('.')
+                    val literalId = Regex("""id\s*=\s*["']([^"']+)["']""").find(block)?.groupValues?.get(1)
+                    val aliasPath = Regex("""id\s*=\s*libs\.plugins\.([A-Za-z0-9_.]+)""").find(block)?.groupValues?.get(1)
+                    val pluginId = literalId ?: aliasPath?.let { aliasPathFor(aliases, it) }?.let(aliases::get)
+                    if (implClass == null || pluginId == null) return@forEach
+                    val implFile = kotlinFiles.firstOrNull { it.fileName.toString() == "$implClass.kt" } ?: return@forEach
+                    val implText = runCatching { Files.readString(implFile) }.getOrNull() ?: return@forEach
+                    val appliedIds =
+                        Regex("""apply\(\s*plugin\s*=\s*["']([^"']+)["']\s*\)""").findAll(implText).map { it.groupValues[1] }.toSet()
+                    if (appliedIds.isNotEmpty()) resolved.getOrPut(pluginId) { mutableSetOf() }.addAll(appliedIds)
+                }
+            }
+        }
+        return resolved
+    }
+
+    /** Trims trailing Provider/`libs.plugins` accessor segments (`.get`, `.asProvider`, `.pluginId`, ...) until a known catalog alias matches. */
+    private fun aliasPathFor(
+        aliases: Map<String, String>,
+        rawPath: String,
+    ): String? {
+        var candidate = rawPath
+        repeat(4) {
+            if (aliases.containsKey(candidate)) return candidate
+            val lastDot = candidate.lastIndexOf('.')
+            if (lastDot < 0) return null
+            candidate = candidate.substring(0, lastDot)
+        }
+        return null
     }
 
     private fun commandSpecsFor(

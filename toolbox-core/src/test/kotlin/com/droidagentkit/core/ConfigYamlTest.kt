@@ -12,7 +12,7 @@ class ConfigYamlTest {
             """
             schemaVersion: 1
             project:
-              name: inferred
+              name: demo
             safety:
               allowGradleTasks:
                 - ":*:test*UnitTest"
@@ -31,12 +31,12 @@ class ConfigYamlTest {
               extraPatterns: []
             """.trimIndent()
 
-        assertEquals(expected, ConfigYaml.render(emptySet(), emptySet()))
+        assertEquals(expected, ConfigYaml.render(emptySet(), emptySet(), "demo"))
     }
 
     @Test
     fun `render with capabilities omits the legacy boolean aliases`() {
-        val yaml = ConfigYaml.render(emptySet(), setOf(Capability.DEVICE_INPUT, Capability.APP_CONTROL))
+        val yaml = ConfigYaml.render(emptySet(), setOf(Capability.DEVICE_INPUT, Capability.APP_CONTROL), "demo")
 
         assertTrue(yaml.contains("  allowCapabilities:"))
         assertTrue(yaml.contains("    - app_control"))
@@ -48,7 +48,7 @@ class ConfigYamlTest {
 
     @Test
     fun `render with groups adds an mcp exposedGroups section`() {
-        val yaml = ConfigYaml.render(setOf(ToolGroup.DEVICE_READ, ToolGroup.DEVICE_CONTROL), emptySet())
+        val yaml = ConfigYaml.render(setOf(ToolGroup.DEVICE_READ, ToolGroup.DEVICE_CONTROL), emptySet(), "demo")
 
         assertTrue(yaml.contains("mcp:"))
         assertTrue(yaml.contains("  exposedGroups:"))
@@ -58,7 +58,7 @@ class ConfigYamlTest {
 
     @Test
     fun `render with empty groups omits the mcp section entirely`() {
-        val yaml = ConfigYaml.render(emptySet(), setOf(Capability.DEVICE_INPUT))
+        val yaml = ConfigYaml.render(emptySet(), setOf(Capability.DEVICE_INPUT), "demo")
 
         assertTrue(!yaml.contains("mcp:"))
     }
@@ -70,6 +70,7 @@ class ConfigYamlTest {
             ConfigYaml.render(
                 setOf(ToolGroup.DEVICE_READ, ToolGroup.DEVICE_CONTROL),
                 setOf(Capability.DEVICE_INPUT, Capability.APP_CONTROL),
+                "demo",
             )
         val configPath = root.resolve(".droidagentkit/config.yaml")
         Files.createDirectories(configPath.parent)
@@ -89,7 +90,7 @@ class ConfigYamlTest {
 
     @Test
     fun `render always includes APP_INSTALL when capabilities is non-empty, even if not requested`() {
-        val yaml = ConfigYaml.render(emptySet(), setOf(Capability.DEVICE_INPUT))
+        val yaml = ConfigYaml.render(emptySet(), setOf(Capability.DEVICE_INPUT), "demo")
 
         assertTrue(yaml.contains("    - app_install"))
     }

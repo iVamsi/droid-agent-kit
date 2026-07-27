@@ -444,11 +444,11 @@ class AgentDocumentWriter {
         val configPath = root.resolve(".droidagentkit/config.yaml")
         Files.createDirectories(configPath.parent)
         if (!configPath.exists()) {
-            Files.writeString(configPath, defaultConfigYaml())
+            Files.writeString(configPath, defaultConfigYaml(report.project.name))
         }
         artifacts += ArtifactRef(ArtifactType.OTHER, configPath.toString(), "text/yaml", "DroidAgentKit config")
         return artifacts
     }
 
-    private fun defaultConfigYaml(): String = ConfigYaml.render(emptySet(), emptySet())
+    private fun defaultConfigYaml(projectName: String): String = ConfigYaml.render(emptySet(), emptySet(), projectName)
 }
