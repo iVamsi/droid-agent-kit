@@ -14,6 +14,7 @@ enum class AndroidModuleType {
     DYNAMIC_FEATURE,
     KMP_ANDROID,
     JVM_TOOLING,
+    TEST_MODULE,
     UNKNOWN,
 }
 
