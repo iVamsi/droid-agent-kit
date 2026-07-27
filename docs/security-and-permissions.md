@@ -118,6 +118,15 @@ These tools are not listed unless the `device_control` tool group is exposed at 
 | `android_file_push` | `file_import` | Push a host file to a device path. Host paths must stay inside an allowed root; device paths are restricted the same way as `android_file_pull`. Destructive: requires `confirmDestructive`. |
 | `android_run_flow` | `device_input`, `app_control` | Run a small sequence of primitive device-control actions against one device serial, stopping on the first error by default. Each step is re-authorized individually. |
 
+### Opt-in `perfetto` group
+
+These tools are not listed unless the `perfetto` tool group is exposed at server startup. Both require the `sensitive_diagnostics` capability.
+
+| Tool | Capabilities | Description |
+| ---- | ------------ | ----------- |
+| `android_perfetto_capture` | `sensitive_diagnostics` | Capture a bounded Perfetto trace on a device (duration, data sources, buffer size, and max file size are all configurable with safe defaults), pull it to sensitive artifact storage, and delete the remote file. |
+| `android_perfetto_analyze` | `sensitive_diagnostics` | Run versioned Trace Processor SQL analyses (CPU utilization, main-thread slices, frame jank, binder latency, contention) over a local trace file and return a correlated evidence report. Read-only. Requires a configured `trace_processor_shell` (`safety.traceProcessorPath`, or pass `traceProcessorShell` per call) — there is no bundled or auto-downloaded binary. |
+
 ### Opt-in `visuals` group
 
 These tools are not listed unless the `visuals` tool group is exposed at server startup. They operate on host PNG/golden files under the project root and emit only pixel-diff evidence (no synthesized text-clipping, contrast, RTL, semantics, or recomposition findings).
