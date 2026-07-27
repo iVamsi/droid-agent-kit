@@ -338,8 +338,9 @@ class DroidAgentCli(
             expansion = wizardResult
         }
 
+        val projectName = AndroidProjectInspector().inspect(root).projectName
         Files.createDirectories(configPath.parent)
-        Files.writeString(configPath, ConfigYaml.render(expansion.groups, expansion.capabilities))
+        Files.writeString(configPath, ConfigYaml.render(expansion.groups, expansion.capabilities, projectName))
         println("Wrote $configPath")
         return 0
     }

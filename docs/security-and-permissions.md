@@ -19,7 +19,7 @@ Default `.droidagentkit/config.yaml`:
 ```yaml
 schemaVersion: 1
 project:
-  name: inferred
+  name: my-app # inferred from settings.gradle(.kts) rootProject.name, or the directory name
 safety:
   allowGradleTasks:
     - ":*:test*UnitTest"
