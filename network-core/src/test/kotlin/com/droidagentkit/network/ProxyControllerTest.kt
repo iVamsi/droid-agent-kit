@@ -75,10 +75,15 @@ class ProxyControllerTest {
                     binary: Boolean,
                 ): ByteArray {
                     calls += command.drop(3).joinToString(" ")
-                    return ByteArray(0)
+                    return if (command.drop(3).joinToString(" ").endsWith("get global http_proxy")) {
+                        ":none".toByteArray()
+                    } else {
+                        ByteArray(0)
+                    }
                 }
             }
-        ProxyController(adb).restoreProxy(exec, "emulator-5554", null)
+        val error = ProxyController(adb).restoreProxy(exec, "emulator-5554", null)
+        assertNull(error)
         assertTrue(calls.any { it == "shell settings put global http_proxy :none" })
     }
 
@@ -92,10 +97,34 @@ class ProxyControllerTest {
                     binary: Boolean,
                 ): ByteArray {
                     calls += command.drop(3).joinToString(" ")
-                    return ByteArray(0)
+                    return if (command.drop(3).joinToString(" ").endsWith("get global http_proxy")) {
+                        "10.0.2.2:8888".toByteArray()
+                    } else {
+                        ByteArray(0)
+                    }
                 }
             }
-        ProxyController(adb).restoreProxy(exec, "emulator-5554", "10.0.2.2:8888")
+        val error = ProxyController(adb).restoreProxy(exec, "emulator-5554", "10.0.2.2:8888")
+        assertNull(error)
         assertTrue(calls.any { it == "shell settings put global http_proxy 10.0.2.2:8888" })
+    }
+
+    @Test
+    fun `restoreProxy reports when verification fails after retries`() {
+        val exec =
+            object : NetworkCommandExecutor {
+                override fun run(
+                    command: List<String>,
+                    binary: Boolean,
+                ): ByteArray {
+                    return if (command.drop(3).joinToString(" ").endsWith("get global http_proxy")) {
+                        "10.0.2.2:9999".toByteArray()
+                    } else {
+                        ByteArray(0)
+                    }
+                }
+            }
+        val error = ProxyController(adb).restoreProxy(exec, "emulator-5554", null)
+        assertTrue(error!!.contains("proxy-restore-unverified"))
     }
 }
