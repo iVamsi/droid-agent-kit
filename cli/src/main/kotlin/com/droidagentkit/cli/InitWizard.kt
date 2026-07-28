@@ -62,7 +62,7 @@ class InitWizard(
         print("This will enable groups: $groupsText")
         print("and capabilities: $capsText")
 
-        return if (askYesNo("Write this to .droidagentkit/config.yaml?")) expansion else null
+        return if (askYesNo("Write this to the user policy (~/.droidagentkit/policy.yaml)?")) expansion else null
     }
 
     private fun askYesNo(question: String): Boolean {

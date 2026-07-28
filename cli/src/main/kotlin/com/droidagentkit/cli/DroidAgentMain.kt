@@ -141,7 +141,7 @@ class DroidAgentCli(
 
     private fun serveMcp(command: CliCommand.ServeMcp): Int {
         val projectRoot = ProjectLocator.resolve(command.project)
-        val config = resolveServerConfig(DroidAgentConfigLoader.load(projectRoot)) { System.err.println(it) }
+        val config = resolveServerConfig(DroidAgentConfigLoader.loadEffective(projectRoot)) { System.err.println(it) }
         val projectDispatcher = mcpDispatcher(config, projectRoot)
         val dispatcher =
             command.projectsRoot?.let { configuredRoot ->
@@ -152,7 +152,7 @@ class DroidAgentCli(
                 }
                 DroidAgentWorkspaceDispatcher(projectsRoot, projectDispatcher) { root ->
                     val projectConfig =
-                        resolveServerConfig(DroidAgentConfigLoader.load(root)) { System.err.println(it) }
+                        resolveServerConfig(DroidAgentConfigLoader.loadEffective(root)) { System.err.println(it) }
                     mcpDispatcher(projectConfig, root)
                 }
             } ?: projectDispatcher
@@ -192,7 +192,7 @@ class DroidAgentCli(
     private fun devices(command: CliCommand.Devices): Int {
         val root = ProjectLocator.resolve(command.project)
         val config =
-            when (val configResult = DroidAgentConfigLoader.load(root)) {
+            when (val configResult = DroidAgentConfigLoader.loadEffective(root)) {
                 is ConfigLoadResult.Loaded -> {
                     configResult.warnings.forEach { System.err.println("droidagentkit config warning: $it") }
                     configResult.config
@@ -230,7 +230,7 @@ class DroidAgentCli(
     ): Int {
         val root = ProjectLocator.resolve(project)
         val config =
-            when (val configResult = DroidAgentConfigLoader.load(root)) {
+            when (val configResult = DroidAgentConfigLoader.loadEffective(root)) {
                 is ConfigLoadResult.Loaded -> {
                     configResult.warnings.forEach { System.err.println("droidagentkit config warning: $it") }
                     configResult.config
@@ -308,8 +308,9 @@ class DroidAgentCli(
         }
         val root = Path.of(command.project).toAbsolutePath().normalize()
         val configPath = root.resolve(".droidagentkit/config.yaml")
-        if (Files.exists(configPath) && !command.force) {
-            System.err.println("$configPath already exists. Rerun with --force to regenerate it.")
+        val policyPath = DroidAgentConfigLoader.defaultUserPolicyPath()
+        if (Files.exists(policyPath) && !command.force) {
+            System.err.println("$policyPath already exists. Rerun with --force to regenerate it.")
             return 1
         }
 
@@ -338,10 +339,20 @@ class DroidAgentCli(
             expansion = wizardResult
         }
 
-        val projectName = AndroidProjectInspector().inspect(root).projectName
-        Files.createDirectories(configPath.parent)
-        Files.writeString(configPath, ConfigYaml.render(expansion.groups, expansion.capabilities, projectName))
-        println("Wrote $configPath")
+        // Grants (capabilities, tool groups) go to the user policy — the only config the server
+        // honors them from. The project config is seeded separately, without grants.
+        Files.createDirectories(policyPath.parent)
+        Files.writeString(policyPath, ConfigYaml.renderUserPolicy(expansion.groups, expansion.capabilities))
+        println("Wrote $policyPath")
+
+        if (Files.exists(configPath)) {
+            println("Kept existing $configPath (project config holds no grants; edit it for task allowlist/output options).")
+        } else {
+            val projectName = AndroidProjectInspector().inspect(root).projectName
+            Files.createDirectories(configPath.parent)
+            Files.writeString(configPath, ConfigYaml.renderProject(projectName))
+            println("Wrote $configPath")
+        }
         return 0
     }
 

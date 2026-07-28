@@ -450,5 +450,5 @@ class AgentDocumentWriter {
         return artifacts
     }
 
-    private fun defaultConfigYaml(projectName: String): String = ConfigYaml.render(emptySet(), emptySet(), projectName)
+    private fun defaultConfigYaml(projectName: String): String = ConfigYaml.renderProject(projectName)
 }

@@ -39,7 +39,6 @@ class ConfigAndSafetyTest {
             reports:
               outputDir: "out/reports"
             redaction:
-              enabled: false
               extraPatterns:
                 - "PRIVATE_[A-Z]+"
             """.trimIndent(),
@@ -54,7 +53,8 @@ class ConfigAndSafetyTest {
         assertFalse(loaded.safety.allowAppInstall)
         assertEquals(42, loaded.safety.maxCommandSeconds)
         assertEquals("out/reports", loaded.reports.outputDir)
-        assertFalse(loaded.redaction.enabled)
+        // Project files cannot disable redaction; default stays on.
+        assertTrue(loaded.redaction.enabled)
         assertEquals(listOf("PRIVATE_[A-Z]+"), loaded.redaction.extraPatterns)
         assertTrue(result.warnings.isEmpty())
     }
