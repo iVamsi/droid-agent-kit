@@ -6,6 +6,18 @@ pre-release convention `0.y.z-alpha` until a stable 1.0 release.
 
 ## Unreleased
 
+### Added
+
+- `release.yml` now also publishes `distribution/server.json` to the MCP registry on every tag,
+  via a new `publish-mcp-registry` job using `mcp-publisher login github-oidc` — same
+  no-stored-token model as the npm publish. Previously this was a manual step.
+
+### Fixed
+
+- `scripts/check-public-hygiene.sh` was flagging the synthetic `"/home/dev"` fixture in
+  `JsonAndCommandTest.kt` as a leaked personal path, failing CI on every push to `main` since
+  commit `5be79da`. Excluded that test file from the check.
+
 ## [0.2.2-alpha] - 2026-07-28
 
 ### Fixed
