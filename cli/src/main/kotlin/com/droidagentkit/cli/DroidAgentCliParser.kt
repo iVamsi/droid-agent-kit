@@ -33,6 +33,7 @@ class DroidAgentCliParser {
                     port = options["port"]?.toIntOrNull() ?: 8765,
                     bearerTokenFile = options["bearer-token-file"],
                     projectsRoot = options["projects-root"],
+                    allowRemote = options.containsKey("allow-remote"),
                 )
             "inspect" ->
                 CliCommand.Inspect(

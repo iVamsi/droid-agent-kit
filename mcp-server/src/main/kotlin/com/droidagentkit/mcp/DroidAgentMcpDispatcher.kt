@@ -583,7 +583,17 @@ class DroidAgentMcpDispatcher(
             }
         return runner(
             root,
-        ).run(com.droidagentkit.core.CommandSpec("gradle-${task.sanitizeId()}", command, root.toString(), false, false, timeoutSeconds))
+        ).run(
+            CommandSpec(
+                "gradle-${task.sanitizeId()}",
+                command,
+                root.toString(),
+                false,
+                false,
+                timeoutSeconds,
+                scrubGradleEnvironment = true,
+            ),
+        )
     }
 
     private fun lintRun(arguments: Map<String, Any?>): Map<String, Any> {
@@ -707,6 +717,8 @@ class DroidAgentMcpDispatcher(
         return candidates.maxByOrNull { Files.getLastModifiedTime(it).toMillis() }
     }
 
+    private val findingRedactor = Redactor(config.redaction)
+
     override fun resultMapWithFindings(
         result: ToolResult,
         findings: List<DiagnosticFinding>,
@@ -716,9 +728,9 @@ class DroidAgentMcpDispatcher(
         mapOf(
             "category" to finding.category,
             "severity" to finding.severity.wireName,
-            "title" to finding.title,
-            "detail" to finding.detail,
-            "location" to finding.location,
+            "title" to findingRedactor.redact(finding.title).text,
+            "detail" to findingRedactor.redact(finding.detail).text,
+            "location" to finding.location?.let { findingRedactor.redact(it).text },
         )
 
     private fun install(arguments: Map<String, Any?>): Map<String, Any> {

@@ -21,6 +21,7 @@ private const val INVALID_PARAMS = -32602
 private const val SERVER_NAME = "droidagentkit"
 private const val SERVER_VERSION = "0.1.0-alpha"
 internal const val MCP_PROTOCOL_VERSION = "2025-11-25"
+private const val MAX_MESSAGE_CHARS = 1_048_576
 
 private val ERROR_STATUSES = setOf("failed", "blocked", "unsupported")
 private val SUPPORTED_PROTOCOL_VERSIONS = setOf(MCP_PROTOCOL_VERSION)
@@ -29,6 +30,9 @@ class McpJsonRpcHandler(
     private val dispatcher: McpDispatcher,
 ) {
     fun handle(rawMessage: String): String? {
+        if (rawMessage.length > MAX_MESSAGE_CHARS) {
+            return errorResponse(null, INVALID_REQUEST, "Request exceeds $MAX_MESSAGE_CHARS character limit")
+        }
         val root =
             try {
                 KJson.parseToJsonElement(rawMessage).jsonObject

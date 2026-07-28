@@ -123,4 +123,22 @@ class JsonAndCommandTest {
         assertTrue(indexA < indexM)
         assertTrue(indexM < indexZ)
     }
+
+    @Test
+    fun `gradle environment scrubber removes option-injection vars and keeps PATH`() {
+        val env =
+            mutableMapOf(
+                "PATH" to "/usr/bin",
+                "GRADLE_OPTS" to "--init-script /tmp/evil.gradle",
+                "JAVA_TOOL_OPTIONS" to "-javaagent:evil.jar",
+                "HOME" to "/home/dev",
+            )
+
+        ProcessEnvironmentScrubber.scrubGradleOptionVars(env)
+
+        assertEquals("/usr/bin", env["PATH"])
+        assertEquals("/home/dev", env["HOME"])
+        assertTrue(!env.containsKey("GRADLE_OPTS"))
+        assertTrue(!env.containsKey("JAVA_TOOL_OPTIONS"))
+    }
 }

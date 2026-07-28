@@ -276,4 +276,14 @@ class McpJsonRpcHandlerTest {
 
         assertNull(response)
     }
+
+    @Test
+    fun `oversized request is rejected without parsing`() {
+        val handler = McpJsonRpcHandler(DroidAgentMcpDispatcher(DroidAgentConfig.default()))
+        val huge = "x".repeat(1_048_577)
+
+        val response = handler.handle(huge)
+
+        assertTrue(response!!.contains("character limit"))
+    }
 }

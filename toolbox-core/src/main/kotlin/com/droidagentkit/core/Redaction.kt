@@ -83,7 +83,12 @@ class Redactor(
             }
         }
         for ((index, pattern) in config.extraPatterns.withIndex()) {
-            val regex = Regex(pattern)
+            val regex =
+                try {
+                    Regex(pattern)
+                } catch (_: Exception) {
+                    continue
+                }
             if (regex.containsMatchIn(output)) {
                 output = output.replace(regex, "[REDACTED]")
                 applied.add("extra-$index")

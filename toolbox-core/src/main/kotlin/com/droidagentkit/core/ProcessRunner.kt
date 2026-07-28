@@ -18,10 +18,14 @@ class ProcessRunner(
         val started = Instant.now()
         val process =
             try {
-                ProcessBuilder(spec.command)
-                    .directory(Path.of(spec.workingDirectory).toFile())
-                    .redirectErrorStream(true)
-                    .start()
+                val builder =
+                    ProcessBuilder(spec.command)
+                        .directory(Path.of(spec.workingDirectory).toFile())
+                        .redirectErrorStream(true)
+                if (spec.scrubGradleEnvironment) {
+                    ProcessEnvironmentScrubber.scrubGradleOptionVars(builder.environment())
+                }
+                builder.start()
             } catch (error: Exception) {
                 return ToolResult(
                     status = ResultStatus.BLOCKED,
@@ -160,5 +164,24 @@ class ProcessRunner(
     private companion object {
         const val BUFFER_SIZE = 8 * 1024
         const val MAX_TEXT_CAPTURE_BYTES = 10 * 1024 * 1024
+    }
+}
+
+/**
+ * Removes host env vars that can inject Gradle/JVM flags outside the SAFE_GRADLE_ARGUMENTS
+ * allowlist. Applied to the ProcessBuilder environment map before start.
+ */
+object ProcessEnvironmentScrubber {
+    val GRADLE_OPTION_ENV_KEYS: Set<String> =
+        setOf(
+            "GRADLE_OPTS",
+            "JAVA_TOOL_OPTIONS",
+            "_JAVA_OPTIONS",
+            "JDK_JAVA_OPTIONS",
+            "GRADLE_ARGS",
+        )
+
+    fun scrubGradleOptionVars(env: MutableMap<String, String>) {
+        GRADLE_OPTION_ENV_KEYS.forEach { env.remove(it) }
     }
 }

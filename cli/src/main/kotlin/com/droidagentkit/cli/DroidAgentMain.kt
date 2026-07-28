@@ -176,11 +176,19 @@ class DroidAgentCli(
                     }
                     token
                 }
-            val server = DroidAgentMcpHttpServer(dispatcher, command.host, command.port, configuredToken)
-            server.start()
+            val server = DroidAgentMcpHttpServer(dispatcher, command.host, command.port, configuredToken, command.allowRemote)
+            try {
+                server.start()
+            } catch (error: IllegalArgumentException) {
+                System.err.println(error.message)
+                return 1
+            }
             println("DroidAgentKit MCP server listening at http://${command.host}:${command.port}/mcp")
             if (configuredToken == null) {
-                println("Set Authorization: Bearer ${server.bearerToken} in the MCP client configuration.")
+                System.err.println(
+                    "Bearer token written to stderr only. Prefer --bearer-token-file for non-interactive hosts.",
+                )
+                System.err.println("Set Authorization: Bearer ${server.bearerToken} in the MCP client configuration.")
             } else {
                 println("Using the bearer token from ${command.bearerTokenFile}.")
             }
