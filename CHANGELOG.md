@@ -6,6 +6,13 @@ pre-release convention `0.y.z-alpha` until a stable 1.0 release.
 
 ## Unreleased
 
+## [0.2.1-alpha] - 2026-07-28
+
+### Changed
+
+- Align `distribution/server.json` with the official MCP Registry schema (`io.github.iVamsi/droidagentkit`).
+- Add `mcpName` to `@droidagentkit/launcher` for registry ownership verification.
+
 ## [0.2.0-alpha] - 2026-07-28
 
 ### Added

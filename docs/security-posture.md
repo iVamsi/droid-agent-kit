@@ -30,11 +30,24 @@ Then on npmjs.com → package → Settings → Trusted Publisher → GitHub Acti
 Until that lands, install via the GitHub Release jar:
 
 ```bash
-java -jar droidagent-cli-0.2.0-alpha.jar serve-mcp --transport stdio --project auto
+java -jar droidagent-cli-0.2.1-alpha.jar serve-mcp --transport stdio --project auto
 ```
 
 Do **not** submit `distribution/server.json` to the MCP registry until
 `npx -y @droidagentkit/launcher@alpha` smoke is green on a clean machine.
+
+## MCP registry publish
+
+Official registry name: `io.github.iVamsi/droidagentkit` (must match `mcpName` in the
+npm launcher `package.json`).
+
+```bash
+# After mcpName is on the published npm package:
+brew install mcp-publisher   # or install binary from modelcontextprotocol/registry releases
+mcp-publisher login github
+mcp-publisher publish distribution/server.json
+curl "https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.iVamsi/droidagentkit"
+```
 
 
 ## Before 1.0
