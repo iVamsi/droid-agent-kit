@@ -2,37 +2,41 @@
 
 DroidAgentKit is designed to be installed once and then work in every Android project you open with an agent.
 
-## One-Time Local Setup
+## npm launcher (normal path)
 
-From the DroidAgentKit repo:
+No clone, no Gradle build. `@droidagentkit/launcher` is a thin Node shim (install-time only —
+the runtime stays pure JVM) that downloads the matching `droidagent-cli` fat jar from
+[GitHub Releases](https://github.com/iVamsi/droid-agent-kit/releases) on first run, verifies its
+SHA-256, caches it under `~/.droidagentkit/cli/`, and runs it. Requires a JDK 17+ on `PATH`.
+
+```bash
+npx -y @droidagentkit/launcher --version   # prints immutable launcher/server version metadata
+npx -y @droidagentkit/launcher             # runs `serve-mcp --transport stdio --project auto`
+
+# Or install it once:
+npm install -g @droidagentkit/launcher
+droidagent-mcp --version
+
+# Override the CLI location entirely (skips auto-fetch):
+DROIDAGENT_BIN=/path/to/droidagent droidagent-mcp
+```
+
+Point your agent's MCP config at `npx -y @droidagentkit/launcher` directly (e.g.
+`claude mcp add droidagent -- npx -y @droidagentkit/launcher`).
+
+The packaging decision (npm launcher primary, MCPB secondary, OCI rejected) and the release
+pipeline that builds and publishes it are documented in `docs/adrs/0001-packaging.md`.
+
+## Building from source
+
+For contributing, or to run a version that hasn't been released yet:
 
 ```bash
 ./gradlew :cli:installDist
 ./cli/build/install/droidagent/bin/droidagent install-mcp
 ```
 
-That is the normal path.
-
-## npm Launcher (preview)
-
-A thin Node launcher is available under `distribution/npm-launcher/` for hosts that prefer an
-npm-based install. Node is an install-time shim only; the runtime stays pure JVM.
-
-```bash
-# From a published package (once released):
-npm install -g @droidagentkit/launcher
-droidagent-mcp --version          # prints immutable launcher/server version metadata
-droidagent-mcp                    # spawns `droidagent serve-mcp --transport stdio --project auto`
-
-# Override the CLI location if it is not on PATH:
-DROIDAGENT_BIN=/path/to/droidagent droidagent-mcp
-```
-
-The packaging decision (npm launcher primary, MCPB secondary, OCI rejected) is documented in
-`docs/adrs/0001-packaging.md`. Registry metadata in `distribution/server.json` is published only
-after `distribution/smoke-test.sh` passes on a clean machine.
-
-For a preview:
+For a preview without writing files:
 
 ```bash
 ./cli/build/install/droidagent/bin/droidagent install-mcp --dry-run

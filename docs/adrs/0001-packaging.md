@@ -1,6 +1,6 @@
 # ADR 0001 — Packaging and registry distribution
 
-- **Status:** Proposed
+- **Status:** Accepted (npm launcher + release pipeline implemented 2026-07-27)
 - **Date:** 2026-07-22
 - **Decision driver:** Tranche 9 — Capability reporting, distribution, and documentation
 
@@ -71,3 +71,23 @@ Ship **both** in a layered way, with the npm launcher as the primary install pat
   prints the immutable version, and `serve-mcp --transport stdio` answers `initialize`.
 - The launcher never silently downgrades: it pins to the requested version and fails
   closed on checksum mismatch.
+
+## Implementation notes
+
+- `.github/workflows/release.yml`, triggered on `v*` tags, builds `cli:shadowJar` (a fat jar via
+  the `com.gradleup.shadow` plugin), attaches it plus a `.sha256` checksum to a GitHub Release,
+  and publishes `@droidagentkit/launcher` to npm using OIDC **trusted publishing** — no long-lived
+  `NPM_TOKEN` stored in CI, and npm attaches a provenance attestation automatically.
+- `scripts/check-release-version.sh <version>` gates the release: it fails the workflow if the
+  tag doesn't match every hardcoded version string in the repo (root `build.gradle.kts`,
+  `SERVER_VERSION`, the npm package, `mcp.json`, `server.json`, and the changelog).
+- `distribution/npm-launcher/index.js` implements the download/verify/cache/spawn flow described
+  above against this repo's real GitHub Releases; `distribution/smoke-test.sh` exercises it
+  against a local mock server fixture (`distribution/test-fixtures/mock-release-server.js`) so
+  the checksum-mismatch and cache-reuse paths are tested without a real release or network call.
+- **One-time bootstrap, not automated by CI:** npm's trusted-publisher configuration can only be
+  attached to a package that already exists, so the very first `npm publish` for
+  `@droidagentkit/launcher` must be run manually (`npm login && npm publish --access public`
+  from `distribution/npm-launcher/`) before configuring the trusted publisher on
+  npmjs.com (package → Settings → Trusted Publisher → GitHub Actions → this repo →
+  `release.yml`). Every release after that goes through CI with no stored token.
