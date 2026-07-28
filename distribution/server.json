@@ -2,11 +2,12 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.iVamsi/droidagentkit",
   "title": "DroidAgentKit",
-  "description": "Local-first Android development MCP: safe Gradle/lint/test/build tooling, read-only device diagnostics, bounded device mutation, Perfetto capture + Trace Processor analysis, visual regression, read-only app storage inspection, and experimental emulator-only network interception.",
+  "description": "Local-first Android development MCP: Gradle, adb, logcat, lint, crash triage, Perfetto, visuals.",
   "version": "0.2.1-alpha",
   "repository": {
     "url": "https://github.com/iVamsi/droid-agent-kit",
-    "source": "github"
+    "source": "github",
+    "id": "1289435288"
   },
   "packages": [
     {
