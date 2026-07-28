@@ -1,6 +1,6 @@
 {
   "name": "@droidagentkit/launcher",
-  "version": "0.2.1-alpha",
+  "version": "0.2.2-alpha",
   "mcpName": "io.github.iVamsi/droidagentkit",
   "description": "Thin Node launcher for the DroidAgentKit JVM MCP server. Locates the `droidagent` CLI (or a fetched archive), verifies its SHA-256, and spawns `droidagent serve-mcp --transport stdio`. Node is an install-time dependency only; the server runtime is pure JVM.",
   "license": "Apache-2.0",
