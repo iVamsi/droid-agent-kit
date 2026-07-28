@@ -8,6 +8,7 @@ sealed class CliCommand {
         val port: Int = 8765,
         val bearerTokenFile: String? = null,
         val projectsRoot: String? = null,
+        val allowRemote: Boolean = false,
     ) : CliCommand()
 
     data class Inspect(

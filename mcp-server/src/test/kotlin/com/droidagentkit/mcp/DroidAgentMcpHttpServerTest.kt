@@ -129,4 +129,38 @@ class DroidAgentMcpHttpServerTest {
 
         assertEquals(202, connection.responseCode)
     }
+
+    @Test
+    fun `non-loopback Host header is rejected`() {
+        val port = server.boundPort ?: error("server did not bind a port")
+        Socket("127.0.0.1", port).use { socket ->
+            val writer = socket.getOutputStream().writer(StandardCharsets.UTF_8)
+            writer.write(
+                "POST /mcp HTTP/1.1\r\n" +
+                    "Host: evil.example\r\n" +
+                    "Authorization: Bearer test-token\r\n" +
+                    "Content-Length: 2\r\n\r\n{}",
+            )
+            writer.flush()
+
+            val statusLine =
+                socket
+                    .getInputStream()
+                    .bufferedReader()
+                    .readLine()
+            assertTrue(statusLine.contains(" 403 "))
+        }
+    }
+
+    @Test
+    fun `start refuses a non-loopback bind without allowRemote`() {
+        val dispatcher = DroidAgentMcpDispatcher(DroidAgentConfig.default())
+        val remote = DroidAgentMcpHttpServer(dispatcher, host = "0.0.0.0", port = 0, bearerToken = "x", allowRemote = false)
+        try {
+            remote.start()
+            error("expected IllegalArgumentException")
+        } catch (error: IllegalArgumentException) {
+            assertTrue(error.message!!.contains("non-loopback"))
+        }
+    }
 }

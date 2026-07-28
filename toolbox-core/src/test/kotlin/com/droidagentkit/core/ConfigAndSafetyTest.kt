@@ -224,4 +224,25 @@ class ConfigAndSafetyTest {
         assertTrue(hit.applied.contains("generic-secret-assignment"))
         assertFalse(miss.applied.contains("generic-secret-assignment"))
     }
+
+    @Test
+    fun `config loader rejects nested-quantifier extraPatterns`() {
+        val dir = Files.createTempDirectory("dak-config-redos")
+        val config = dir.resolve(".droidagentkit/config.yaml")
+        Files.createDirectories(config.parent)
+        Files.writeString(
+            config,
+            """
+            schemaVersion: 1
+            redaction:
+              extraPatterns:
+                - "(a+)+"
+            """.trimIndent(),
+        )
+
+        val result = DroidAgentConfigLoader.load(dir)
+
+        assertTrue(result is ConfigLoadResult.Invalid)
+        assertEquals("redaction.extraPatterns", (result as ConfigLoadResult.Invalid).errors.single().key)
+    }
 }

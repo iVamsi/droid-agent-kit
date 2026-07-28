@@ -312,7 +312,14 @@ object DroidAgentConfigLoader {
                             val group = parseToolGroup(value, lineNumber, errors)
                             if (group != null) exposedGroups.add(group)
                         }
-                    "redaction.extraPatterns" -> extraPatterns.add(value)
+                    "redaction.extraPatterns" -> {
+                        val rejection = validateExtraPattern(value)
+                        if (rejection != null) {
+                            errors += ConfigError(lineNumber, "redaction.extraPatterns", rejection)
+                        } else {
+                            extraPatterns.add(value)
+                        }
+                    }
                 }
                 continue
             }
@@ -413,6 +420,28 @@ object DroidAgentConfigLoader {
     ): String =
         "line $lineNumber: '$key' is only honored in the user policy ($USER_POLICY_DISPLAY_PATH) — " +
             "ignored here (see docs/security-and-permissions.md)"
+
+    /**
+     * Rejects extraPatterns that are likely to hang the redactor (catastrophic backtracking) or
+     * that fail to compile. Keeps the hand-rolled YAML loader free of a regex engine timeout API.
+     */
+    private fun validateExtraPattern(pattern: String): String? {
+        if (pattern.length > MAX_EXTRA_PATTERN_LENGTH) {
+            return "pattern exceeds $MAX_EXTRA_PATTERN_LENGTH characters"
+        }
+        if (NESTED_QUANTIFIER.containsMatchIn(pattern)) {
+            return "pattern looks like nested quantifiers (ReDoS risk); simplify it"
+        }
+        return try {
+            Regex(pattern)
+            null
+        } catch (error: Exception) {
+            "invalid regex: ${error.message}"
+        }
+    }
+
+    private const val MAX_EXTRA_PATTERN_LENGTH = 256
+    private val NESTED_QUANTIFIER = Regex("""(\([^)]*[+*][^)]*\))[+*]|\([^)]*[+*][^)]*[+*][^)]*\)""")
 
     private fun String.unquote(): String = trim().removeSurrounding("\"").removeSurrounding("'")
 

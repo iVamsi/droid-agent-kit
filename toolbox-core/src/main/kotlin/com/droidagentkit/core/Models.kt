@@ -77,6 +77,8 @@ data class CommandSpec(
     val artifactName: String? = null,
     val sensitivity: ArtifactSensitivity = ArtifactSensitivity.PUBLIC,
     val maxCaptureBytes: Long = DEFAULT_BINARY_CAPTURE_BYTES,
+    /** When true, strips known Gradle/JVM option env vars that can bypass the arg allowlist. */
+    val scrubGradleEnvironment: Boolean = false,
 ) {
     private companion object {
         const val DEFAULT_BINARY_CAPTURE_BYTES = 256L * 1024 * 1024

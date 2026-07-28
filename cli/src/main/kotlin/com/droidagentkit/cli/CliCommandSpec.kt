@@ -27,6 +27,11 @@ object CliCommandRegistry {
                     CliOption("--port", "Bind port for http transport. Defaults to 8765."),
                     CliOption("--bearer-token-file", "Read the HTTP bearer token from a local file."),
                     CliOption("--projects-root", "Allow Android projects beneath this trusted directory."),
+                    CliOption(
+                        "--allow-remote",
+                        "Allow binding the HTTP transport to a non-loopback host (off by default).",
+                        takesValue = false,
+                    ),
                 ),
             ),
             CliCommandSpec(
