@@ -18,6 +18,9 @@ dependencyResolutionManagement {
     }
 }
 
+// dependency-verification is enabled automatically by gradle/verification-metadata.xml
+// (sha256 checksums; signatures intentionally off until keyring maintenance is in place).
+
 rootProject.name = "droid-agent-kit"
 
 include(

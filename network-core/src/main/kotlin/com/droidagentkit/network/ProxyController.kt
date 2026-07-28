@@ -37,16 +37,39 @@ class ProxyController(
         return ProxySnapshot(priorProxy = prior, installedProxy = proxy)
     }
 
-    /** Restore the prior proxy, or clear it if there was none. */
+    /**
+     * Restore the prior proxy (or clear it), retrying once and verifying the result.
+     * Returns a non-null error message when verification fails after retries.
+     */
     fun restoreProxy(
         exec: NetworkCommandExecutor,
         serial: String,
         priorProxy: String?,
-    ) {
-        if (priorProxy.isNullOrBlank()) {
-            exec.run(listOf(adbPath, "-s", serial, "shell", "settings", "put", "global", "http_proxy", ":none"))
-        } else {
-            exec.run(listOf(adbPath, "-s", serial, "shell", "settings", "put", "global", "http_proxy", priorProxy))
+    ): String? {
+        val expected = if (priorProxy.isNullOrBlank()) null else priorProxy
+        repeat(2) { attempt ->
+            try {
+                if (priorProxy.isNullOrBlank()) {
+                    exec.run(listOf(adbPath, "-s", serial, "shell", "settings", "put", "global", "http_proxy", ":none"))
+                } else {
+                    exec.run(listOf(adbPath, "-s", serial, "shell", "settings", "put", "global", "http_proxy", priorProxy))
+                }
+            } catch (error: Exception) {
+                if (attempt == 1) return "proxy-restore-failed: ${error.message}"
+                return@repeat
+            }
+            val current = readProxy(exec, serial)
+            if (current == expected) return null
+            if (attempt == 1) {
+                return "proxy-restore-unverified: expected '${expected ?: ":none"}' but device reports '${current ?: ":none"}'"
+            }
         }
+        return "proxy-restore-unverified"
     }
+
+    /** True when a leftover global HTTP proxy is set (useful as a preflight warning). */
+    fun hasLeftoverProxy(
+        exec: NetworkCommandExecutor,
+        serial: String,
+    ): Boolean = readProxy(exec, serial) != null
 }

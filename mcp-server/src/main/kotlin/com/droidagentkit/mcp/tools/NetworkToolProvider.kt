@@ -219,12 +219,19 @@ class NetworkToolProvider(
             } catch (e: NetworkCaptureException) {
                 return blocked(e.code, e.message ?: e.code)
             }
-        val proxy = ProxyController(adbPath).installProxy(exec, serial, "10.0.2.2", plan.listenPort)
+        val proxyController = ProxyController(adbPath)
+        if (proxyController.hasLeftoverProxy(exec, serial)) {
+            System.err.println(
+                "droidagentkit: device $serial already has a global HTTP proxy set; " +
+                    "capture will overwrite it and attempt to restore afterward.",
+            )
+        }
+        val proxy = proxyController.installProxy(exec, serial, "10.0.2.2", plan.listenPort)
         val jobId = "net-${context.safeId(serial)}-${System.currentTimeMillis()}"
         val restore: () -> Unit = {
-            try {
-                ProxyController(adbPath).restoreProxy(exec, serial, proxy.priorProxy)
-            } catch (_: Exception) {
+            val error = ProxyController(adbPath).restoreProxy(exec, serial, proxy.priorProxy)
+            if (error != null) {
+                System.err.println("droidagentkit: $error — check `adb -s $serial shell settings get global http_proxy`")
             }
         }
         val spec =

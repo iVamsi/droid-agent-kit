@@ -40,6 +40,12 @@ jobs:
           set -euo pipefail
           jar="droidagent-cli-${GITHUB_REF_NAME#v}.jar"
           shasum -a 256 "$jar" > "$jar.sha256"
+      - name: Generate CycloneDX SBOM
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          chmod +x scripts/generate-sbom.sh
+          bash scripts/generate-sbom.sh "$version" "cli/build/libs/droidagent-cli-${version}.cdx.json"
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -49,6 +55,7 @@ jobs:
           gh release create "$GITHUB_REF_NAME" \
             "cli/build/libs/droidagent-cli-${version}.jar" \
             "cli/build/libs/droidagent-cli-${version}.jar.sha256" \
+            "cli/build/libs/droidagent-cli-${version}.cdx.json" \
             --title "$GITHUB_REF_NAME" \
             --generate-notes
 
