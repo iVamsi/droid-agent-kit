@@ -1,7 +1,8 @@
 plugins {
     kotlin("jvm")
-    kotlin("plugin.serialization") version "2.3.20"
+    kotlin("plugin.serialization")
     application
+    alias(libs.plugins.shadow)
 }
 
 dependencies {
@@ -22,4 +23,13 @@ application {
 
 tasks.named<JavaExec>("run") {
     workingDir = rootProject.projectDir
+}
+
+// Release pipeline builds this via `./gradlew :cli:shadowJar` and publishes the jar as a
+// GitHub Release asset; the npm launcher downloads it and runs it with a plain `java -jar`.
+tasks.shadowJar {
+    archiveBaseName.set("droidagent-cli")
+    archiveClassifier.set("")
+    archiveVersion.set(project.version.toString())
+    mergeServiceFiles()
 }

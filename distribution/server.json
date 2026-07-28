@@ -4,8 +4,8 @@
   "description": "Local-first Android development MCP: safe Gradle/lint/test/build tooling, read-only device diagnostics, bounded device mutation, Perfetto capture + Trace Processor analysis, visual regression, read-only app storage inspection, and experimental emulator-only network interception.",
   "version": "0.1.0-alpha",
   "license": "Apache-2.0",
-  "repository": "https://github.com/droidagentkit/droid-agent-kit",
-  "homepage": "https://github.com/droidagentkit/droid-agent-kit",
+  "repository": "https://github.com/iVamsi/droid-agent-kit",
+  "homepage": "https://github.com/iVamsi/droid-agent-kit",
   "keywords": ["android", "mcp", "gradle", "adb", "emulator", "perfetto", "jetpack-compose"],
   "installations": {
     "npm": {

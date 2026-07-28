@@ -46,33 +46,39 @@ Full tool list and capability IDs: [`docs/security-and-permissions.md`](docs/sec
 
 ## Quick start
 
-Build the CLI:
+The fastest way to run DroidAgentKit needs no clone and no Gradle build — just Node (install-time
+only) and a JDK 17+ on your PATH. The `@droidagentkit/launcher` npm package downloads and caches
+the matching `droidagent-cli` jar from [GitHub Releases](https://github.com/iVamsi/droid-agent-kit/releases)
+the first time it runs, verifying its SHA-256 before executing it:
+
+```bash
+npx -y @droidagentkit/launcher --version
+```
+
+Point your agent's MCP config at it directly, e.g. for Claude Code:
+
+```bash
+claude mcp add droidagent -- npx -y @droidagentkit/launcher
+```
+
+### Building from source
+
+If you're contributing, or want to run a version that isn't released yet:
 
 ```bash
 ./gradlew :cli:installDist
-```
-
-Register it once for your agent (Codex, Claude Code, Cursor, Zed, VS Code, Android Studio, …):
-
-```bash
 ./cli/build/install/droidagent/bin/droidagent install-mcp
 ```
 
-Preview without writing files:
-
-```bash
-./cli/build/install/droidagent/bin/droidagent install-mcp --dry-run
-```
-
-For Android Studio across many projects under one folder:
+Register it once for your agent (Codex, Claude Code, Cursor, Zed, VS Code, Android Studio, …).
+Preview without writing files with `install-mcp --dry-run`. For Android Studio across many
+projects under one folder:
 
 ```bash
 droidagent install-mcp --targets android-studio --projects-root ~/Developer/StudioProjects
 ```
 
 Details and per-host config paths: [`docs/easy-mcp-installation.md`](docs/easy-mcp-installation.md).
-
-**npm launcher (preview):** `distribution/npm-launcher/` is a thin Node shim that spawns the JVM server. See [`.github/workflows/release.yml`](.github/workflows/release.yml).
 
 ## Try it in chat
 

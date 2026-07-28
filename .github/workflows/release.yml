@@ -1,0 +1,76 @@
+name: Release
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+*"]
+
+permissions:
+  contents: read
+
+jobs:
+  verify-version:
+    name: Verify version consistency
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Check every hardcoded version string matches the tag
+        run: bash scripts/check-release-version.sh "${GITHUB_REF_NAME#v}"
+
+  build-and-release:
+    name: Build fat jar and publish GitHub Release
+    needs: verify-version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      JAVA_TOOL_OPTIONS: -Djava.awt.headless=true
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Build fat jar
+        run: |
+          chmod +x gradlew
+          ./gradlew :cli:shadowJar --no-configuration-cache --stacktrace
+      - name: Checksum
+        working-directory: cli/build/libs
+        run: |
+          set -euo pipefail
+          jar="droidagent-cli-${GITHUB_REF_NAME#v}.jar"
+          shasum -a 256 "$jar" > "$jar.sha256"
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          gh release create "$GITHUB_REF_NAME" \
+            "cli/build/libs/droidagent-cli-${version}.jar" \
+            "cli/build/libs/droidagent-cli-${version}.jar.sha256" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes
+
+  publish-npm:
+    name: Publish npm launcher (OIDC trusted publishing)
+    needs: verify-version
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    defaults:
+      run:
+        working-directory: distribution/npm-launcher
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+      # Trusted publishing needs npm >= 11.5.1; pin/upgrade explicitly rather than trusting
+      # whatever setup-node's cached Node 22 build happens to bundle.
+      - name: Ensure npm supports OIDC trusted publishing
+        run: npm install -g npm@latest
+      - name: Publish
+        run: npm publish --access public

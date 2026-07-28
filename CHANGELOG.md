@@ -10,6 +10,11 @@ pre-release convention `0.y.z-alpha` until a stable 1.0 release.
 
 - `droidagent init` command generates `.droidagentkit/config.yaml` interactively (a six-question wizard) or
   via named `--profile` presets (`core`, `device-control`, `full`, `storage`, `network-experimental`).
+- Release pipeline (`.github/workflows/release.yml`, tag-triggered) builds a `droidagent-cli` fat jar via
+  the `com.gradleup.shadow` plugin, publishes it as a GitHub Release asset with a SHA-256 checksum, and
+  publishes `@droidagentkit/launcher` to npm using OIDC trusted publishing (no stored token). The npm
+  launcher now auto-downloads, verifies, and caches that jar on first run instead of requiring a local
+  Gradle build; see `.github/workflows/release.yml`.
 
 ## [0.1.0-alpha] - 2026-07-04
 
