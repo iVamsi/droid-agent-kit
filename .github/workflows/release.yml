@@ -80,4 +80,4 @@ jobs:
       - name: Ensure npm supports OIDC trusted publishing
         run: npm install -g npm@latest
       - name: Publish
-        run: npm publish --access public
+        run: npm publish --access public --tag alpha
