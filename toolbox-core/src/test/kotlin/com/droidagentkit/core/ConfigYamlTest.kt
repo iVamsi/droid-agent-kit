@@ -1,13 +1,14 @@
 package com.droidagentkit.core
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.nio.file.Files
 
 class ConfigYamlTest {
     @Test
-    fun `render with empty groups and capabilities matches the historical default config`() {
+    fun `renderProject writes a grant-free project config`() {
         val expected =
             """
             schemaVersion: 1
@@ -20,35 +21,33 @@ class ConfigYamlTest {
                 - ":*:assemble*Debug"
                 - ":*:*AndroidTest"
                 - ":*:validate*ScreenshotTest"
-              allowAdbInput: false
-              allowAppInstall: true
-              allowEmulatorStart: false
               maxCommandSeconds: 600
             reports:
               outputDir: "build/droidagentkit"
             redaction:
-              enabled: true
               extraPatterns: []
             """.trimIndent()
 
-        assertEquals(expected, ConfigYaml.render(emptySet(), emptySet(), "demo"))
+        assertEquals(expected, ConfigYaml.renderProject("demo"))
     }
 
     @Test
-    fun `render with capabilities omits the legacy boolean aliases`() {
-        val yaml = ConfigYaml.render(emptySet(), setOf(Capability.DEVICE_INPUT, Capability.APP_CONTROL), "demo")
+    fun `renderUserPolicy with capabilities includes APP_INSTALL and omits legacy aliases`() {
+        val yaml = ConfigYaml.renderUserPolicy(emptySet(), setOf(Capability.DEVICE_INPUT, Capability.APP_CONTROL))
 
         assertTrue(yaml.contains("  allowCapabilities:"))
         assertTrue(yaml.contains("    - app_control"))
+        assertTrue(yaml.contains("    - app_install"))
         assertTrue(yaml.contains("    - device_input"))
-        assertTrue(!yaml.contains("allowAdbInput"))
-        assertTrue(!yaml.contains("allowAppInstall"))
-        assertTrue(!yaml.contains("allowEmulatorStart"))
+        assertFalse(yaml.contains("allowAdbInput"))
+        assertFalse(yaml.contains("allowAppInstall"))
+        assertFalse(yaml.contains("allowEmulatorStart"))
+        assertFalse(yaml.contains("project:"))
     }
 
     @Test
-    fun `render with groups adds an mcp exposedGroups section`() {
-        val yaml = ConfigYaml.render(setOf(ToolGroup.DEVICE_READ, ToolGroup.DEVICE_CONTROL), emptySet(), "demo")
+    fun `renderUserPolicy with groups adds an mcp exposedGroups section`() {
+        val yaml = ConfigYaml.renderUserPolicy(setOf(ToolGroup.DEVICE_READ, ToolGroup.DEVICE_CONTROL), emptySet())
 
         assertTrue(yaml.contains("mcp:"))
         assertTrue(yaml.contains("  exposedGroups:"))
@@ -57,26 +56,23 @@ class ConfigYamlTest {
     }
 
     @Test
-    fun `render with empty groups omits the mcp section entirely`() {
-        val yaml = ConfigYaml.render(emptySet(), setOf(Capability.DEVICE_INPUT), "demo")
+    fun `renderUserPolicy with empty groups omits the mcp section`() {
+        val yaml = ConfigYaml.renderUserPolicy(emptySet(), setOf(Capability.DEVICE_INPUT))
 
-        assertTrue(!yaml.contains("mcp:"))
+        assertFalse(yaml.contains("mcp:"))
     }
 
     @Test
-    fun `render output round-trips through the config loader`() {
-        val root = Files.createTempDirectory("dak-configyaml-roundtrip")
+    fun `renderUserPolicy round-trips through the user-policy loader`() {
+        val path = Files.createTempFile("dak-policy", ".yaml")
         val yaml =
-            ConfigYaml.render(
+            ConfigYaml.renderUserPolicy(
                 setOf(ToolGroup.DEVICE_READ, ToolGroup.DEVICE_CONTROL),
                 setOf(Capability.DEVICE_INPUT, Capability.APP_CONTROL),
-                "demo",
             )
-        val configPath = root.resolve(".droidagentkit/config.yaml")
-        Files.createDirectories(configPath.parent)
-        Files.writeString(configPath, yaml)
+        Files.writeString(path, yaml)
 
-        val result = DroidAgentConfigLoader.load(root)
+        val result = DroidAgentConfigLoader.loadUserPolicy(path)
 
         assertTrue(result is ConfigLoadResult.Loaded)
         val loaded = result as ConfigLoadResult.Loaded
@@ -89,9 +85,19 @@ class ConfigYamlTest {
     }
 
     @Test
-    fun `render always includes APP_INSTALL when capabilities is non-empty, even if not requested`() {
-        val yaml = ConfigYaml.render(emptySet(), setOf(Capability.DEVICE_INPUT), "demo")
+    fun `renderProject round-trips through the project loader without grants`() {
+        val root = Files.createTempDirectory("dak-configyaml-project")
+        val configPath = root.resolve(".droidagentkit/config.yaml")
+        Files.createDirectories(configPath.parent)
+        Files.writeString(configPath, ConfigYaml.renderProject("demo"))
 
-        assertTrue(yaml.contains("    - app_install"))
+        val result = DroidAgentConfigLoader.load(root)
+
+        assertTrue(result is ConfigLoadResult.Loaded)
+        val loaded = result as ConfigLoadResult.Loaded
+        assertTrue(loaded.warnings.isEmpty())
+        assertEquals("demo", loaded.config.project.name)
+        assertTrue(loaded.config.mcp.exposedGroups.isEmpty())
+        assertTrue(loaded.config.safety.allowCapabilities.isEmpty())
     }
 }

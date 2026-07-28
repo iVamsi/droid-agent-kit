@@ -1,20 +1,26 @@
 # Security and Permissions Model
 
-DroidAgentKit is local-only by default.
+DroidAgentKit is local-only by default. Configuration trust is split (see
+[`docs/adrs/0002-threat-model.md`](adrs/0002-threat-model.md)): **grants live only in the user
+policy** (`~/.droidagentkit/policy.yaml`, override with `DROIDAGENTKIT_POLICY`); the per-project
+`.droidagentkit/config.yaml` can narrow settings (task allowlist, output dir, extra redaction
+patterns, `allowAppInstall: false`) but cannot escalate privileges.
 
 ## Command Safety
 
 - MCP v1 does not expose arbitrary shell execution.
-- Gradle tasks must match configured allowlist patterns.
+- Gradle tasks must match configured allowlist patterns (or the user policy must set
+  `safety.allowAnyGradleTask: true`). Project configs cannot use catch-all `*` / `**` patterns.
 - Gradle arguments are restricted to a small safe set (`--continue`, logging, stacktrace, offline,
   daemon, and rerun controls); init scripts, alternate settings files, project properties, and custom
   JVM properties are blocked.
-- adb install and input-style actions are controlled by config.
+- Capabilities, opt-in tool groups, host binary paths (`adbPath` etc.), and disabling redaction are
+  controlled by the **user policy**, never by the project config.
 - Device-specific commands require explicit serials.
 - An MCP server is bound to the project root supplied at startup. Tool calls cannot replace that root,
   and generated artifacts must remain under it.
 
-Default `.droidagentkit/config.yaml`:
+Default project `.droidagentkit/config.yaml` (no grants):
 
 ```yaml
 schemaVersion: 1
@@ -27,23 +33,33 @@ safety:
     - ":*:assemble*Debug"
     - ":*:*AndroidTest"
     - ":*:validate*ScreenshotTest"
-  allowAdbInput: false
-  allowAppInstall: true
-  allowEmulatorStart: false
   maxCommandSeconds: 600
 reports:
   outputDir: "build/droidagentkit"
 redaction:
-  enabled: true
   extraPatterns: []
+```
+
+Example user policy `~/.droidagentkit/policy.yaml` that grants storage inspection:
+
+```yaml
+schemaVersion: 1
+safety:
+  allowCapabilities:
+    - app_data_read
+    - app_install
+mcp:
+  exposedGroups:
+    - storage
 ```
 
 ## Generating config with `droidagent init`
 
-`droidagent init` generates `.droidagentkit/config.yaml` without hand-writing `ToolGroup`/`Capability` enum
-names. Run it with no flags in a terminal for six yes/no prompts (one per tool group, each explaining
-the risk in plain language, with follow-ups for bugreport capture, irreversible device-control actions, and
-golden-image overwrites). For scripted/CI setup, use a named profile instead:
+`droidagent init` writes **grants to the user policy** (`~/.droidagentkit/policy.yaml`) and seeds a
+grant-free project `.droidagentkit/config.yaml` when one is missing. Run it with no flags in a
+terminal for six yes/no prompts (one per tool group, each explaining the risk in plain language,
+with follow-ups for bugreport capture, irreversible device-control actions, and golden-image
+overwrites). For scripted/CI setup, use a named profile instead:
 
 | Profile | Enables |
 |---|---|
@@ -53,10 +69,11 @@ golden-image overwrites). For scripted/CI setup, use a named profile instead:
 | `storage` | Read-only SQLite/SharedPreferences inspection for a debuggable app, alone. |
 | `network-experimental` | Emulator-only mitmproxy interception, alone. |
 
-`--profile` accepts a comma-separated list (e.g. `--profile device-control,storage`). `init` refuses to
-overwrite an existing `config.yaml` unless `--force` is passed. The generated file is always fully explicit
-— literal group/capability names, never a reference to the profile that produced it — so it stays reviewable
-without needing to know what a profile currently expands to.
+`--profile` accepts a comma-separated list (e.g. `--profile device-control,storage`). `init` refuses
+to overwrite an existing user policy unless `--force` is passed. Existing project configs are kept as-is
+(they hold no grants). The generated policy is always fully explicit — literal group/capability names,
+never a reference to the profile that produced it — so it stays reviewable without needing to know what
+a profile currently expands to.
 
 ## MCP Tools
 

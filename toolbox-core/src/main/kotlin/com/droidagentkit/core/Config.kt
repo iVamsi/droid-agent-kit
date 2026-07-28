@@ -36,6 +36,7 @@ data class SafetyConfig(
             ":*:*AndroidTest",
             ":*:validate*ScreenshotTest",
         ),
+    val allowAnyGradleTask: Boolean = false,
     val allowAdbInput: Boolean = false,
     val allowAppInstall: Boolean = true,
     val allowEmulatorStart: Boolean = false,
@@ -46,7 +47,8 @@ data class SafetyConfig(
     val mitmProxyPath: String = "",
     val maxCommandSeconds: Long = 600,
 ) {
-    fun isGradleTaskAllowed(task: String): Boolean = allowGradleTasks.any { pattern -> globToRegex(pattern).matches(task) }
+    fun isGradleTaskAllowed(task: String): Boolean =
+        allowAnyGradleTask || allowGradleTasks.any { pattern -> globToRegex(pattern).matches(task) }
 
     fun allowedCapabilities(): Set<Capability> {
         if (allowCapabilities.isNotEmpty()) return allowCapabilities
@@ -103,12 +105,28 @@ sealed interface ConfigLoadResult {
     ) : ConfigLoadResult
 }
 
+/**
+ * Which file a config document came from. The trust split (ADR 0002) makes privileged keys —
+ * capabilities, opt-in tool groups, host binary paths, disabling redaction, any-task Gradle —
+ * honored only from [USER_POLICY]; a project config containing them gets warnings and defaults
+ * for those keys instead.
+ */
+enum class ConfigSource {
+    PROJECT,
+    USER_POLICY,
+}
+
 object DroidAgentConfigLoader {
+    private const val USER_POLICY_ENV = "DROIDAGENTKIT_POLICY"
+    private const val USER_POLICY_PROPERTY = "droidagentkit.policy"
+    private const val USER_POLICY_DISPLAY_PATH = "~/.droidagentkit/policy.yaml"
+
     private val knownSections = setOf("project", "safety", "mcp", "reports", "redaction")
     private val knownKeys =
         setOf(
             "project.name",
             "safety.allowGradleTasks",
+            "safety.allowAnyGradleTask",
             "safety.allowAdbInput",
             "safety.allowAppInstall",
             "safety.allowEmulatorStart",
@@ -124,11 +142,93 @@ object DroidAgentConfigLoader {
             "redaction.extraPatterns",
         )
 
+    /** Keys that can grant new authority and are therefore ignored (with a warning) in project files. */
+    private val privilegedKeys =
+        setOf(
+            "safety.allowAnyGradleTask",
+            "safety.allowAdbInput",
+            "safety.allowEmulatorStart",
+            "safety.allowCapabilities",
+            "safety.adbPath",
+            "safety.emulatorPath",
+            "safety.traceProcessorPath",
+            "safety.mitmProxyPath",
+            "mcp.exposedGroups",
+            "redaction.enabled",
+        )
+
+    /** Gradle task patterns that match every task; too broad for a project file (ADR 0002). */
+    private val catchAllGradlePatterns = setOf("*", "**")
+
+    fun defaultUserPolicyPath(): Path =
+        System.getProperty(USER_POLICY_PROPERTY)?.takeIf { it.isNotBlank() }?.let { Path.of(it) }
+            ?: System.getenv(USER_POLICY_ENV)?.takeIf { it.isNotBlank() }?.let { Path.of(it) }
+            ?: Path.of(System.getProperty("user.home"), ".droidagentkit", "policy.yaml")
+
     fun load(projectRoot: Path): ConfigLoadResult {
         val path = projectRoot.resolve(".droidagentkit/config.yaml")
         if (!path.exists()) return ConfigLoadResult.Loaded(DroidAgentConfig.default())
+        return parse(Files.readAllLines(path), ConfigSource.PROJECT)
+    }
 
-        val lines = Files.readAllLines(path)
+    fun loadUserPolicy(policyPath: Path = defaultUserPolicyPath()): ConfigLoadResult {
+        if (!policyPath.exists()) return ConfigLoadResult.Loaded(DroidAgentConfig.default())
+        return parse(Files.readAllLines(policyPath), ConfigSource.USER_POLICY)
+    }
+
+    /**
+     * Loads the project config and the user policy, then merges them per ADR 0002: privileged
+     * fields come from the policy, project-restrictable fields from the project file.
+     */
+    fun loadEffective(
+        projectRoot: Path,
+        policyPath: Path = defaultUserPolicyPath(),
+    ): ConfigLoadResult {
+        val projectResult = load(projectRoot)
+        val policyResult = loadUserPolicy(policyPath)
+        if (projectResult is ConfigLoadResult.Invalid) return projectResult
+        if (policyResult is ConfigLoadResult.Invalid) {
+            return ConfigLoadResult.Invalid(
+                policyResult.errors.map { ConfigError(it.line, it.key, "user policy: ${it.message}") },
+            )
+        }
+        val project = (projectResult as ConfigLoadResult.Loaded)
+        val policy = (policyResult as ConfigLoadResult.Loaded)
+        val warnings =
+            project.warnings +
+                policy.warnings.map { "user policy: $it" }
+        return ConfigLoadResult.Loaded(mergeWithUserPolicy(project.config, policy.config), warnings)
+    }
+
+    fun mergeWithUserPolicy(
+        project: DroidAgentConfig,
+        policy: DroidAgentConfig,
+    ): DroidAgentConfig =
+        project.copy(
+            safety =
+                project.safety.copy(
+                    allowAnyGradleTask = policy.safety.allowAnyGradleTask,
+                    allowAdbInput = policy.safety.allowAdbInput,
+                    allowAppInstall = project.safety.allowAppInstall && policy.safety.allowAppInstall,
+                    allowEmulatorStart = policy.safety.allowEmulatorStart,
+                    allowCapabilities = policy.safety.allowCapabilities,
+                    adbPath = policy.safety.adbPath,
+                    emulatorPath = policy.safety.emulatorPath,
+                    traceProcessorPath = policy.safety.traceProcessorPath,
+                    mitmProxyPath = policy.safety.mitmProxyPath,
+                ),
+            mcp = McpConfig(exposedGroups = policy.mcp.exposedGroups),
+            redaction =
+                RedactionConfig(
+                    enabled = policy.redaction.enabled,
+                    extraPatterns = (project.redaction.extraPatterns + policy.redaction.extraPatterns).distinct(),
+                ),
+        )
+
+    private fun parse(
+        lines: List<String>,
+        source: ConfigSource,
+    ): ConfigLoadResult {
 
         for ((index, rawLine) in lines.withIndex()) {
             val line = rawLine.trim()
@@ -157,6 +257,7 @@ object DroidAgentConfigLoader {
         var allowAdbInput = false
         var allowAppInstall = true
         var allowEmulatorStart = false
+        var allowAnyGradleTask = false
         val allowCapabilities = mutableSetOf<Capability>()
         val exposedGroups = mutableSetOf<ToolGroup>()
         var aliasUsedWithCapabilities = false
@@ -188,15 +289,29 @@ object DroidAgentConfigLoader {
             if (line.startsWith("- ")) {
                 val value = line.removePrefix("- ").unquote()
                 when (listTarget) {
-                    "safety.allowGradleTasks" -> allowGradleTasks.add(value)
-                    "safety.allowCapabilities" -> {
-                        val capability = parseCapability(value, lineNumber, errors)
-                        if (capability != null) allowCapabilities.add(capability)
-                    }
-                    "mcp.exposedGroups" -> {
-                        val group = parseToolGroup(value, lineNumber, errors)
-                        if (group != null) exposedGroups.add(group)
-                    }
+                    "safety.allowGradleTasks" ->
+                        if (source == ConfigSource.PROJECT && value in catchAllGradlePatterns) {
+                            warnings +=
+                                "line $lineNumber: Gradle task pattern '$value' matches every task and is too broad for a " +
+                                "project config — ignored. Set safety.allowAnyGradleTask: true in the user policy " +
+                                "($USER_POLICY_DISPLAY_PATH) to allow any task"
+                        } else {
+                            allowGradleTasks.add(value)
+                        }
+                    "safety.allowCapabilities" ->
+                        if (source == ConfigSource.PROJECT) {
+                            warnings += privilegedWarning(lineNumber, listTarget)
+                        } else {
+                            val capability = parseCapability(value, lineNumber, errors)
+                            if (capability != null) allowCapabilities.add(capability)
+                        }
+                    "mcp.exposedGroups" ->
+                        if (source == ConfigSource.PROJECT) {
+                            warnings += privilegedWarning(lineNumber, listTarget)
+                        } else {
+                            val group = parseToolGroup(value, lineNumber, errors)
+                            if (group != null) exposedGroups.add(group)
+                        }
                     "redaction.extraPatterns" -> extraPatterns.add(value)
                 }
                 continue
@@ -204,8 +319,27 @@ object DroidAgentConfigLoader {
             val key = line.substringBefore(":", missingDelimiterValue = "").trim()
             val value = line.substringAfter(":", missingDelimiterValue = "").trim().unquote()
             val fullKey = "$section.$key"
+            // In project files, privileged keys are ignored with a warning. Assignments equal to the
+            // built-in default (allowAdbInput: false, redaction.enabled: true, …) are silent no-ops so
+            // previously generated configs don't spam warnings. The reverse direction — granting a
+            // capability or disabling redaction — is always blocked here (ADR 0002).
+            if (source == ConfigSource.PROJECT && fullKey in privilegedKeys) {
+                val isDefaultNoop =
+                    when (fullKey) {
+                        "safety.allowAdbInput", "safety.allowEmulatorStart", "safety.allowAnyGradleTask" -> value == "false"
+                        "redaction.enabled" -> value == "true"
+                        else -> false
+                    }
+                if (!isDefaultNoop) {
+                    warnings += privilegedWarning(lineNumber, fullKey)
+                    continue
+                }
+            }
             when (fullKey) {
                 "project.name" -> projectName = value
+                "safety.allowAnyGradleTask" ->
+                    allowAnyGradleTask =
+                        value.toStrictBooleanOrError(lineNumber, fullKey, errors) ?: allowAnyGradleTask
                 "safety.allowAdbInput" -> {
                     allowAdbInput = value.toStrictBooleanOrError(lineNumber, fullKey, errors) ?: allowAdbInput
                     if (allowAdbInput && allowCapabilities.isNotEmpty()) aliasUsedWithCapabilities = true
@@ -250,6 +384,7 @@ object DroidAgentConfigLoader {
         val safety =
             SafetyConfig(
                 allowGradleTasks = allowGradleTasks.ifEmpty { SafetyConfig().allowGradleTasks },
+                allowAnyGradleTask = allowAnyGradleTask,
                 allowAdbInput = allowAdbInput,
                 allowAppInstall = allowAppInstall,
                 allowEmulatorStart = allowEmulatorStart,
@@ -271,6 +406,13 @@ object DroidAgentConfigLoader {
             warnings = warnings,
         )
     }
+
+    private fun privilegedWarning(
+        lineNumber: Int,
+        key: String,
+    ): String =
+        "line $lineNumber: '$key' is only honored in the user policy ($USER_POLICY_DISPLAY_PATH) — " +
+            "ignored here (see docs/adrs/0002-threat-model.md)"
 
     private fun String.unquote(): String = trim().removeSurrounding("\"").removeSurrounding("'")
 
