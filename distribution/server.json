@@ -1,36 +1,21 @@
 {
-  "$schema": "https://raw.githubusercontent.com/modelcontextprotocol/registry/main/docs/schema/mcp-registry-server.schema.json",
-  "name": "droidagentkit",
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.iVamsi/droidagentkit",
+  "title": "DroidAgentKit",
   "description": "Local-first Android development MCP: safe Gradle/lint/test/build tooling, read-only device diagnostics, bounded device mutation, Perfetto capture + Trace Processor analysis, visual regression, read-only app storage inspection, and experimental emulator-only network interception.",
-  "version": "0.2.0-alpha",
-  "license": "Apache-2.0",
-  "repository": "https://github.com/iVamsi/droid-agent-kit",
-  "homepage": "https://github.com/iVamsi/droid-agent-kit",
-  "keywords": ["android", "mcp", "gradle", "adb", "emulator", "perfetto", "jetpack-compose"],
-  "installations": {
-    "npm": {
-      "type": "npm",
-      "command": "npx",
-      "args": ["-y", "@droidagentkit/launcher"],
-      "env": {},
-      "os": ["darwin", "linux", "win32"]
+  "version": "0.2.1-alpha",
+  "repository": {
+    "url": "https://github.com/iVamsi/droid-agent-kit",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@droidagentkit/launcher",
+      "version": "0.2.1-alpha",
+      "transport": {
+        "type": "stdio"
+      }
     }
-  },
-  "runtime": {
-    "type": "jvm",
-    "minJavaVersion": 17,
-    "localOnly": true,
-    "optionalExecutables": ["adb", "emulator", "trace_processor_shell", "mitmproxy"]
-  },
-  "capabilities": {
-    "toolGroups": ["core", "device_read", "device_control", "perfetto", "visuals", "storage", "network_experimental"],
-    "optIn": true,
-    "destructiveRequiresConfirmation": true
-  },
-  "prerequisites": [
-    "JDK 17+ on PATH",
-    "adb on PATH for device tools",
-    "Perfetto trace_processor_shell for android_perfetto_analyze",
-    "mitmproxy + user-installed debug CA for experimental network interception (emulator only)"
   ]
 }

@@ -2,7 +2,7 @@
   "bundle": {
     "id": "droidagentkit",
     "name": "DroidAgentKit",
-    "version": "0.2.0-alpha",
+    "version": "0.2.1-alpha",
     "description": "Local-first Android development MCP server.",
     "license": "Apache-2.0",
     "homepage": "https://github.com/iVamsi/droid-agent-kit"
