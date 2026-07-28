@@ -90,4 +90,22 @@ class DroidAgentVisualRuleTest {
             rule.captureMatrix(name = "home_screen", matrix = matrix) { byteArrayOf(0) }
         }
     }
+
+    @Test
+    fun `captureCompose uses first matrix environment`() {
+        val outputDir = Files.createTempDirectory("dak-visual-rule-first")
+        val rule = DroidAgentVisualRule(outputDir)
+        val matrix =
+            VisualMatrix(
+                devices = listOf("phone_412x915", "tablet"),
+                themes = listOf("dark", "light"),
+                fontScales = listOf(1.0f),
+                locales = listOf("en"),
+            )
+
+        val capture = rule.captureCompose(name = "home_screen", matrix = matrix) { byteArrayOf(9) }
+
+        assertEquals("phone_412x915", capture.environment.device)
+        assertEquals("dark", capture.environment.theme)
+    }
 }

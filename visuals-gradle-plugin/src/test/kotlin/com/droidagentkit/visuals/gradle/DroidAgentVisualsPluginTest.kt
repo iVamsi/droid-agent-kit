@@ -139,6 +139,15 @@ class DroidAgentVisualsPluginTest {
         assertTrue(markdown.contains("fail-on-accessibility-warnings-deprecated"))
     }
 
+    @Test
+    fun `extension defaults failOnChangedGoldens to true`() {
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply(DroidAgentVisualsPlugin::class.java)
+        val extension = project.extensions.getByType(DroidAgentVisualsExtension::class.java)
+
+        assertTrue(extension.failOnChangedGoldens.get())
+    }
+
     private fun solidColorPng(
         color: Color,
         size: Int = 10,

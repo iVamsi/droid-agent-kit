@@ -130,6 +130,15 @@ class McpInstallerTest {
         )
         assertEquals(cwd, ProjectLocator.resolve("auto", emptyMap(), cwd))
         assertEquals(codexProject, ProjectLocator.resolve(codexProject.toString(), emptyMap(), cwd))
+        val cursorProject = Files.createTempDirectory("dak-cursor")
+        assertEquals(
+            cursorProject,
+            ProjectLocator.resolve(
+                requested = "auto",
+                environment = mapOf("CURSOR_PROJECT_DIR" to cursorProject.toString()),
+                currentDirectory = cwd,
+            ),
+        )
     }
 
     @Test

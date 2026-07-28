@@ -22,7 +22,7 @@ DROIDAGENT_BIN=/path/to/droidagent droidagent-mcp
 ```
 
 Point your agent's MCP config at `npx -y @droidagentkit/launcher` directly (e.g.
-`claude mcp add droidagent -- npx -y @droidagentkit/launcher`).
+`claude mcp add droidagentkit -- npx -y @droidagentkit/launcher`).
 
 The npm launcher is the primary install path; MCPB is secondary. The release pipeline that
 builds and publishes it lives in `.github/workflows/release.yml`.

@@ -27,9 +27,16 @@ class ProcessRunner(
                 }
                 builder.start()
             } catch (error: Exception) {
+                val commandName = spec.command.firstOrNull().orEmpty()
+                val hint =
+                    when {
+                        commandName.endsWith("adb") || commandName == "adb" ->
+                            " Install Android platform-tools, ensure adb is on PATH, or set safety.adbPath in ~/.droidagentkit/policy.yaml."
+                        else -> ""
+                    }
                 return ToolResult(
                     status = ResultStatus.BLOCKED,
-                    summary = "Could not start command ${spec.command.joinToString(" ")}: ${error.message}",
+                    summary = "Could not start command ${spec.command.joinToString(" ")}: ${error.message}.$hint",
                     warnings = listOf("command-start-failed"),
                 )
             }

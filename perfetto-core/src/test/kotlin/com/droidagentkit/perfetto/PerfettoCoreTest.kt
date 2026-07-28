@@ -70,6 +70,25 @@ class PerfettoCoreTest {
     }
 
     @Test
+    fun `parser handles nested objects and escaped strings`() {
+        val output =
+            """{"columns":["name","meta"],"rows":[["a\"b",{"nested":true,"n":2}]]}"""
+        val result = TraceProcessorOutputParser.parse(output)
+        assertTrue(result is TraceProcessorQueryResult.Rows)
+        val row = (result as TraceProcessorQueryResult.Rows).rows.single()
+        assertEquals("a\"b", row["name"])
+        @Suppress("UNCHECKED_CAST")
+        val meta = row["meta"] as Map<String, Any?>
+        assertEquals(true, meta["nested"])
+        assertEquals(2L, meta["n"])
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `capture config rejects buffer size below minimum`() {
+        PerfettoCaptureConfig(durationSeconds = 1, bufferSizeKb = 0)
+    }
+
+    @Test
     fun `analysis build for rows yields medium confidence and evidence`() {
         val rows = listOf(mapOf("process_name" to "com.example", "cpu_seconds" to 1.5))
         val result = PerfettoAnalysis.build(PerfettoAnalysisType.CPU_UTILIZATION, TraceProcessorQueryResult.Rows(rows))

@@ -137,6 +137,41 @@ class ReadinessAuditorTest {
         assertTrue(report.risks.none { it.id == "missing-baseline-profile" })
     }
 
+    @Test
+    fun `readiness level maps score bands`() {
+        val usable = sampleAndroidProject()
+        Files.writeString(usable.resolve("AGENTS.md"), "# Agents\n")
+        Files.createDirectories(usable.resolve(".github/workflows"))
+        Files.writeString(usable.resolve(".github/workflows/ci.yml"), "name: CI\nrun: ./gradlew test\n")
+        Files.writeString(usable.resolve("detekt.yml"), "build:\n  maxIssues: 0\n")
+        Files.writeString(usable.resolve("app/proguard-rules.pro"), "-keep class *\n")
+        Files.createDirectories(usable.resolve("docs"))
+        Files.writeString(usable.resolve("docs/devices.md"), "Expect emulator API 34.\n")
+        Files.createDirectories(usable.resolve("gradle"))
+        Files.writeString(usable.resolve("gradle/libs.versions.toml"), "[versions]\n")
+
+        val report = ReadinessAuditor(AndroidProjectInspector()).audit(usable)
+        assertTrue(report.score >= 50)
+        assertTrue(
+            report.level == ReadinessLevel.USABLE_WITH_REVIEW ||
+                report.level == ReadinessLevel.AGENT_READY ||
+                report.level == ReadinessLevel.SMALL_TASKS_ONLY,
+        )
+        // Capability summary is never attached by the auditor itself (never rewarded).
+        assertEquals(null, report.capabilitySummary)
+    }
+
+    @Test
+    fun `sparse project lands in unsafe or small-tasks band`() {
+        val root = Files.createTempDirectory("dak-sparse")
+        Files.writeString(root.resolve("settings.gradle.kts"), "rootProject.name = \"Sparse\"\n")
+
+        val report = ReadinessAuditor(AndroidProjectInspector()).audit(root)
+
+        assertTrue(report.score < 50)
+        assertEquals(ReadinessLevel.UNSAFE_FOR_AUTONOMY, report.level)
+    }
+
     private fun sampleAndroidProject() =
         Files.createTempDirectory("dak-ready").also { root ->
             Files.writeString(root.resolve("settings.gradle.kts"), "rootProject.name = \"Ready\"\ninclude(\":app\")")

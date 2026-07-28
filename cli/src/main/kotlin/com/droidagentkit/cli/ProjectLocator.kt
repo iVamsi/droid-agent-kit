@@ -16,6 +16,8 @@ object ProjectLocator {
                 "CODEX_PROJECT_DIR",
                 "GEMINI_PROJECT_DIR",
                 "GEMINI_WORKSPACE",
+                "CURSOR_PROJECT_DIR",
+                "CURSOR_WORKSPACE",
                 "PWD",
             ).firstNotNullOfOrNull { key ->
                 environment[key]?.takeIf { it.isNotBlank() }?.let(Path::of)
