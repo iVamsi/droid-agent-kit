@@ -15,8 +15,19 @@ Instead, use GitHub's private vulnerability reporting:
 2. Click **Report a vulnerability**.
 3. Include what you found, the affected version/commit, and steps to reproduce.
 
-You should get an initial response within a few days. Confirmed issues will be fixed and disclosed
-via a GitHub Security Advisory once a patch is available.
+You should get an initial response within **3 business days**. Confirmed issues will be fixed and
+disclosed via a GitHub Security Advisory once a patch is available.
+
+### Triage SLA (internal)
+
+| Severity | Initial response | Target fix on `main` |
+|----------|------------------|----------------------|
+| Critical (allowlist/capability/redaction bypass, RCE) | 1 business day | 7 days |
+| High (privilege escalation via config/path) | 3 business days | 14 days |
+| Medium / Low | 5 business days | next minor release |
+
+Dependabot, CodeQL, and OpenSSF Scorecard alerts are reviewed weekly. Tool-manifest hash drift
+(`ToolManifestIntegrityTest`) must be reviewed on every PR that touches tool schemas.
 
 ## Scope Notes
 

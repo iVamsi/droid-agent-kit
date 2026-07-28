@@ -116,13 +116,12 @@ class ProxyControllerTest {
                 override fun run(
                     command: List<String>,
                     binary: Boolean,
-                ): ByteArray {
-                    return if (command.drop(3).joinToString(" ").endsWith("get global http_proxy")) {
+                ): ByteArray =
+                    if (command.drop(3).joinToString(" ").endsWith("get global http_proxy")) {
                         "10.0.2.2:9999".toByteArray()
                     } else {
                         ByteArray(0)
                     }
-                }
             }
         val error = ProxyController(adb).restoreProxy(exec, "emulator-5554", null)
         assertTrue(error!!.contains("proxy-restore-unverified"))

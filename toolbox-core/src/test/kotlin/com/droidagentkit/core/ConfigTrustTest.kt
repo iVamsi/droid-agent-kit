@@ -34,9 +34,15 @@ class ConfigTrustTest {
 
         assertTrue(result is ConfigLoadResult.Loaded)
         val loaded = result as ConfigLoadResult.Loaded
-        assertTrue(loaded.config.safety.allowCapabilities.isEmpty())
+        assertTrue(
+            loaded.config.safety.allowCapabilities
+                .isEmpty(),
+        )
         assertEquals("adb", loaded.config.safety.adbPath)
-        assertTrue(loaded.config.mcp.exposedGroups.isEmpty())
+        assertTrue(
+            loaded.config.mcp.exposedGroups
+                .isEmpty(),
+        )
         assertTrue(loaded.config.redaction.enabled)
         assertTrue(loaded.warnings.any { it.contains("allowCapabilities") })
         assertTrue(loaded.warnings.any { it.contains("adbPath") })

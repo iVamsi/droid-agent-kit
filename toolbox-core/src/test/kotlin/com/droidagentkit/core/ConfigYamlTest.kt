@@ -97,7 +97,13 @@ class ConfigYamlTest {
         val loaded = result as ConfigLoadResult.Loaded
         assertTrue(loaded.warnings.isEmpty())
         assertEquals("demo", loaded.config.project.name)
-        assertTrue(loaded.config.mcp.exposedGroups.isEmpty())
-        assertTrue(loaded.config.safety.allowCapabilities.isEmpty())
+        assertTrue(
+            loaded.config.mcp.exposedGroups
+                .isEmpty(),
+        )
+        assertTrue(
+            loaded.config.safety.allowCapabilities
+                .isEmpty(),
+        )
     }
 }
