@@ -79,8 +79,10 @@ Ship **both** in a layered way, with the npm launcher as the primary install pat
   (`scripts/generate-sbom.sh`) to a GitHub Release, and publishes `@droidagentkit/launcher` to npm
   using OIDC **trusted publishing** — no long-lived `NPM_TOKEN` stored in CI, and npm attaches a
   provenance attestation automatically.
-- `distribution/server.json` is **not** auto-published by CI; it is promoted to the MCP registry only
-  after clean-machine smoke passes (see Consequences).
+- `distribution/server.json` **is** auto-published to the MCP registry by CI (`publish-mcp-registry`
+  job), after `publish-npm` succeeds, using `mcp-publisher login github-oidc` — same no-stored-token
+  model as npm. It only started being promoted after clean-machine smoke passed once (see
+  Consequences); it now tracks every tagged release automatically.
 - `scripts/check-release-version.sh <version>` gates the release: it fails the workflow if the
   tag doesn't match every hardcoded version string in the repo (root `build.gradle.kts`,
   `SERVER_VERSION`, the npm package, `mcp.json`, `server.json`, and the changelog).
@@ -90,7 +92,12 @@ Ship **both** in a layered way, with the npm launcher as the primary install pat
   the checksum-mismatch and cache-reuse paths are tested without a real release or network call.
 - **One-time bootstrap, not automated by CI:** npm's trusted-publisher configuration can only be
   attached to a package that already exists, so the very first `npm publish` for
-  `@droidagentkit/launcher` must be run manually (`npm login && npm publish --access public`
-  from `distribution/npm-launcher/`) before configuring the trusted publisher on
-  npmjs.com (package → Settings → Trusted Publisher → GitHub Actions → this repo →
-  `release.yml`). Every release after that goes through CI with no stored token.
+  `@droidagentkit/launcher` had to be run manually (`npm login && npm publish --access public`
+  from `distribution/npm-launcher/`) before configuring the trusted publisher on npmjs.com. The
+  same applied to the MCP registry name (`mcp-publisher login github` + `publish` once, manually).
+  A real gotcha hit during setup: the npm Trusted Publisher form saved the GitHub owner as
+  `ivamsi` (lowercase); GitHub's OIDC token carries the exact-cased `repository` claim
+  (`iVamsi/droid-agent-kit`), and npm compares it case-sensitively even though GitHub's own URLs
+  aren't. Every publish failed with a generic 404 until that was corrected — see
+  `docs/security-posture.md` for the full note. Every release since goes through CI with no
+  stored token, for both npm and the MCP registry.

@@ -13,40 +13,39 @@
    reviewing tool schema/description diffs).
 3. `bash distribution/smoke-test.sh` and `DROIDAGENT_E2E=1 bash distribution/smoke-test.sh` on a
    clean machine before publishing `distribution/server.json` to any MCP registry.
-## Bootstrap `@droidagentkit/launcher` (one-time)
+## Publishing (npm + MCP registry) — fully automated as of 0.2.2-alpha
 
-OIDC trusted publishing cannot create a **new** scoped package. First publish must be
-local after creating the npm org/user scope:
+`.github/workflows/release.yml` publishes both `@droidagentkit/launcher` to npm and
+`distribution/server.json` to the MCP registry on every `v*` tag push, using GitHub Actions
+OIDC for both (`npm publish` and `mcp-publisher login github-oidc`) — no stored tokens.
+
+**npm Trusted Publisher gotcha (already fixed, worth remembering):** npmjs.com's config form
+took the GitHub owner as free text; it was saved as `ivamsi` (lowercase). GitHub's own URLs are
+case-insensitive so that looked fine, but the OIDC token's `repository` claim carries the
+exact-cased login (`iVamsi/droid-agent-kit`), and npm compares case-sensitively. Every publish
+failed with a generic 404 until the saved value was corrected to `iVamsi` — check this first if
+OIDC publishing ever starts failing again after looking correctly configured.
+
+### One-time bootstrap history (for reference, not needed again for this package)
+
+OIDC trusted publishing cannot create a **new** scoped package or MCP registry name — the first
+publish of each had to be done manually, once:
 
 ```bash
 npm login
-cd distribution/npm-launcher
-npm publish --access public --tag alpha
-```
+cd distribution/npm-launcher && npm publish --access public --tag alpha
+# then: npmjs.com → package → Settings → Trusted Publisher → GitHub Actions → this repo → release.yml
 
-Then on npmjs.com → package → Settings → Trusted Publisher → GitHub Actions → this repo →
-`release.yml`. Re-run the failed Release workflow job (or push the next tag).
-
-Until that lands, install via the GitHub Release jar:
-
-```bash
-java -jar droidagent-cli-0.2.1-alpha.jar serve-mcp --transport stdio --project auto
-```
-
-Do **not** submit `distribution/server.json` to the MCP registry until
-`npx -y @droidagentkit/launcher@alpha` smoke is green on a clean machine.
-
-## MCP registry publish
-
-Official registry name: `io.github.iVamsi/droidagentkit` (must match `mcpName` in the
-npm launcher `package.json`).
-
-```bash
-# After mcpName is on the published npm package:
 brew install mcp-publisher   # or install binary from modelcontextprotocol/registry releases
 mcp-publisher login github
 mcp-publisher publish distribution/server.json
-curl "https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.iVamsi/droidagentkit"
+```
+
+If `@droidagentkit/launcher` or `io.github.iVamsi/droidagentkit` ever need to be recreated (new
+scope, new registry name), repeat this manual bootstrap once, then trusted publishing takes over.
+
+```bash
+curl "https://registry.modelcontextprotocol.io/v0/servers?search=io.github.iVamsi/droidagentkit"
 ```
 
 
