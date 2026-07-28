@@ -18,9 +18,11 @@ import com.droidagentkit.core.OperationRequest
 import com.droidagentkit.core.ProcessRunner
 import com.droidagentkit.core.Redactor
 import com.droidagentkit.core.ResultStatus
+import com.droidagentkit.core.ShellQuote
 import com.droidagentkit.core.Severity
 import com.droidagentkit.core.ToolGroup
 import com.droidagentkit.core.ToolResult
+import com.droidagentkit.core.Capability
 import com.droidagentkit.device.DeviceToolContext
 import com.droidagentkit.inspector.AndroidProjectInspector
 import com.droidagentkit.mcp.tools.BuildFailureParser
@@ -720,15 +722,6 @@ class DroidAgentMcpDispatcher(
         )
 
     private fun install(arguments: Map<String, Any?>): Map<String, Any> {
-        if (!config.safety.allowAppInstall) {
-            return resultMap(
-                ToolResult(
-                    status = ResultStatus.BLOCKED,
-                    summary = "App install is disabled by config.",
-                    warnings = listOf("app-install-disabled"),
-                ),
-            )
-        }
         val apk =
             arguments["apkPath"]?.toString()
                 ?: return resultMap(
@@ -747,19 +740,33 @@ class DroidAgentMcpDispatcher(
                         warnings = listOf("missing-device-serial"),
                     ),
                 )
+        val apkPath = Path.of(apk).toAbsolutePath().normalize()
+        val decision =
+            authorize(
+                OperationRequest(
+                    operationId = "android_app_install",
+                    requiredCapabilities = setOf(Capability.APP_INSTALL),
+                    destructive = false,
+                    deviceSerial = serial,
+                    hostPaths = listOf(apkPath),
+                ),
+            )
+        if (decision is AuthorizationDecision.Denied) {
+            return resultMap(
+                ToolResult(
+                    status = ResultStatus.BLOCKED,
+                    summary = decision.reason,
+                    warnings = listOf(decision.code),
+                ),
+            )
+        }
         return runAdb(
             listOf(
                 "-s",
                 serial,
                 "install",
-                if (arguments["reinstall"] ==
-                    true
-                ) {
-                    "-r"
-                } else {
-                    ""
-                },
-                apk,
+                if (arguments["reinstall"] == true) "-r" else "",
+                apkPath.toString(),
             ).filter { it.isNotBlank() },
             "adb-install",
             rootPath(arguments),
@@ -787,7 +794,19 @@ class DroidAgentMcpDispatcher(
                 )
         val activity = arguments["activityName"]?.toString()
         val component = if (activity.isNullOrBlank()) packageName else "$packageName/$activity"
-        return runAdb(listOf("-s", serial, "shell", "am", "start", "-n", component), "adb-launch", rootPath(arguments))
+        return runAdb(
+            listOf(
+                "-s",
+                serial,
+                "shell",
+                ShellQuote.quote("am"),
+                ShellQuote.quote("start"),
+                ShellQuote.quote("-n"),
+                ShellQuote.quote(component),
+            ),
+            "adb-launch",
+            rootPath(arguments),
+        )
     }
 
     private fun logcat(arguments: Map<String, Any?>): Map<String, Any> {
@@ -1001,7 +1020,16 @@ class DroidAgentMcpDispatcher(
         args: List<String>,
         id: String,
         root: Path,
-    ): ToolResult = runner(root).run(com.droidagentkit.core.CommandSpec(id, listOf("adb") + args, root.toString(), false, true, 60))
+    ): ToolResult = runner(root).run(
+        CommandSpec(
+            id,
+            listOf(config.safety.adbPath) + args,
+            root.toString(),
+            false,
+            true,
+            60,
+        ),
+    )
 
     private fun crashTriage(arguments: Map<String, Any?>): Map<String, Any> {
         val serial =

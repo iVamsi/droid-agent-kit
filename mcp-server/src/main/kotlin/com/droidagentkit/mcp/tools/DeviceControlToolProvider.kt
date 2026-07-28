@@ -10,6 +10,7 @@ import com.droidagentkit.core.ManagedJobSpec
 import com.droidagentkit.core.OperationRequest
 import com.droidagentkit.core.OutputMode
 import com.droidagentkit.core.ResultStatus
+import com.droidagentkit.core.ShellQuote
 import com.droidagentkit.core.ToolGroup
 import com.droidagentkit.core.ToolResult
 import com.droidagentkit.device.DeviceToolContext
@@ -142,7 +143,7 @@ class DeviceControlToolProvider(
             root,
             CommandSpec(
                 id = id,
-                command = listOf(adbPath, "-s", serial, "shell") + shellArgs.map(::shellQuote),
+                command = listOf(adbPath, "-s", serial, "shell") + shellArgs.map(ShellQuote::quote),
                 workingDirectory = root.toString(),
                 mutatesProject = false,
                 requiresDevice = true,
@@ -151,15 +152,6 @@ class DeviceControlToolProvider(
                 sensitivity = ArtifactSensitivity.SENSITIVE,
             ),
         )
-
-    /**
-     * `adb shell arg1 arg2 ...` re-joins every post-`shell` argument with spaces into a single
-     * string that the device executes via `/system/bin/sh -c`, independent of how the host-side
-     * argv list was built. Single-quoting each argument (with embedded quotes escaped) makes it
-     * always parse as one literal shell word on the device, closing shell-metacharacter injection
-     * through agent-supplied strings (permission names, URIs, typed text, etc).
-     */
-    private fun shellQuote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
 
     private fun runAdb(
         args: List<String>,
