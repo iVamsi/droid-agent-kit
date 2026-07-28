@@ -9,36 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  repair-main:
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          fetch-depth: 0
-      - name: Restore truncated MCP patch files on main
-        run: |
-          set -euo pipefail
-          NEED=0
-          if [ "$(wc -l < gradle/verification-metadata.xml)" -lt 100 ]; then NEED=1; fi
-          if [ "$(wc -l < mcp-server/src/main/kotlin/com/droidagentkit/mcp/DroidAgentMcpDispatcher.kt)" -lt 50 ]; then NEED=1; fi
-          if [ "$NEED" -eq 0 ]; then
-            echo "Build inputs already intact on main."
-            exit 0
-          fi
-          bash scripts/restore-mcp-patch-files.sh --no-git
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add gradle/verification-metadata.xml \
-            mcp-server/src/main/kotlin/com/droidagentkit/mcp/DroidAgentMcpDispatcher.kt
-          git commit -m "fix: restore verification-metadata.xml and DroidAgentMcpDispatcher.kt"
-          git push origin HEAD:main
-
   test:
-    needs: repair-main
-    if: always() && !cancelled() && (needs.repair-main.result == 'success' || needs.repair-main.result == 'skipped')
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -60,7 +31,9 @@ jobs:
           set -euo pipefail
           if [ "$(wc -l < gradle/verification-metadata.xml)" -lt 100 ] || \
              [ "$(wc -l < mcp-server/src/main/kotlin/com/droidagentkit/mcp/DroidAgentMcpDispatcher.kt)" -lt 50 ]; then
-            bash scripts/restore-mcp-patch-files.sh --no-git
+            echo "Build inputs look truncated. Restore with scripts/restore-verification-metadata.sh" \
+              "and regenerate DroidAgentMcpDispatcher.kt from source history." >&2
+            exit 1
           fi
       - name: Public repository hygiene
         run: bash scripts/check-public-hygiene.sh
