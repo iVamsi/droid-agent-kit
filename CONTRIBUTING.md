@@ -33,8 +33,9 @@ To run a single test class:
 ## Project layout
 
 See `CLAUDE.md`'s "Architecture" section for the current module list and what each one owns
-(`toolbox-core`, `android-inspector`, `mcp-server`, `auditor-cli`, `visuals-core`,
-`visuals-gradle-plugin`, `visuals-android-test`, `cli`).
+(`toolbox-core`, `android-inspector`, `android-device-core`, `mcp-server`, `auditor-cli`,
+`visuals-core`, `visuals-gradle-plugin`, `visuals-android-test`, `perfetto-core`,
+`storage-inspector`, `network-core`, `cli`).
 
 ## Before you open a PR
 

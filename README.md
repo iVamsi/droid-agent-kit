@@ -46,10 +46,14 @@ Full tool list and capability IDs: [`docs/security-and-permissions.md`](docs/sec
 
 ## Quick start
 
-The fastest way to run DroidAgentKit needs no clone and no Gradle build — just Node (install-time
-only) and a JDK 17+ on your PATH. The `@droidagentkit/launcher` npm package downloads and caches
-the matching `droidagent-cli` jar from [GitHub Releases](https://github.com/iVamsi/droid-agent-kit/releases)
-the first time it runs, verifying its SHA-256 before executing it:
+**Prerequisites:** JDK 17+ on `PATH`, Node 18+ (install-time only for the launcher). Optional:
+Android `adb` / platform-tools for device tools; set `ANDROID_HOME` or configure `adbPath` in the
+user policy (`~/.droidagentkit/policy.yaml`).
+
+The `@droidagentkit/launcher` npm package downloads and caches the matching `droidagent-cli` jar from
+[GitHub Releases](https://github.com/iVamsi/droid-agent-kit/releases) the first time it runs,
+verifying its SHA-256 before executing it. The launcher always runs `serve-mcp` — for `init` /
+`install-mcp` / `audit` use `java -jar` on the downloaded jar or build from source.
 
 ```bash
 npx -y @droidagentkit/launcher --version
@@ -58,7 +62,7 @@ npx -y @droidagentkit/launcher --version
 Point your agent's MCP config at it directly, e.g. for Claude Code:
 
 ```bash
-claude mcp add droidagent -- npx -y @droidagentkit/launcher
+claude mcp add droidagentkit -- npx -y @droidagentkit/launcher
 ```
 
 ### Building from source
@@ -80,6 +84,8 @@ droidagent install-mcp --targets android-studio --projects-root ~/Developer/Stud
 
 Details and per-host config paths: [`docs/easy-mcp-installation.md`](docs/easy-mcp-installation.md).
 Packaging/distribution decisions: [`docs/adrs/0001-packaging.md`](docs/adrs/0001-packaging.md).
+Security model + full tool tables: [`docs/security-and-permissions.md`](docs/security-and-permissions.md).
+CLI reference + troubleshooting: [`docs/cli-reference.md`](docs/cli-reference.md), [`docs/troubleshooting.md`](docs/troubleshooting.md).
 
 ## Try it in chat
 
@@ -99,7 +105,9 @@ You describe the goal; the agent picks tools from the list it was given at start
 1. Your agent starts `droidagent serve-mcp --transport stdio --project auto` (or talks to the localhost HTTP endpoint Android Studio uses on macOS).
 2. MCP handshake (`initialize`, then `tools/list`).
 3. The agent calls `android_*` tools via `tools/call`. You don't call them by hand.
-4. `--project auto` resolves the active project from `CLAUDE_PROJECT_DIR`, `CODEX_WORKSPACE`, cwd, and similar env vars — one user-wide install, many projects.
+4. `--project auto` resolves the active project from `CLAUDE_PROJECT_DIR`, `CODEX_WORKSPACE` /
+   `CODEX_PROJECT_DIR`, `GEMINI_PROJECT_DIR` / `GEMINI_WORKSPACE`, `CURSOR_PROJECT_DIR` /
+   `CURSOR_WORKSPACE`, `PWD`, then cwd — one user-wide install, many projects.
 
 Optional **resources** and **workflow prompts** are available on non–Android Studio hosts. Tool listings include hints like `readOnlyHint` and `destructiveHint` where relevant.
 

@@ -569,9 +569,12 @@ class DroidAgentMcpDispatcher(
         }
         val wrapper = if (System.getProperty("os.name").startsWith("Windows")) "gradlew.bat" else "./gradlew"
         if (!root.resolve(wrapper.removePrefix("./")).exists()) {
+            val wrapperPath = root.resolve(wrapper.removePrefix("./"))
             return ToolResult(
                 status = ResultStatus.BLOCKED,
-                summary = "Gradle wrapper was not found at ${root.resolve(wrapper.removePrefix("./"))}.",
+                summary =
+                    "Gradle wrapper was not found at $wrapperPath. " +
+                        "Run `gradle wrapper` in the project, or open a project that already has gradlew.",
                 warnings = listOf("missing-gradle-wrapper"),
             )
         }

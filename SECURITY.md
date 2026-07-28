@@ -27,7 +27,8 @@ disclosed via a GitHub Security Advisory once a patch is available.
 | Medium / Low | 5 business days | next minor release |
 
 Dependabot, CodeQL, and OpenSSF Scorecard alerts are reviewed weekly. Tool-manifest hash drift
-(`ToolManifestIntegrityTest`) must be reviewed on every PR that touches tool schemas.
+(`ToolManifestIntegrityTest`) must be reviewed on every PR that touches tool schemas. See
+[docs/security-posture.md](docs/security-posture.md) for the per-release checklist.
 
 ## Scope Notes
 

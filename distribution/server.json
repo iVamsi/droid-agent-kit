@@ -2,7 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/modelcontextprotocol/registry/main/docs/schema/mcp-registry-server.schema.json",
   "name": "droidagentkit",
   "description": "Local-first Android development MCP: safe Gradle/lint/test/build tooling, read-only device diagnostics, bounded device mutation, Perfetto capture + Trace Processor analysis, visual regression, read-only app storage inspection, and experimental emulator-only network interception.",
-  "version": "0.1.0-alpha",
+  "version": "0.2.0-alpha",
   "license": "Apache-2.0",
   "repository": "https://github.com/iVamsi/droid-agent-kit",
   "homepage": "https://github.com/iVamsi/droid-agent-kit",

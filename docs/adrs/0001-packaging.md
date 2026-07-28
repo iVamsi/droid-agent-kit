@@ -75,9 +75,12 @@ Ship **both** in a layered way, with the npm launcher as the primary install pat
 ## Implementation notes
 
 - `.github/workflows/release.yml`, triggered on `v*` tags, builds `cli:shadowJar` (a fat jar via
-  the `com.gradleup.shadow` plugin), attaches it plus a `.sha256` checksum to a GitHub Release,
-  and publishes `@droidagentkit/launcher` to npm using OIDC **trusted publishing** — no long-lived
-  `NPM_TOKEN` stored in CI, and npm attaches a provenance attestation automatically.
+  the `com.gradleup.shadow` plugin), attaches it plus a `.sha256` checksum and a CycloneDX SBOM
+  (`scripts/generate-sbom.sh`) to a GitHub Release, and publishes `@droidagentkit/launcher` to npm
+  using OIDC **trusted publishing** — no long-lived `NPM_TOKEN` stored in CI, and npm attaches a
+  provenance attestation automatically.
+- `distribution/server.json` is **not** auto-published by CI; it is promoted to the MCP registry only
+  after clean-machine smoke passes (see Consequences).
 - `scripts/check-release-version.sh <version>` gates the release: it fails the workflow if the
   tag doesn't match every hardcoded version string in the repo (root `build.gradle.kts`,
   `SERVER_VERSION`, the npm package, `mcp.json`, `server.json`, and the changelog).

@@ -6,15 +6,32 @@ pre-release convention `0.y.z-alpha` until a stable 1.0 release.
 
 ## Unreleased
 
+## [0.2.0-alpha] - 2026-07-28
+
 ### Added
 
-- `droidagent init` command generates `.droidagentkit/config.yaml` interactively (a six-question wizard) or
-  via named `--profile` presets (`core`, `device-control`, `full`, `storage`, `network-experimental`).
-- Release pipeline (`.github/workflows/release.yml`, tag-triggered) builds a `droidagent-cli` fat jar via
-  the `com.gradleup.shadow` plugin, publishes it as a GitHub Release asset with a SHA-256 checksum, and
-  publishes `@droidagentkit/launcher` to npm using OIDC trusted publishing (no stored token). The npm
-  launcher now auto-downloads, verifies, and caches that jar on first run instead of requiring a local
-  Gradle build; see `docs/adrs/0001-packaging.md`.
+- User policy (`~/.droidagentkit/policy.yaml`) as the only place that can grant capabilities, expose
+  opt-in tool groups, set host binary paths, or disable redaction (ADR 0002). `droidagent init`
+  writes the policy and seeds a grant-free project config.
+- Release pipeline (`.github/workflows/release.yml`, tag-triggered) builds a `droidagent-cli` fat jar,
+  attaches SHA-256 + CycloneDX SBOM, and publishes `@droidagentkit/launcher` via OIDC trusted publishing.
+- Tool-manifest integrity test (SHA-256 pin of every tool name/description/schema).
+- CLI/docs: `docs/cli-reference.md`, `docs/troubleshooting.md`, docs index; Cursor project-dir env support.
+
+### Security
+
+- Project config can no longer escalate privileges (config trust split).
+- Every `adb shell` path is shell-quoted; `apkPath` confined to project root via `OperationPolicy`.
+- Gradle runs scrub `GRADLE_OPTS` / `JAVA_TOOL_OPTIONS` and related env vars.
+- HTTP: reject non-loopback bind unless `--allow-remote`; Host allowlist; digest-based bearer compare.
+- Findings redaction; stdio message size cap; nested-quantifier `extraPatterns` rejected.
+- Proxy restore retries + verifies; leftover-proxy preflight warning.
+- Gradle wrapper `distributionSha256Sum` pinned.
+
+### Changed
+
+- MCP server id standardized to `droidagentkit` in docs/quickstart.
+- `allowAnyGradleTask` (user policy only) replaces project-file catch-all `*` patterns.
 
 ## [0.1.0-alpha] - 2026-07-04
 

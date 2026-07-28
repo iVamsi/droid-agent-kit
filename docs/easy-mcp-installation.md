@@ -22,7 +22,7 @@ DROIDAGENT_BIN=/path/to/droidagent droidagent-mcp
 ```
 
 Point your agent's MCP config at `npx -y @droidagentkit/launcher` directly (e.g.
-`claude mcp add droidagent -- npx -y @droidagentkit/launcher`).
+`claude mcp add droidagentkit -- npx -y @droidagentkit/launcher`).
 
 The packaging decision (npm launcher primary, MCPB secondary, OCI rejected) and the release
 pipeline that builds and publishes it are documented in `docs/adrs/0001-packaging.md`.
