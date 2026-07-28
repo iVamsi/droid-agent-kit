@@ -278,13 +278,39 @@ class DeviceReadToolProviderTest {
         assertTrue(start.containsKey("jobId"))
     }
 
+    @Test
+    fun `permission audit does not allow shell metacharacter injection via packageName`() {
+        val root = Files.createTempDirectory("dak-perm-injection")
+        val marker = root.resolve("injected.marker")
+        val config =
+            DroidAgentConfig.default().copy(
+                safety = DroidAgentConfig.default().safety.copy(adbPath = fakeAdb(root)),
+            )
+        val dispatcher = dispatcher(root, config)
+
+        val result =
+            dispatcher.call(
+                "android_permission_audit",
+                mapOf(
+                    "rootPath" to root.toString(),
+                    "deviceSerial" to "emulator-5554",
+                    "packageName" to "com.example; touch $marker",
+                ),
+            )
+
+        assertEquals("success", result["status"])
+        assertTrue(!Files.exists(marker))
+    }
+
     private fun fakeAdb(root: java.nio.file.Path): String {
         val script = root.resolve("fake-adb.sh")
         Files.writeString(
             script,
             """
             #!/bin/bash
-            # argv: ${'$'}1=-s ${'$'}2=serial ${'$'}3=shell|bugreport ${'$'}4=cmd ...
+            # argv: ${'$'}1=-s ${'$'}2=serial ${'$'}3=shell|bugreport ...
+            # The shell branch reassembles and re-evaluates remaining args the way a real device's
+            # `/system/bin/sh -c "joined args"` would, so ShellQuote regressions stay testable.
             case "${'$'}3" in
               bugreport)
                 mkdir -p "${'$'}4"
@@ -292,19 +318,18 @@ class DeviceReadToolProviderTest {
                 echo "Bugreport written to ${'$'}4"
                 ;;
               shell)
-                case "${'$'}4" in
-                  dumpsys)
-                    case "${'$'}5" in
-                      meminfo) echo "Total RAM: 1,234,567 KB"; echo "Free RAM: 123,456 KB"; echo "Used RAM: 1,111,111 KB" ;;
-                      battery) echo "level: 42"; echo "status: Discharging"; echo "health: Good"; echo "temperature: 250"; echo "voltage: 4200" ;;
-                      package) echo "Package [${'$'}6]"; echo "  runtime permissions:"; echo "    android.permission.CAMERA: granted=false" ;;
-                      *) echo "dumpsys ${'$'}5" ;;
-                    esac
-                    ;;
-                  pidof) echo "4242" ;;
-                  logcat) echo "log line 1"; echo "log line 2" ;;
-                  *) echo "shell ${'$'}4" ;;
-                esac
+                shift 3
+                dumpsys() {
+                  case "${'$'}1" in
+                    meminfo) echo "Total RAM: 1,234,567 KB"; echo "Free RAM: 123,456 KB"; echo "Used RAM: 1,111,111 KB" ;;
+                    battery) echo "level: 42"; echo "status: Discharging"; echo "health: Good"; echo "temperature: 250"; echo "voltage: 4200" ;;
+                    package) echo "Package [${'$'}2]"; echo "  runtime permissions:"; echo "    android.permission.CAMERA: granted=false" ;;
+                    *) echo "dumpsys ${'$'}1" ;;
+                  esac
+                }
+                pidof() { echo "4242"; }
+                logcat() { echo "log line 1"; echo "log line 2"; }
+                eval "${'$'}@"
                 ;;
               *) echo "unknown adb command" ;;
             esac

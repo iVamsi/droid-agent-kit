@@ -378,4 +378,100 @@ class McpDispatcherTest {
         val findings = result["findings"] as List<Map<*, *>>
         assertEquals("compiler.kotlin", findings.single()["category"])
     }
+
+    @Test
+    fun `app launch does not allow shell metacharacter injection via packageName`() {
+        val root = Files.createTempDirectory("dak-launch-injection")
+        val marker = root.resolve("injected.marker")
+        val adb = root.resolve("fake-adb-launch.sh")
+        Files.writeString(
+            adb,
+            """
+            #!/bin/bash
+            case "${'$'}3" in
+              shell)
+                shift 3
+                am() { echo "am ${'$'}* ok"; }
+                eval "${'$'}@"
+                ;;
+              *) echo "ok" ;;
+            esac
+            exit 0
+            """.trimIndent(),
+        )
+        Files.setPosixFilePermissions(
+            adb,
+            java.nio.file.attribute.PosixFilePermissions
+                .fromString("rwxr-xr-x"),
+        )
+        val config =
+            DroidAgentConfig.default().copy(
+                safety = DroidAgentConfig.default().safety.copy(adbPath = adb.toString()),
+            )
+        val dispatcher = DroidAgentMcpDispatcher(config, root)
+
+        val result =
+            dispatcher.call(
+                "android_app_launch",
+                mapOf(
+                    "rootPath" to root.toString(),
+                    "deviceSerial" to "emulator-5554",
+                    "packageName" to "com.example; touch $marker",
+                ),
+            )
+
+        assertEquals("success", result["status"])
+        assertTrue(!Files.exists(marker))
+    }
+
+    @Test
+    fun `app install blocks apkPath outside the project root`() {
+        val root = Files.createTempDirectory("dak-apk-confine")
+        val outside = Files.createTempDirectory("dak-apk-outside")
+        val apk = outside.resolve("app.apk")
+        Files.writeString(apk, "fake")
+        val dispatcher = DroidAgentMcpDispatcher(DroidAgentConfig.default(), root)
+
+        val result =
+            dispatcher.call(
+                "android_app_install",
+                mapOf(
+                    "rootPath" to root.toString(),
+                    "deviceSerial" to "emulator-5554",
+                    "apkPath" to apk.toString(),
+                ),
+            )
+
+        assertEquals("blocked", result["status"])
+        assertTrue((result["warnings"] as List<*>).contains("host-path-denied"))
+    }
+
+    @Test
+    fun `app install is blocked when APP_INSTALL capability is disabled`() {
+        val root = Files.createTempDirectory("dak-apk-cap")
+        val apk = root.resolve("app.apk")
+        Files.writeString(apk, "fake")
+        val config =
+            DroidAgentConfig.default().copy(
+                safety =
+                    DroidAgentConfig.default().safety.copy(
+                        allowAppInstall = false,
+                        allowCapabilities = emptySet(),
+                    ),
+            )
+        val dispatcher = DroidAgentMcpDispatcher(config, root)
+
+        val result =
+            dispatcher.call(
+                "android_app_install",
+                mapOf(
+                    "rootPath" to root.toString(),
+                    "deviceSerial" to "emulator-5554",
+                    "apkPath" to apk.toString(),
+                ),
+            )
+
+        assertEquals("blocked", result["status"])
+        assertTrue((result["warnings"] as List<*>).contains("capability-not-enabled"))
+    }
 }

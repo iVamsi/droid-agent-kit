@@ -10,6 +10,7 @@ import com.droidagentkit.core.ManagedJobSpec
 import com.droidagentkit.core.OperationRequest
 import com.droidagentkit.core.OutputMode
 import com.droidagentkit.core.ResultStatus
+import com.droidagentkit.core.ShellQuote
 import com.droidagentkit.core.ToolGroup
 import com.droidagentkit.core.ToolResult
 import com.droidagentkit.device.DeviceToolContext
@@ -254,7 +255,7 @@ class DeviceReadToolProvider(
             root,
             CommandSpec(
                 id = id,
-                command = listOf(adbPath, "-s", serial, "shell") + shellArgs,
+                command = listOf(adbPath, "-s", serial, "shell") + shellArgs.map(ShellQuote::quote),
                 workingDirectory = root.toString(),
                 mutatesProject = false,
                 requiresDevice = true,
