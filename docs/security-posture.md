@@ -13,9 +13,29 @@
    reviewing tool schema/description diffs).
 3. `bash distribution/smoke-test.sh` and `DROIDAGENT_E2E=1 bash distribution/smoke-test.sh` on a
    clean machine before publishing `distribution/server.json` to any MCP registry.
-4. First npm publish of `@droidagentkit/launcher` is a **manual bootstrap** only if OIDC is not yet
-   configured; alpha prereleases use `npm publish --access public --tag alpha` (also in
-   `.github/workflows/release.yml`). Later releases use OIDC trusted publishing.
+## Bootstrap `@droidagentkit/launcher` (one-time)
+
+OIDC trusted publishing cannot create a **new** scoped package. First publish must be
+local after creating the npm org/user scope:
+
+```bash
+npm login
+cd distribution/npm-launcher
+npm publish --access public --tag alpha
+```
+
+Then on npmjs.com → package → Settings → Trusted Publisher → GitHub Actions → this repo →
+`release.yml`. Re-run the failed Release workflow job (or push the next tag).
+
+Until that lands, install via the GitHub Release jar:
+
+```bash
+java -jar droidagent-cli-0.2.0-alpha.jar serve-mcp --transport stdio --project auto
+```
+
+Do **not** submit `distribution/server.json` to the MCP registry until
+`npx -y @droidagentkit/launcher@alpha` smoke is green on a clean machine.
+
 
 ## Before 1.0
 
