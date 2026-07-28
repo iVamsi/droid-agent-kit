@@ -229,7 +229,6 @@ object DroidAgentConfigLoader {
         lines: List<String>,
         source: ConfigSource,
     ): ConfigLoadResult {
-
         for ((index, rawLine) in lines.withIndex()) {
             val line = rawLine.trim()
             if (!line.startsWith("schemaVersion")) continue

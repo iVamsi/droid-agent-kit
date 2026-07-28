@@ -6,6 +6,7 @@ import com.droidagentkit.core.ArtifactSensitivity
 import com.droidagentkit.core.ArtifactType
 import com.droidagentkit.core.ArtifactWriter
 import com.droidagentkit.core.AuthorizationDecision
+import com.droidagentkit.core.Capability
 import com.droidagentkit.core.CommandSpec
 import com.droidagentkit.core.DefaultOperationPolicy
 import com.droidagentkit.core.DiagnosticFinding
@@ -18,11 +19,10 @@ import com.droidagentkit.core.OperationRequest
 import com.droidagentkit.core.ProcessRunner
 import com.droidagentkit.core.Redactor
 import com.droidagentkit.core.ResultStatus
-import com.droidagentkit.core.ShellQuote
 import com.droidagentkit.core.Severity
+import com.droidagentkit.core.ShellQuote
 import com.droidagentkit.core.ToolGroup
 import com.droidagentkit.core.ToolResult
-import com.droidagentkit.core.Capability
 import com.droidagentkit.device.DeviceToolContext
 import com.droidagentkit.inspector.AndroidProjectInspector
 import com.droidagentkit.mcp.tools.BuildFailureParser
@@ -1032,16 +1032,17 @@ class DroidAgentMcpDispatcher(
         args: List<String>,
         id: String,
         root: Path,
-    ): ToolResult = runner(root).run(
-        CommandSpec(
-            id,
-            listOf(config.safety.adbPath) + args,
-            root.toString(),
-            false,
-            true,
-            60,
-        ),
-    )
+    ): ToolResult =
+        runner(root).run(
+            CommandSpec(
+                id,
+                listOf(config.safety.adbPath) + args,
+                root.toString(),
+                false,
+                true,
+                60,
+            ),
+        )
 
     private fun crashTriage(arguments: Map<String, Any?>): Map<String, Any> {
         val serial =

@@ -73,3 +73,17 @@ Principles:
 - The readiness auditor reports capability enablement from the *effective* merged configuration.
 - Audit checklist items (config-escalation E2E, binary-path confinement) are tracked as tests in
   `toolbox-core` (`ConfigTrustTest`) and `cli`.
+
+## Internal audit checklist (Phase 2)
+
+Regression coverage that must stay green before any public publish:
+
+1. Config-escalation E2E — `ConfigTrustTest` (project file cannot grant capabilities/groups/paths).
+2. Every `adb shell` injection path — `DeviceControlToolProviderTest`, `DeviceReadToolProviderTest`,
+   `McpDispatcherTest` (launch).
+3. Gradle env bypass — `ProcessEnvironmentScrubber` + Gradle `CommandSpec.scrubGradleEnvironment`.
+4. Proxy-restore failure — `ProxyControllerTest` (verify + retry).
+5. HAR/redaction + findings redaction — `Redactor` / `resultMapWithFindings`.
+6. Storage SQL guards — `SqliteInspectorTest`.
+7. Tool-manifest integrity — `ToolManifestIntegrityTest` (SHA-256 pin of name+description+schema).
+8. Fuzz — `ConfigFuzzTest`, `McpJsonRpcFuzzTest` (malformed input never crashes).
