@@ -11,7 +11,7 @@
   "homepage": "https://github.com/iVamsi/droid-agent-kit",
   "bugs": "https://github.com/iVamsi/droid-agent-kit/issues",
   "bin": {
-    "droidagent-mcp": "./index.js"
+    "droidagent-mcp": "index.js"
   },
   "engines": {
     "node": ">=18"

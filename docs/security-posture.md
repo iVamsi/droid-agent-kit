@@ -13,8 +13,9 @@
    reviewing tool schema/description diffs).
 3. `bash distribution/smoke-test.sh` and `DROIDAGENT_E2E=1 bash distribution/smoke-test.sh` on a
    clean machine before publishing `distribution/server.json` to any MCP registry.
-4. First npm publish of `@droidagentkit/launcher` is a **manual bootstrap**; later releases use OIDC
-   trusted publishing in `.github/workflows/release.yml`.
+4. First npm publish of `@droidagentkit/launcher` is a **manual bootstrap** only if OIDC is not yet
+   configured; alpha prereleases use `npm publish --access public --tag alpha` (also in
+   `.github/workflows/release.yml`). Later releases use OIDC trusted publishing.
 
 ## Before 1.0
 
