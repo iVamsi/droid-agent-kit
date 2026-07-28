@@ -6,12 +6,24 @@ pre-release convention `0.y.z-alpha` until a stable 1.0 release.
 
 ## Unreleased
 
+## [0.2.2-alpha] - 2026-07-28
+
+### Fixed
+
+- No code changes; version bump only, to prove `.github/workflows/release.yml`'s npm OIDC
+  trusted-publishing job works fully unattended end to end. The npmjs.com Trusted Publisher
+  entry had the GitHub owner saved as `ivamsi` (lowercase); GitHub's OIDC token carries the
+  exact-cased `repository` claim (`iVamsi/droid-agent-kit`), and npm compares it
+  case-sensitively even though GitHub's own URLs are case-insensitive. Fixed on npmjs.com,
+  not in this repo.
+
 ## [0.2.1-alpha] - 2026-07-28
 
 ### Changed
 
 - Align `distribution/server.json` with the official MCP Registry schema (`io.github.iVamsi/droidagentkit`).
 - Add `mcpName` to `@droidagentkit/launcher` for registry ownership verification.
+- Shorten `server.json` description under the registry's 100-char limit and add `repository.id`.
 
 ## [0.2.0-alpha] - 2026-07-28
 
