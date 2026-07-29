@@ -80,7 +80,9 @@ jobs:
       - name: Ensure npm supports OIDC trusted publishing
         run: npm install -g npm@latest
       - name: Publish
-        run: npm publish --access public --tag alpha
+        # No explicit dist-tag while pre-1.0: every release moves `latest` so
+        # `npm install`/`npx` resolve to the newest build.
+        run: npm publish --access public
 
   publish-mcp-registry:
     name: Publish to MCP registry (OIDC)
