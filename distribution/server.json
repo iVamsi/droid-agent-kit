@@ -3,7 +3,7 @@
   "name": "io.github.iVamsi/droidagentkit",
   "title": "DroidAgentKit",
   "description": "Local-first Android development MCP: Gradle, adb, logcat, lint, crash triage, Perfetto, visuals.",
-  "version": "0.2.2-alpha",
+  "version": "0.2.3-alpha",
   "repository": {
     "url": "https://github.com/iVamsi/droid-agent-kit",
     "source": "github",
@@ -13,7 +13,7 @@
     {
       "registryType": "npm",
       "identifier": "@droidagentkit/launcher",
-      "version": "0.2.2-alpha",
+      "version": "0.2.3-alpha",
       "transport": {
         "type": "stdio"
       }
