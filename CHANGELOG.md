@@ -14,7 +14,7 @@ pre-release convention `0.y.z-alpha` until a stable 1.0 release.
 
 ### Fixed
 
-- `scripts/check-public-hygiene.sh` was flagging the synthetic `"/home/dev"` fixture in
+- `scripts/check-public-hygiene.sh` was flagging a synthetic fake-HOME test fixture in
   `JsonAndCommandTest.kt` as a leaked personal path, failing CI on every push to `main` since
   commit `5be79da`. Excluded that test file from the check.
 
