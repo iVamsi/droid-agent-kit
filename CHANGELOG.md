@@ -6,6 +6,8 @@ pre-release convention `0.y.z-alpha` until a stable 1.0 release.
 
 ## Unreleased
 
+## [0.2.3-alpha] - 2026-07-28
+
 ### Added
 
 - `release.yml` now also publishes `distribution/server.json` to the MCP registry on every tag,

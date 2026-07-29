@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "com.droidagentkit"
-version = "0.2.2-alpha"
+version = "0.2.3-alpha"
 
 subprojects {
     group = rootProject.group
