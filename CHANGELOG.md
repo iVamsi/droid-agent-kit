@@ -22,6 +22,28 @@ pre-release convention `0.y.z-alpha` until a stable 1.0 release.
   tasks). The default `:*:lint*` previously admitted `lintFix`, which rewrites sources. Naming such
   a task exactly, or setting `safety.allowAnyGradleTask`, still works as explicit consent.
 
+- The built-in redaction rules went quadratic on a long unbroken run of identifier characters.
+  `[A-Z0-9_]*` on both sides of the keyword in the password/token/secret assignment rules is
+  ambiguous, so a 50,000-character token stalled redaction for over five seconds and 200,000 hung
+  it outright. `ProcessRunner` passes up to 10 MB of command output through the redactor, and that
+  output is attacker-influenceable (logcat, build and test output), so any tool call could be
+  stalled without touching the config. The identifier runs are now bounded, which keeps matching
+  linear — one million characters in roughly 700 ms.
+- Redaction now runs each pattern under a matching budget and abandons any that exceeds it,
+  reporting `redaction-pattern-timeout`. `StackOverflowError` from deep regex recursion on long
+  inputs is caught per pattern as well; being an `Error` rather than an `Exception`, it would
+  otherwise have escaped and failed the whole tool call.
+- Device paths for generic push/pull are checked against an allowlist of public storage instead of
+  a list of blocked prefixes. The denylist left everything unnamed reachable, including
+  `/data/local/tmp` — the usual staging directory for Android privilege pivots — as well as
+  `/etc`, `/vendor`, `/cache`, and `/mnt`.
+- Device serials and package names are validated before use. Shell injection was already handled
+  by quoting, but a value beginning with `-` sits in flag position for `adb -s <serial>` and
+  `run-as <pkg>`.
+- The HTTP transport no longer resolves DNS for the `Host` and `Origin` request headers, which put
+  a blocking lookup on the request path and let a name resolving to loopback satisfy the check.
+  Bind-time host resolution, which comes from the operator's own command line, is unchanged.
+
 ### Changed
 
 - Documented the threat model explicitly, including that `confirmDestructive` is an accident guard

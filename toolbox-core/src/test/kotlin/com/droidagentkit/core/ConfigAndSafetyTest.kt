@@ -162,6 +162,52 @@ class ConfigAndSafetyTest {
     }
 
     @Test
+    fun `built-in rules stay fast on a long unbroken token`() {
+        // The assignment rules previously used unbounded `[A-Z0-9_]*` either side of a keyword,
+        // which is ambiguous and went quadratic: 50k identifier characters stalled redaction for
+        // over five seconds, and ProcessRunner feeds it up to 10MB of attacker-influenced output.
+        val redactor = Redactor(DroidAgentConfig.default().redaction)
+        val hostile = "A".repeat(200_000) + "!"
+
+        val started = System.nanoTime()
+        val result = redactor.redact(hostile)
+        val elapsedMs =
+            java.util.concurrent.TimeUnit.NANOSECONDS
+                .toMillis(System.nanoTime() - started)
+
+        assertTrue("redaction took ${elapsedMs}ms on a 200k token", elapsedMs < 5_000)
+        assertEquals(hostile, result.text)
+    }
+
+    @Test
+    fun `redaction of a hostile extra pattern is bounded and reported`() {
+        // Polynomial blowup reproduces reliably where classic exponential patterns do not, and it
+        // escapes the static nested-quantifier screen entirely.
+        val redactor =
+            Redactor(RedactionConfig(enabled = true, extraPatterns = listOf(".*.*.*=.*")))
+
+        val started = System.nanoTime()
+        val result = redactor.redact("x".repeat(200_000))
+        val elapsedMs =
+            java.util.concurrent.TimeUnit.NANOSECONDS
+                .toMillis(System.nanoTime() - started)
+
+        assertTrue("redaction took ${elapsedMs}ms", elapsedMs < 5_000)
+        assertTrue(result.warnings.any { it.startsWith("redaction-pattern-timeout:extra-0") })
+    }
+
+    @Test
+    fun `built-in rules still apply when an extra pattern is abandoned`() {
+        val redactor =
+            Redactor(RedactionConfig(enabled = true, extraPatterns = listOf(".*.*.*=.*")))
+
+        val result = redactor.redact("x".repeat(200_000) + "\nAuthorization: Bearer abc.def.ghi")
+
+        assertTrue(result.text.contains("Authorization: Bearer [REDACTED]"))
+        assertTrue(result.applied.contains("authorization-bearer"))
+    }
+
+    @Test
     fun `redactor hides aws access key ids`() {
         val redactor = Redactor(DroidAgentConfig.default().redaction)
 

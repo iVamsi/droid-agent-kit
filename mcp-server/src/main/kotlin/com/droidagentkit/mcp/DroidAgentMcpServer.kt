@@ -27,7 +27,7 @@ class DroidAgentMcpHttpServer(
         get() = server?.address?.port
 
     fun start() {
-        if (!allowRemote && !isLoopbackHost(host)) {
+        if (!allowRemote && !isLoopbackBindHost(host)) {
             throw IllegalArgumentException(
                 "Refusing to bind MCP HTTP server to non-loopback host '$host'. " +
                     "Pass --allow-remote to override (local-only by default).",
@@ -123,12 +123,29 @@ class DroidAgentMcpHttpServer(
         const val MAX_HTTP_WORKERS = 4
         const val MAX_REQUEST_BYTES = 1_048_576
 
-        fun isLoopbackHost(hostname: String): Boolean {
-            if (hostname == "127.0.0.1" || hostname == "localhost" || hostname == "::1" || hostname == "[::1]") {
-                return true
-            }
-            return runCatching { InetAddress.getByName(hostname).isLoopbackAddress }.getOrDefault(false)
-        }
+        private val LOOPBACK_IPV4 = Regex("^127\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}$")
+
+        /**
+         * Literal-only loopback test, for values taken from request headers.
+         *
+         * Resolving an attacker-supplied `Host` or `Origin` would put a blocking DNS lookup on the
+         * request path and let a name that resolves to 127.0.0.1 satisfy the check. Comparing
+         * literals removes both. The bearer token is the primary control either way; this keeps
+         * the secondary one from being a lever of its own.
+         */
+        fun isLoopbackHost(hostname: String): Boolean =
+            hostname == "localhost" ||
+                hostname == "::1" ||
+                hostname == "[::1]" ||
+                LOOPBACK_IPV4.matches(hostname)
+
+        /**
+         * Bind-time check. The host here comes from the operator's own command line, not from a
+         * request, so resolving a name they typed is appropriate.
+         */
+        fun isLoopbackBindHost(hostname: String): Boolean =
+            isLoopbackHost(hostname) ||
+                runCatching { InetAddress.getByName(hostname).isLoopbackAddress }.getOrDefault(false)
 
         fun generateBearerToken(): String {
             val bytes = ByteArray(32)

@@ -93,7 +93,7 @@ class ProcessRunner(
             summary = summary,
             artifacts = listOf(artifact),
             redactionsApplied = redacted.applied,
-            warnings = warnings(completed, capturedOutput.truncated),
+            warnings = warnings(completed, capturedOutput.truncated) + redacted.warnings,
         )
     }
 

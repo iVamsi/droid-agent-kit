@@ -70,6 +70,22 @@ class DefaultOperationPolicy(
     private val allowedRoots: List<Path>,
 ) : OperationPolicy {
     override fun authorize(request: OperationRequest): AuthorizationDecision {
+        request.deviceSerial?.let { serial ->
+            if (!DeviceIdentifiers.isValidDeviceSerial(serial)) {
+                return AuthorizationDecision.Denied(
+                    "invalid-device-serial",
+                    "Device serial '$serial' is not a valid adb serial.",
+                )
+            }
+        }
+        request.packageName?.let { pkg ->
+            if (!DeviceIdentifiers.isValidPackageName(pkg)) {
+                return AuthorizationDecision.Denied(
+                    "invalid-package-name",
+                    "Package name '$pkg' is not a valid Android package name.",
+                )
+            }
+        }
         val enabled = config.allowedCapabilities()
         val missing = request.requiredCapabilities - enabled
         if (missing.isNotEmpty()) {
@@ -101,7 +117,7 @@ class DefaultOperationPolicy(
                 )
             }
             val normalized = normalizeDevicePath(devicePath)
-            if (FORBIDDEN_DEVICE_PATH_PREFIXES.any { normalized == it.removeSuffix("/") || normalized.startsWith(it) }) {
+            if (ALLOWED_DEVICE_PATH_PREFIXES.none { normalized == it.removeSuffix("/") || normalized.startsWith(it) }) {
                 return AuthorizationDecision.Denied(
                     "device-path-denied",
                     "Device path '$devicePath' is outside the allowed public-storage scope.",
@@ -112,11 +128,15 @@ class DefaultOperationPolicy(
     }
 
     private companion object {
-        // App-private storage (/data/data, /data/user) is intentionally excluded: the `storage`
-        // tool group provides scoped, run-as-based read access to a debuggable app's own data.
-        // Generic file push/pull is for public/external storage only.
-        val FORBIDDEN_DEVICE_PATH_PREFIXES =
-            listOf("/system/", "/proc/", "/sys/", "/data/data/", "/data/user/", "/data/app/")
+        // Generic file push/pull is for public/external storage only, so this is an allowlist
+        // rather than a list of things to block. A denylist left everything unnamed reachable —
+        // including /data/local/tmp, the usual staging directory for Android privilege pivots,
+        // plus /etc, /vendor, /cache and /mnt.
+        //
+        // App-private storage stays out deliberately: the `storage` tool group provides scoped,
+        // run-as-based read access to a debuggable app's own data, which is the supported path.
+        val ALLOWED_DEVICE_PATH_PREFIXES =
+            listOf("/sdcard/", "/storage/emulated/0/", "/storage/self/primary/")
 
         fun normalizeDevicePath(path: String): String {
             val segments = path.split("/")

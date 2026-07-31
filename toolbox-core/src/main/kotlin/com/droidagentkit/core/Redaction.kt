@@ -3,7 +3,49 @@ package com.droidagentkit.core
 data class RedactionResult(
     val text: String,
     val applied: List<String>,
+    val warnings: List<String> = emptyList(),
 )
+
+/** Raised when a single pattern exceeds its matching budget; see [BoundedCharSequence]. */
+private class RedactionTimeout : RuntimeException(null, null, false, false)
+
+/**
+ * Aborts a match that runs past [deadlineNanos].
+ *
+ * Catastrophic backtracking shows up as an enormous number of character reads rather than as a
+ * long-running single operation, so checking the clock on each read is what makes an otherwise
+ * unbounded match interruptible. Guarding this at match time covers every pathological pattern,
+ * including ones a static heuristic would not recognize.
+ */
+private class BoundedCharSequence(
+    private val inner: CharSequence,
+    private val deadlineNanos: Long,
+) : CharSequence {
+    override val length: Int get() = inner.length
+
+    override fun get(index: Int): Char {
+        if (System.nanoTime() > deadlineNanos) throw RedactionTimeout()
+        return inner[index]
+    }
+
+    override fun subSequence(
+        startIndex: Int,
+        endIndex: Int,
+    ): CharSequence = BoundedCharSequence(inner.subSequence(startIndex, endIndex), deadlineNanos)
+
+    override fun toString(): String = inner.toString()
+}
+
+/**
+ * Caps the identifier runs either side of a keyword in the assignment rules.
+ *
+ * Unbounded `[A-Z0-9_]*` on both sides of an alternation is ambiguous: for a long unbroken run of
+ * identifier characters the engine retries an enormous number of splits, which turned these rules
+ * quadratic. A single 50k-character token in command output was enough to stall redaction, and
+ * command output is attacker-influenced (logcat, build and test output). Real key names are far
+ * shorter than this bound, so capping it costs no coverage.
+ */
+private const val MAX_KEY_CHARS = 64
 
 class Redactor(
     private val config: RedactionConfig,
@@ -28,7 +70,7 @@ class Redactor(
             ),
             Rule(
                 "password-assignment",
-                Regex("(?i)([A-Z0-9_]*PASSWORD[A-Z0-9_]*\\s*[:=]\\s*)[^\\s\\n]+"),
+                Regex("(?i)([A-Z0-9_]{0,$MAX_KEY_CHARS}PASSWORD[A-Z0-9_]{0,$MAX_KEY_CHARS}[ \\t]*[:=][ \\t]*)[^\\s\\n]+"),
                 "$1[REDACTED]",
             ),
             // Rules below must precede token-assignment: specific AWS/GitHub patterns must fire
@@ -62,12 +104,15 @@ class Redactor(
             ),
             Rule(
                 "token-assignment",
-                Regex("(?i)([A-Z0-9_]*(TOKEN|SECRET)[A-Z0-9_]*\\s*[:=]\\s*)[^\\s\\n]+"),
+                Regex("(?i)([A-Z0-9_]{0,$MAX_KEY_CHARS}(TOKEN|SECRET)[A-Z0-9_]{0,$MAX_KEY_CHARS}[ \\t]*[:=][ \\t]*)[^\\s\\n]+"),
                 "$1[REDACTED]",
             ),
             Rule(
                 "generic-secret-assignment",
-                Regex("""(?i)([A-Z0-9_]*(?:KEY|SECRET|CREDENTIAL)[A-Z0-9_]*\s*[:=]\s*)(?!"?\[)([^\s\n]{8,})"""),
+                Regex(
+                    "(?i)([A-Z0-9_]{0,$MAX_KEY_CHARS}(?:KEY|SECRET|CREDENTIAL)[A-Z0-9_]{0,$MAX_KEY_CHARS}" +
+                        "[ \\t]*[:=][ \\t]*)(?!\"?\\[)([^\\s\\n]{8,})",
+                ),
                 "$1[REDACTED]",
             ),
         )
@@ -76,11 +121,9 @@ class Redactor(
         if (!config.enabled) return RedactionResult(input, emptyList())
         var output = input
         val applied = linkedSetOf<String>()
+        val warnings = mutableListOf<String>()
         for (rule in rules) {
-            if (rule.regex.containsMatchIn(output)) {
-                output = output.replace(rule.regex, rule.replacement)
-                applied.add(rule.id)
-            }
+            output = apply(output, rule.regex, rule.replacement, rule.id, applied, warnings) ?: output
         }
         for ((index, pattern) in config.extraPatterns.withIndex()) {
             val regex =
@@ -89,11 +132,46 @@ class Redactor(
                 } catch (_: Exception) {
                     continue
                 }
-            if (regex.containsMatchIn(output)) {
-                output = output.replace(regex, "[REDACTED]")
-                applied.add("extra-$index")
-            }
+            output = apply(output, regex, "[REDACTED]", "extra-$index", applied, warnings) ?: output
         }
-        return RedactionResult(output, applied.toList())
+        return RedactionResult(output, applied.toList(), warnings)
+    }
+
+    /**
+     * Runs one pattern under a matching budget. A pattern that blows the budget is skipped and
+     * reported rather than allowed to hang the caller — the remaining rules still run, so built-in
+     * redaction is never lost because a user-supplied pattern misbehaved.
+     */
+    private fun apply(
+        input: String,
+        regex: Regex,
+        replacement: String,
+        id: String,
+        applied: MutableSet<String>,
+        warnings: MutableList<String>,
+    ): String? {
+        val deadline = System.nanoTime() + PATTERN_BUDGET_NANOS
+        return try {
+            val bounded = BoundedCharSequence(input, deadline)
+            if (!regex.containsMatchIn(bounded)) return null
+            val result = regex.replace(BoundedCharSequence(input, deadline), replacement)
+            applied.add(id)
+            result
+        } catch (_: RedactionTimeout) {
+            warnings += "redaction-pattern-timeout:$id"
+            null
+        } catch (_: StackOverflowError) {
+            // java.util.regex recurses per input character for alternation-under-quantifier, so a
+            // long enough line overflows the stack before any deadline can fire. That is an Error
+            // rather than an Exception, so it would otherwise escape and kill the whole tool call.
+            warnings += "redaction-pattern-overflow:$id"
+            null
+        }
+    }
+
+    private companion object {
+        val PATTERN_BUDGET_NANOS =
+            java.util.concurrent.TimeUnit.MILLISECONDS
+                .toNanos(500)
     }
 }
