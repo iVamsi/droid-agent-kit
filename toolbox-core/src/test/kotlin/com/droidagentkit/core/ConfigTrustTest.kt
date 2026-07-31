@@ -142,6 +142,122 @@ class ConfigTrustTest {
         assertTrue(safety.isGradleTaskAllowed(":app:publishRelease"))
     }
 
+    @Test
+    fun `project config cannot widen the gradle allowlist past the policy`() {
+        val projectDir = Files.createTempDirectory("dak-trust-widen")
+        writeProject(
+            projectDir,
+            """
+            schemaVersion: 1
+            safety:
+              allowGradleTasks:
+                - ":*:*"
+                - "*publish*"
+            """.trimIndent(),
+        )
+        val policyPath = Files.createTempFile("dak-trust-widen-policy", ".yaml")
+        Files.writeString(policyPath, "schemaVersion: 1\n")
+
+        val result = DroidAgentConfigLoader.loadEffective(projectDir, policyPath)
+
+        assertTrue(result is ConfigLoadResult.Loaded)
+        val loaded = result as ConfigLoadResult.Loaded
+        val safety = loaded.config.safety
+        assertFalse(safety.isGradleTaskAllowed(":app:publishReleasePublicationToMavenRepository"))
+        assertFalse(safety.isGradleTaskAllowed(":app:installDebug"))
+        assertFalse(safety.isGradleTaskAllowed(":buildSrc:jar"))
+        assertTrue(safety.isGradleTaskAllowed(":app:testDebugUnitTest"))
+        assertTrue(loaded.warnings.any { it.contains(":*:*") })
+    }
+
+    @Test
+    fun `project config may narrow the gradle allowlist`() {
+        val projectDir = Files.createTempDirectory("dak-trust-narrow")
+        writeProject(
+            projectDir,
+            """
+            schemaVersion: 1
+            safety:
+              allowGradleTasks:
+                - ":app:testDebugUnitTest"
+            """.trimIndent(),
+        )
+        val policyPath = Files.createTempFile("dak-trust-narrow-policy", ".yaml")
+        Files.writeString(policyPath, "schemaVersion: 1\n")
+
+        val result = DroidAgentConfigLoader.loadEffective(projectDir, policyPath)
+
+        val loaded = result as ConfigLoadResult.Loaded
+        assertEquals(listOf(":app:testDebugUnitTest"), loaded.config.safety.allowGradleTasks)
+        assertTrue(loaded.config.safety.isGradleTaskAllowed(":app:testDebugUnitTest"))
+        assertFalse(loaded.config.safety.isGradleTaskAllowed(":other:testDebugUnitTest"))
+    }
+
+    @Test
+    fun `project config cannot raise the command timeout past the policy`() {
+        val projectDir = Files.createTempDirectory("dak-trust-timeout")
+        writeProject(projectDir, "schemaVersion: 1\nsafety:\n  maxCommandSeconds: 99999\n")
+        val policyPath = Files.createTempFile("dak-trust-timeout-policy", ".yaml")
+        Files.writeString(policyPath, "schemaVersion: 1\nsafety:\n  maxCommandSeconds: 120\n")
+
+        val result = DroidAgentConfigLoader.loadEffective(projectDir, policyPath)
+
+        val loaded = result as ConfigLoadResult.Loaded
+        assertEquals(120L, loaded.config.safety.maxCommandSeconds)
+        assertTrue(loaded.warnings.any { it.contains("maxCommandSeconds") })
+    }
+
+    @Test
+    fun `project config may lower the command timeout`() {
+        val projectDir = Files.createTempDirectory("dak-trust-timeout-low")
+        writeProject(projectDir, "schemaVersion: 1\nsafety:\n  maxCommandSeconds: 30\n")
+        val policyPath = Files.createTempFile("dak-trust-timeout-low-policy", ".yaml")
+        Files.writeString(policyPath, "schemaVersion: 1\n")
+
+        val result = DroidAgentConfigLoader.loadEffective(projectDir, policyPath)
+
+        assertEquals(30L, (result as ConfigLoadResult.Loaded).config.safety.maxCommandSeconds)
+    }
+
+    @Test
+    fun `wildcard patterns cannot sweep in mutating tasks`() {
+        val safety = SafetyConfig()
+
+        // The default ":*:lint*" must not reach the source-rewriting variants.
+        assertTrue(safety.isGradleTaskAllowed(":app:lintDebug"))
+        assertFalse(safety.isGradleTaskAllowed(":app:lintFix"))
+        assertFalse(safety.isGradleTaskAllowed(":app:lintFixDebug"))
+        assertFalse(safety.isGradleTaskAllowed(":app:updateLintBaseline"))
+        assertFalse(safety.isGradleTaskAllowed(":app:publishToMavenLocal"))
+    }
+
+    @Test
+    fun `naming a mutating task exactly is explicit consent`() {
+        val safety = SafetyConfig(allowGradleTasks = listOf(":app:lintFix"))
+        assertTrue(safety.isGradleTaskAllowed(":app:lintFix"))
+        assertFalse(safety.isGradleTaskAllowed(":other:lintFix"))
+    }
+
+    @Test
+    fun `allowAnyGradleTask still reaches mutating tasks`() {
+        assertTrue(SafetyConfig(allowAnyGradleTask = true).isGradleTaskAllowed(":app:lintFix"))
+    }
+
+    @Test
+    fun `glob subsumption accepts narrowings and rejects widenings`() {
+        // Narrowings: every task the inner pattern admits, the outer already admitted.
+        assertTrue(DroidAgentConfigLoader.globSubsumes(":*:test*UnitTest", ":app:testDebugUnitTest"))
+        assertTrue(DroidAgentConfigLoader.globSubsumes(":*:test*UnitTest", ":*:testDebug*UnitTest"))
+        assertTrue(DroidAgentConfigLoader.globSubsumes("*", ":*:*"))
+        assertTrue(DroidAgentConfigLoader.globSubsumes(":*:*", ":*:*"))
+
+        // Widenings: the inner pattern admits tasks the outer does not.
+        assertFalse(DroidAgentConfigLoader.globSubsumes(":*:test*UnitTest", ":*:*"))
+        assertFalse(DroidAgentConfigLoader.globSubsumes(":*:test*UnitTest", "*"))
+        assertFalse(DroidAgentConfigLoader.globSubsumes(":app:test", ":app:*"))
+        assertFalse(DroidAgentConfigLoader.globSubsumes(":*:lint*", ":*:*"))
+    }
+
     private fun writeProject(
         dir: java.nio.file.Path,
         yaml: String,

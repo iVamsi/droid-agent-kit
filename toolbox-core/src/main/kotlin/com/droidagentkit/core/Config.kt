@@ -47,8 +47,17 @@ data class SafetyConfig(
     val mitmProxyPath: String = "",
     val maxCommandSeconds: Long = 600,
 ) {
-    fun isGradleTaskAllowed(task: String): Boolean =
-        allowAnyGradleTask || allowGradleTasks.any { pattern -> globToRegex(pattern).matches(task) }
+    /**
+     * A wildcard pattern must never sweep in a task that rewrites the working tree — `:*:lint*`
+     * would otherwise admit `lintFix`, and globs cannot express "lint but not lintFix". Naming
+     * such a task exactly (or setting [allowAnyGradleTask]) is explicit consent and still works.
+     */
+    fun isGradleTaskAllowed(task: String): Boolean {
+        if (allowAnyGradleTask) return true
+        if (allowGradleTasks.any { it == task }) return true
+        if (MUTATING_TASK_PATTERNS.any { globToRegex(it).matches(task) }) return false
+        return allowGradleTasks.any { pattern -> globToRegex(pattern).matches(task) }
+    }
 
     fun allowedCapabilities(): Set<Capability> {
         if (allowCapabilities.isNotEmpty()) return allowCapabilities
@@ -57,6 +66,24 @@ data class SafetyConfig(
         if (allowAppInstall) fromAliases.add(Capability.APP_INSTALL)
         if (allowEmulatorStart) fromAliases.add(Capability.EMULATOR_CONTROL)
         return fromAliases
+    }
+
+    companion object {
+        /**
+         * Tasks that rewrite sources, baselines, or golden files, or that publish artifacts.
+         * Reachable only by naming them exactly or by [allowAnyGradleTask].
+         */
+        val MUTATING_TASK_PATTERNS =
+            listOf(
+                "*lintFix*",
+                "*updateLintBaseline*",
+                "*ktlintFormat*",
+                "*spotlessApply*",
+                "*publish*",
+                "*uploadArchives*",
+                "*recordScreenshotTest*",
+                "*updateScreenshotTest*",
+            )
     }
 
     private fun globToRegex(pattern: String): Regex {
@@ -194,36 +221,120 @@ object DroidAgentConfigLoader {
         }
         val project = (projectResult as ConfigLoadResult.Loaded)
         val policy = (policyResult as ConfigLoadResult.Loaded)
+        val (merged, mergeWarnings) = mergeWithWarnings(project.config, policy.config)
         val warnings =
             project.warnings +
-                policy.warnings.map { "user policy: $it" }
-        return ConfigLoadResult.Loaded(mergeWithUserPolicy(project.config, policy.config), warnings)
+                policy.warnings.map { "user policy: $it" } +
+                mergeWarnings
+        return ConfigLoadResult.Loaded(merged, warnings)
     }
 
     fun mergeWithUserPolicy(
         project: DroidAgentConfig,
         policy: DroidAgentConfig,
-    ): DroidAgentConfig =
-        project.copy(
-            safety =
-                project.safety.copy(
-                    allowAnyGradleTask = policy.safety.allowAnyGradleTask,
-                    allowAdbInput = policy.safety.allowAdbInput,
-                    allowAppInstall = project.safety.allowAppInstall && policy.safety.allowAppInstall,
-                    allowEmulatorStart = policy.safety.allowEmulatorStart,
-                    allowCapabilities = policy.safety.allowCapabilities,
-                    adbPath = policy.safety.adbPath,
-                    emulatorPath = policy.safety.emulatorPath,
-                    traceProcessorPath = policy.safety.traceProcessorPath,
-                    mitmProxyPath = policy.safety.mitmProxyPath,
-                ),
-            mcp = McpConfig(exposedGroups = policy.mcp.exposedGroups),
-            redaction =
-                RedactionConfig(
-                    enabled = policy.redaction.enabled,
-                    extraPatterns = (project.redaction.extraPatterns + policy.redaction.extraPatterns).distinct(),
-                ),
-        )
+    ): DroidAgentConfig = mergeWithWarnings(project, policy).first
+
+    /**
+     * Applies the trust split. Privileged fields are taken from the policy outright. The two
+     * fields a project may legitimately set — the Gradle task allowlist and the command timeout —
+     * are *narrowed* against the policy rather than replaced, so a project file can never end up
+     * with more authority than the policy grants.
+     */
+    private fun mergeWithWarnings(
+        project: DroidAgentConfig,
+        policy: DroidAgentConfig,
+    ): Pair<DroidAgentConfig, List<String>> {
+        val (gradleTasks, taskWarnings) =
+            narrowGradleTasks(project.safety.allowGradleTasks, policy.safety.allowGradleTasks)
+        val timeout = minOf(project.safety.maxCommandSeconds, policy.safety.maxCommandSeconds)
+        val timeoutWarnings =
+            if (project.safety.maxCommandSeconds > policy.safety.maxCommandSeconds) {
+                listOf(
+                    "safety.maxCommandSeconds ${project.safety.maxCommandSeconds} exceeds the user policy limit " +
+                        "${policy.safety.maxCommandSeconds} — clamped to ${policy.safety.maxCommandSeconds}",
+                )
+            } else {
+                emptyList()
+            }
+        val merged =
+            project.copy(
+                safety =
+                    project.safety.copy(
+                        allowGradleTasks = gradleTasks,
+                        allowAnyGradleTask = policy.safety.allowAnyGradleTask,
+                        allowAdbInput = policy.safety.allowAdbInput,
+                        allowAppInstall = project.safety.allowAppInstall && policy.safety.allowAppInstall,
+                        allowEmulatorStart = policy.safety.allowEmulatorStart,
+                        allowCapabilities = policy.safety.allowCapabilities,
+                        adbPath = policy.safety.adbPath,
+                        emulatorPath = policy.safety.emulatorPath,
+                        traceProcessorPath = policy.safety.traceProcessorPath,
+                        mitmProxyPath = policy.safety.mitmProxyPath,
+                        maxCommandSeconds = timeout,
+                    ),
+                mcp = McpConfig(exposedGroups = policy.mcp.exposedGroups),
+                redaction =
+                    RedactionConfig(
+                        enabled = policy.redaction.enabled,
+                        extraPatterns = (project.redaction.extraPatterns + policy.redaction.extraPatterns).distinct(),
+                    ),
+            )
+        return merged to (taskWarnings + timeoutWarnings)
+    }
+
+    /**
+     * Keeps only the project patterns that are at least as specific as something the policy
+     * already allows. A pattern that would admit tasks the policy does not is dropped with a
+     * warning rather than failing the load, matching how privileged keys are handled elsewhere.
+     * If nothing survives, the policy's own list applies — never an empty (or wider) allowlist.
+     */
+    private fun narrowGradleTasks(
+        projectPatterns: List<String>,
+        policyPatterns: List<String>,
+    ): Pair<List<String>, List<String>> {
+        val warnings = mutableListOf<String>()
+        val kept =
+            projectPatterns.filter { pattern ->
+                val subsumed = policyPatterns.any { globSubsumes(outer = it, inner = pattern) }
+                if (!subsumed) {
+                    warnings +=
+                        "safety.allowGradleTasks pattern '$pattern' allows tasks the user policy " +
+                        "($USER_POLICY_DISPLAY_PATH) does not — ignored. A project config can only " +
+                        "narrow the allowlist, never widen it."
+                }
+                subsumed
+            }
+        return (kept.ifEmpty { policyPatterns }) to warnings
+    }
+
+    /**
+     * True when every task name matched by [inner] is also matched by [outer]. Both are globs
+     * whose only metacharacter is `*` (any run of characters), matching
+     * [SafetyConfig.isGradleTaskAllowed].
+     *
+     * A `*` in [outer] absorbs any part of [inner], including [inner]'s own `*`. A literal in
+     * [outer] must be met by the identical literal in [inner]; if [inner] has a `*` there it can
+     * generate a character [outer] would reject, so the pair fails. That asymmetry is what makes
+     * the check sound — it can reject a legitimate narrowing, but never accepts a widening.
+     */
+    internal fun globSubsumes(
+        outer: String,
+        inner: String,
+    ): Boolean {
+        val covers = Array(outer.length + 1) { BooleanArray(inner.length + 1) }
+        covers[outer.length][inner.length] = true
+        for (o in outer.length - 1 downTo 0) {
+            for (i in inner.length downTo 0) {
+                covers[o][i] =
+                    if (outer[o] == '*') {
+                        covers[o + 1][i] || (i < inner.length && covers[o][i + 1])
+                    } else {
+                        i < inner.length && inner[i] == outer[o] && covers[o + 1][i + 1]
+                    }
+            }
+        }
+        return covers[0][0]
+    }
 
     private fun parse(
         lines: List<String>,

@@ -36,6 +36,12 @@ data class OperationRequest(
     val packageName: String? = null,
     val hostPaths: List<Path> = emptyList(),
     val devicePaths: List<String> = emptyList(),
+    /**
+     * Guards against a model invoking a destructive tool *by accident*. This flag arrives in the
+     * MCP tool arguments, so it is supplied by the agent rather than by a human — a compromised
+     * or prompt-injected agent can simply pass `true`. The control that actually bounds a hostile
+     * agent is the capability set in the user policy, which the agent cannot influence.
+     */
     val confirmDestructive: Boolean = false,
     val mutating: Boolean = false,
 )

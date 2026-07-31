@@ -6,6 +6,28 @@ pre-release convention `0.y.z-alpha` until a stable 1.0 release.
 
 ## Unreleased
 
+### Security
+
+- A project-local `.droidagentkit/config.yaml` could widen the Gradle task allowlist instead of
+  narrowing it. `safety.allowGradleTasks` was the one authority-granting field not covered by the
+  trust split, and the only guard rejected the literal patterns `*` and `**` — so `:*:*` was
+  accepted silently and admitted every namespaced task, including `publish*` and `installDebug`.
+  Because Gradle tasks execute arbitrary build-script code, a hostile repository could obtain code
+  execution on the machine of anyone who pointed an agent at it. Project patterns are now accepted
+  only when at least as specific as a pattern the user policy already allows; anything broader is
+  ignored with a warning. `safety.maxCommandSeconds` is clamped to the policy value by the same
+  path.
+- Wildcard allowlist patterns no longer reach tasks that rewrite the working tree or publish
+  artifacts (`lintFix`, `updateLintBaseline`, `spotlessApply`, `publish*`, screenshot-recording
+  tasks). The default `:*:lint*` previously admitted `lintFix`, which rewrites sources. Naming such
+  a task exactly, or setting `safety.allowAnyGradleTask`, still works as explicit consent.
+
+### Changed
+
+- Documented the threat model explicitly, including that `confirmDestructive` is an accident guard
+  supplied by the agent rather than a defense against a hostile one, and that redaction is a
+  best-effort denylist.
+
 ### Added
 
 - `scripts/check-release-version.sh` now also checks the release jar name hardcoded in

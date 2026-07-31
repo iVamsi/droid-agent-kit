@@ -38,7 +38,7 @@ Turn on more by exposing tool groups when you start the server (see [security mo
 | `storage` | Read-only SQLite, SharedPreferences, and file tree for **debuggable** apps |
 | `network_experimental` | Emulator-only mitmproxy capture + redacted HAR query (requires your own debug CA) |
 
-Dangerous actions (uninstall, clear data, proxy install, golden overwrite, …) need the right capability in config **and** `confirmDestructive=true` on the call.
+Dangerous actions (uninstall, clear data, proxy install, golden overwrite, …) need the right capability in config **and** `confirmDestructive=true` on the call. The capability is the real boundary — `confirmDestructive` guards against an accidental call, not a hostile one, since the agent supplies it. See [the threat model](docs/security-and-permissions.md#threat-model-what-this-does-and-does-not-protect-against).
 
 Report bundles include a **capability summary**: which groups are exposed, which capabilities are enabled, and what you still need installed (adb, trace processor, mitmproxy, …). That summary is informational — it does not change your readiness score.
 

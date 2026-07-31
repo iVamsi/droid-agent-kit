@@ -9,7 +9,14 @@ patterns, `allowAppInstall: false`) but cannot escalate privileges.
 
 - MCP v1 does not expose arbitrary shell execution.
 - Gradle tasks must match configured allowlist patterns (or the user policy must set
-  `safety.allowAnyGradleTask: true`). Project configs cannot use catch-all `*` / `**` patterns.
+  `safety.allowAnyGradleTask: true`). A project config can only ever **narrow** the allowlist: each
+  of its patterns must be at least as specific as one the user policy already allows, and any
+  pattern that would admit additional tasks is ignored with a warning. `safety.maxCommandSeconds`
+  is clamped to the policy's value the same way.
+- Wildcard patterns never reach tasks that rewrite the working tree or publish artifacts
+  (`lintFix`, `updateLintBaseline`, `spotlessApply`, `publish*`, screenshot-recording tasks, …).
+  The default `:*:lint*` therefore permits `lintDebug` but not `lintFix`. Naming such a task
+  exactly, or setting `safety.allowAnyGradleTask`, is treated as explicit consent.
 - Gradle arguments are restricted to a small safe set (`--continue`, logging, stacktrace, offline,
   daemon, and rerun controls); init scripts, alternate settings files, project properties, and custom
   JVM properties are blocked.
@@ -51,6 +58,32 @@ mcp:
   exposedGroups:
     - storage
 ```
+
+## Threat model: what this does and does not protect against
+
+The realistic attack on any MCP server is **prompt injection** — the agent reads attacker-controlled
+content (a logcat line, a crash message, a dependency's README, a test fixture) and acts on it. Being
+explicit about where that lands:
+
+**Bounded by this design.** A hostile agent cannot grant itself capabilities or expose tool groups:
+those come only from the user policy, which nothing the agent reads can modify. It cannot widen the
+Gradle allowlist or the command timeout from a project file. It cannot reach a shell — there is no
+arbitrary-execution tool, and every `adb shell` argument is single-quoted before it leaves the host.
+It cannot read or write outside the allowed roots, and device paths are checked against a fixed list.
+
+**Not bounded by this design.** `confirmDestructive` is *not* a defense against a hostile agent. It
+arrives in the tool arguments, so the model supplies it; a prompt-injected agent simply passes
+`true`. It exists to stop a well-behaved model from firing a destructive tool by accident. The
+control that actually bounds a hostile agent is the capability set — so grant `app_destructive`,
+`file_import`, `permission_mutation`, and `network_interception` only when you want them used.
+
+**Redaction is best-effort.** It is a curated denylist of patterns (bearer tokens, cloud keys, PEM
+blocks, `*_TOKEN=`-style assignments). It meaningfully reduces accidental secret exposure in command
+output; it cannot guarantee a secret in an unrecognized shape is caught. Do not treat redacted output
+as safe to publish.
+
+**Anything the agent can already do, it can still do.** This toolkit does not sandbox the agent's own
+file or network access. It bounds what *these tools* expose.
 
 ## Generating config with `droidagent init`
 
@@ -111,7 +144,7 @@ These tools are not listed unless the `device_read` tool group is exposed at ser
 
 ### Opt-in `device_control` group
 
-These tools are not listed unless the `device_control` tool group is exposed at server startup. Each tool is gated by one or more capabilities that must be enabled in `safety.allowCapabilities` (or via the legacy aliases). Destructive tools also require `confirmDestructive=true` on the call.
+These tools are not listed unless the `device_control` tool group is exposed at server startup. Each tool is gated by one or more capabilities that must be enabled in `safety.allowCapabilities` (or via the legacy aliases). Destructive tools also require `confirmDestructive=true` on the call — an accident guard supplied by the agent, not a defense against one; see [Threat model](#threat-model-what-this-does-and-does-not-protect-against).
 
 | Tool | Capabilities | Description |
 | ---- | ------------ | ----------- |
