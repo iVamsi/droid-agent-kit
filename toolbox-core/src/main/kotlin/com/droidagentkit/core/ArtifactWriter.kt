@@ -146,7 +146,7 @@ class ArtifactWriter(
         sizeBytes: Long,
         sha256: String,
     ): ArtifactRef {
-        val opaqueId = assignOpaqueId(path, sensitivity)
+        val opaqueId = assignOpaqueId(path)
         return ArtifactRef(
             type = type,
             path = path.toString(),
@@ -159,10 +159,7 @@ class ArtifactWriter(
         )
     }
 
-    private fun assignOpaqueId(
-        path: Path,
-        sensitivity: ArtifactSensitivity,
-    ): String {
+    private fun assignOpaqueId(path: Path): String {
         val digest = MessageDigest.getInstance("SHA-256")
         digest.update(path.toAbsolutePath().toString().toByteArray(Charsets.UTF_8))
         return "art_" + hex(digest.digest()).take(24)

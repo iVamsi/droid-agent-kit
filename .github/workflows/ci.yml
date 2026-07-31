@@ -43,3 +43,7 @@ jobs:
           ./gradlew ktlintCheck --no-configuration-cache --stacktrace
       - name: Test
         run: ./gradlew test --no-configuration-cache --stacktrace
+      # Gated on the classes that decide authority rather than a project-wide average, which can
+      # stay healthy while exactly the security-critical code loses coverage.
+      - name: Coverage (policy classes)
+        run: ./gradlew :toolbox-core:jacocoTestCoverageVerification --no-configuration-cache --stacktrace

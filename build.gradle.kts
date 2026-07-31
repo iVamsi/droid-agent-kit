@@ -11,6 +11,9 @@ subprojects {
     version = rootProject.version
 
     apply(plugin = "org.jlleitschuh.gradle.ktlint")
+    // JaCoCo rather than Kover: Kover 0.9.1 is the latest release and reads
+    // `compilation.compileKotlinTask`, which the Kotlin 2.4.0 Gradle plugin no longer exposes.
+    apply(plugin = "jacoco")
 
     // ktlint-gradle 14.2.0 pulls ktlint-cli 1.5.0 -> logback 1.3.14, which has several fixed CVEs.
     // Three (GHSA-25qh-j22f-pwp8, GHSA-6v67-2wr5-gvf4, GHSA-pr98-23f8-jwxv) are patched within the
@@ -34,6 +37,15 @@ subprojects {
         testLogging {
             events("failed", "skipped")
             exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        }
+        finalizedBy(tasks.withType<JacocoReport>())
+    }
+
+    tasks.withType<JacocoReport>().configureEach {
+        dependsOn(tasks.withType<Test>())
+        reports {
+            xml.required.set(true)
+            html.required.set(true)
         }
     }
 }

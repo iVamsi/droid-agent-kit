@@ -57,6 +57,23 @@ pre-release convention `0.y.z-alpha` until a stable 1.0 release.
 
 ### Added
 
+- Test coverage is measured (JaCoCo) and enforced in CI. The gate targets the classes that decide
+  authority — `DroidAgentConfigLoader`, `SafetyConfig`, `DefaultOperationPolicy`, `Redactor`,
+  `DeviceIdentifiers` — rather than a project-wide average, which can stay healthy while exactly
+  the security-critical code loses coverage. Measured coverage is 80–98% per module.
+- `ConfigFuzzTest` now asserts the trust-split invariant directly: for randomly generated project
+  configs and policies, the effective config is never more permissive than the policy along any
+  axis. The previous fuzz test only asserted the loader does not crash, which stayed true
+  throughout the escalation described above.
+
+### Fixed
+
+- Database filenames read from a device are validated as bare filenames before being resolved
+  against a host directory, matching the confinement `SqliteInspector` already applied to query
+  arguments.
+
+### Added
+
 - `scripts/check-release-version.sh` now also checks the release jar name hardcoded in
   `distribution/smoke-test.sh`. It was the one version string no guard covered, so a stale value
   there surfaced as a smoke-test failure rather than a release-blocking version mismatch.
