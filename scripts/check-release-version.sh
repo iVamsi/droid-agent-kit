@@ -51,6 +51,12 @@ check "MCP registry metadata" \
   "$root/distribution/server.json" \
   "\"version\": \"$version\""
 
+# The smoke test asserts the launcher cached the jar under its exact release name. A stale
+# version here fails the smoke test instead of the release, so keep it in the guard.
+check "npm launcher smoke test" \
+  "$root/distribution/smoke-test.sh" \
+  "droidagent-cli-$version.jar"
+
 changelog="$root/CHANGELOG.md"
 if [ ! -f "$changelog" ]; then
   echo "MISSING: $changelog (changelog entry)" >&2

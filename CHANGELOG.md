@@ -6,6 +6,12 @@ pre-release convention `0.y.z-alpha` until a stable 1.0 release.
 
 ## Unreleased
 
+### Added
+
+- `scripts/check-release-version.sh` now also checks the release jar name hardcoded in
+  `distribution/smoke-test.sh`. It was the one version string no guard covered, so a stale value
+  there surfaced as a smoke-test failure rather than a release-blocking version mismatch.
+
 ## [0.2.4-alpha] - 2026-07-31
 
 ### Changed
