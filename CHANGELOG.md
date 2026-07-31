@@ -6,6 +6,33 @@ pre-release convention `0.y.z-alpha` until a stable 1.0 release.
 
 ## Unreleased
 
+## [0.2.4-alpha] - 2026-07-31
+
+### Changed
+
+- The npm publish job no longer passes `--tag alpha`. Every pre-1.0 release now claims `latest`,
+  so `npm install @droidagentkit/launcher` and `npx` resolve to the newest build. Previously
+  `latest` stayed pinned to 0.2.0-alpha — the one version published without the flag — while
+  0.2.1-alpha through 0.2.3-alpha shipped unreachable by default.
+
+### Added
+
+- `scripts/check-release-version.sh` now fails on the first stable (non-prerelease) version,
+  forcing an explicit dist-tag decision before a later prerelease could overwrite `latest` and
+  hide the stable release.
+
+### Removed
+
+- The `docs/adrs/` architecture decision records. Packaging rationale is covered by
+  `docs/easy-mcp-installation.md` and `.github/workflows/release.yml`; the configuration trust
+  split is documented in `docs/security-and-permissions.md`, which the generated user policy
+  header and the privileged-key config warning now point at.
+- Repository history was rewritten to remove those documents, so commit SHAs from the
+  0.2.0-alpha era forward have changed and the `v0.2.0-alpha`–`v0.2.3-alpha` tags were
+  re-pointed. The npm provenance attestations for those earlier releases reference commits that
+  no longer exist; 0.2.4-alpha is the first release whose attestation resolves against the
+  current history.
+
 ## [0.2.3-alpha] - 2026-07-28
 
 ### Added
