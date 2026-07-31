@@ -57,10 +57,11 @@ pre-release convention `0.y.z-alpha` until a stable 1.0 release.
 
 ### Added
 
-- Test coverage is measured (JaCoCo) and enforced in CI. The gate targets the classes that decide
+- Test coverage is measured (Kover) and enforced in CI. The gate targets the classes that decide
   authority — `DroidAgentConfigLoader`, `SafetyConfig`, `DefaultOperationPolicy`, `Redactor`,
   `DeviceIdentifiers` — rather than a project-wide average, which can stay healthy while exactly
-  the security-critical code loses coverage. Measured coverage is 80–98% per module.
+  the security-critical code loses coverage. Those classes measure 92.97%; the project aggregate
+  is 88.3%.
 - `ConfigFuzzTest` now asserts the trust-split invariant directly: for randomly generated project
   configs and policies, the effective config is never more permissive than the policy along any
   axis. The previous fuzz test only asserted the loader does not crash, which stayed true

@@ -3,9 +3,11 @@ kotlin = "2.4.0"
 ktlint = "14.2.0"
 shadow = "9.5.0"
 detekt = "1.23.8"
+kover = "0.9.9"
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint" }
 shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
+kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }

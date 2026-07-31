@@ -8,29 +8,31 @@ dependencies {
 
 /**
  * Coverage is gated on the classes that decide authority, not on a project-wide average — an
- * average can stay healthy while exactly the security-critical code rots. The floors sit below
+ * average can stay healthy while exactly the security-critical code rots. The floor sits below
  * current values so this is a regression alarm rather than a tripwire to be tuned constantly.
+ *
+ * Kover 0.9.9's `KoverVerifyRule` exposes only bounds and `groupBy`, with no per-rule filter, so
+ * the class list has to be applied at report level. That narrows *this module's* report to those
+ * classes; the root project aggregates an unfiltered report across every module, so full coverage
+ * visibility is preserved there.
  */
-tasks.named<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
-    dependsOn(tasks.named("jacocoTestReport"))
-    violationRules {
-        rule {
-            element = "CLASS"
-            includes =
-                listOf(
+kover {
+    reports {
+        filters {
+            includes {
+                classes(
                     "com.droidagentkit.core.DroidAgentConfigLoader",
                     "com.droidagentkit.core.SafetyConfig",
                     "com.droidagentkit.core.DefaultOperationPolicy",
                     "com.droidagentkit.core.Redactor",
                     "com.droidagentkit.core.DeviceIdentifiers",
                 )
-            limit {
-                counter = "LINE"
-                value = "COVEREDRATIO"
-                minimum = "0.85".toBigDecimal()
+            }
+        }
+        verify {
+            rule("authority-deciding classes") {
+                minBound(85)
             }
         }
     }
 }
-
-tasks.named("check") { dependsOn(tasks.named("jacocoTestCoverageVerification")) }

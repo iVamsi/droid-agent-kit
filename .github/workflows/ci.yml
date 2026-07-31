@@ -48,4 +48,4 @@ jobs:
       # Gated on the classes that decide authority rather than a project-wide average, which can
       # stay healthy while exactly the security-critical code loses coverage.
       - name: Coverage (policy classes)
-        run: ./gradlew :toolbox-core:jacocoTestCoverageVerification --no-configuration-cache --stacktrace
+        run: ./gradlew :toolbox-core:koverVerify --no-configuration-cache --stacktrace

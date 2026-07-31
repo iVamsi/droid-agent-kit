@@ -2,19 +2,36 @@ plugins {
     alias(libs.plugins.kotlin.jvm) apply false
     alias(libs.plugins.ktlint) apply false
     alias(libs.plugins.detekt) apply false
+    alias(libs.plugins.kover)
 }
 
 group = "com.droidagentkit"
 version = "0.2.4-alpha"
+
+// Unfiltered, project-wide coverage. toolbox-core narrows its own report to the classes its
+// verification rule gates, so the whole-project view lives here.
+dependencies {
+    kover(project(":toolbox-core"))
+    kover(project(":mcp-server"))
+    kover(project(":android-inspector"))
+    kover(project(":android-device-core"))
+    kover(project(":storage-inspector"))
+    kover(project(":network-core"))
+    kover(project(":perfetto-core"))
+    kover(project(":auditor-cli"))
+    kover(project(":visuals-core"))
+    kover(project(":cli"))
+}
 
 subprojects {
     group = rootProject.group
     version = rootProject.version
 
     apply(plugin = "org.jlleitschuh.gradle.ktlint")
-    // JaCoCo rather than Kover: Kover 0.9.1 is the latest release and reads
-    // `compilation.compileKotlinTask`, which the Kotlin 2.4.0 Gradle plugin no longer exposes.
-    apply(plugin = "jacoco")
+    // Kover rather than JaCoCo: this is a pure-Kotlin project, and Kover understands Kotlin
+    // constructs (inline functions, synthetic members) that JaCoCo miscounts. Requires >= 0.9.2;
+    // 0.9.1 reads `compilation.compileKotlinTask`, which Kotlin 2.4.0's Gradle plugin removed.
+    apply(plugin = "org.jetbrains.kotlinx.kover")
     apply(plugin = "io.gitlab.arturbosch.detekt")
 
     extensions.configure<io.gitlab.arturbosch.detekt.extensions.DetektExtension>("detekt") {
@@ -46,15 +63,6 @@ subprojects {
         testLogging {
             events("failed", "skipped")
             exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
-        }
-        finalizedBy(tasks.withType<JacocoReport>())
-    }
-
-    tasks.withType<JacocoReport>().configureEach {
-        dependsOn(tasks.withType<Test>())
-        reports {
-            xml.required.set(true)
-            html.required.set(true)
         }
     }
 }
