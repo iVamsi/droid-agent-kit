@@ -88,6 +88,24 @@ class AppDataSnapshotterTest {
     }
 
     @Test
+    fun `fileTree parseFind drops entries outside the requested subtree`() {
+        // find output comes from a device the toolkit does not trust; entries that claim to sit
+        // outside the path that was asked for are discarded rather than surfaced.
+        val output =
+            listOf(
+                "databases/app.db",
+                "../../etc/passwd",
+                "/data/data/com.other.app/x.db",
+                "databases/nested/inner.db",
+            ).joinToString("\n")
+
+        val entries = FileTreeParser.parseFind(output, basePath = "databases", maxEntries = 100)
+
+        assertEquals(2, entries.size)
+        assertTrue(entries.all { it.path.startsWith("databases/") })
+    }
+
+    @Test
     fun `prefs parser extracts typed entries`() {
         val xml =
             """

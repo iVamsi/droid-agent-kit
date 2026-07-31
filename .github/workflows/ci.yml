@@ -41,6 +41,8 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew ktlintCheck --no-configuration-cache --stacktrace
+      - name: Static analysis
+        run: ./gradlew detekt --no-configuration-cache --stacktrace
       - name: Test
         run: ./gradlew test --no-configuration-cache --stacktrace
       # Gated on the classes that decide authority rather than a project-wide average, which can

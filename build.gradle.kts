@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.kotlin.jvm) apply false
     alias(libs.plugins.ktlint) apply false
+    alias(libs.plugins.detekt) apply false
 }
 
 group = "com.droidagentkit"
@@ -14,6 +15,14 @@ subprojects {
     // JaCoCo rather than Kover: Kover 0.9.1 is the latest release and reads
     // `compilation.compileKotlinTask`, which the Kotlin 2.4.0 Gradle plugin no longer exposes.
     apply(plugin = "jacoco")
+    apply(plugin = "io.gitlab.arturbosch.detekt")
+
+    extensions.configure<io.gitlab.arturbosch.detekt.extensions.DetektExtension>("detekt") {
+        config.setFrom(rootProject.file("config/detekt/detekt.yml"))
+        buildUponDefaultConfig = false
+        ignoreFailures = false
+        basePath = rootProject.projectDir.absolutePath
+    }
 
     // ktlint-gradle 14.2.0 pulls ktlint-cli 1.5.0 -> logback 1.3.14, which has several fixed CVEs.
     // Three (GHSA-25qh-j22f-pwp8, GHSA-6v67-2wr5-gvf4, GHSA-pr98-23f8-jwxv) are patched within the

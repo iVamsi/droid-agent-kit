@@ -66,11 +66,22 @@ pre-release convention `0.y.z-alpha` until a stable 1.0 release.
   axis. The previous fuzz test only asserted the loader does not crash, which stayed true
   throughout the escalation described above.
 
+- Static analysis (detekt) runs in CI with a deliberately narrow, opt-in ruleset covering swallowed
+  failures, dead parameters, and locale-dependent case folding. Formatting stays ktlint's job. The
+  ruleset found four dead parameters/properties across the codebase, all now removed or given real
+  work; no baseline file was needed.
+- `scripts/check-public-hygiene.sh` now fails if a tracked source file is classified as binary. The
+  existing leak scan uses `git grep -I`, which skips binary files, so a single stray NUL byte in a
+  source file would silently exempt it from that check and from any other binary-skipping scanner.
+
 ### Fixed
 
 - Database filenames read from a device are validated as bare filenames before being resolved
   against a host directory, matching the confinement `SqliteInspector` already applied to query
   arguments.
+- `FileTreeParser.parseFind` discards entries that fall outside the requested subtree. `find` output
+  comes from a device the toolkit does not trust, and the `basePath` argument was previously
+  accepted but unused, so entries claiming any path were returned as-is.
 
 ### Added
 

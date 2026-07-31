@@ -236,7 +236,6 @@ class DeviceReadToolProvider(
         )
 
     private fun blocked(
-        tool: String,
         code: String,
         reason: String,
     ): Map<String, Any> =
@@ -269,7 +268,7 @@ class DeviceReadToolProvider(
         val serial = requireSerial(arguments) ?: return missingSerial("android_permission_audit")
         val packageName =
             arguments["packageName"]?.toString()?.takeIf { it.isNotBlank() }
-                ?: return blocked("android_permission_audit", "missing-package", "packageName is required for android_permission_audit.")
+                ?: return blocked("missing-package", "packageName is required for android_permission_audit.")
         val root = context.resolveRoot(arguments)
         val runResult = runAdbText(serial, listOf("dumpsys", "package", packageName), "adb-permission-audit", root)
         if (runResult.status == ResultStatus.BLOCKED) return context.resultMap(runResult)
@@ -295,17 +294,16 @@ class DeviceReadToolProvider(
         val serial = requireSerial(arguments) ?: return missingSerial("android_dumpsys")
         val presetName =
             arguments["preset"]?.toString()?.takeIf { it.isNotBlank() }
-                ?: return blocked("android_dumpsys", "missing-preset", "preset is required for android_dumpsys.")
+                ?: return blocked("missing-preset", "preset is required for android_dumpsys.")
         val preset =
             DumpsysPreset.entries.firstOrNull { it.wireName.equals(presetName, ignoreCase = true) }
                 ?: return blocked(
-                    "android_dumpsys",
                     "invalid-dumpsys-preset",
                     "Unknown dumpsys preset '$presetName'. Use meminfo, gfxinfo, cpuinfo, batterystats, or package.",
                 )
         val packageName = arguments["packageName"]?.toString()?.takeIf { it.isNotBlank() }
         if (preset == DumpsysPreset.PACKAGE && packageName.isNullOrBlank()) {
-            return blocked("android_dumpsys", "missing-package", "packageName is required when preset is package.")
+            return blocked("missing-package", "packageName is required when preset is package.")
         }
         val root = context.resolveRoot(arguments)
         val shellArgs =
@@ -426,13 +424,12 @@ class DeviceReadToolProvider(
             } else {
                 filter.split(Regex("\\s+")).filter { it.isNotBlank() }
             }
-        if (filterTokens.size > 8) return blocked("android_logcat_start", "filter-too-long", "logcat filter is bounded to 8 tokens.")
+        if (filterTokens.size > 8) return blocked("filter-too-long", "logcat filter is bounded to 8 tokens.")
         val invalidToken = filterTokens.firstOrNull { !it.matches(Regex("^[A-Za-z0-9_*:.-]+$")) }
         if (invalidToken !=
             null
         ) {
             return blocked(
-                "android_logcat_start",
                 "invalid-filter-token",
                 "logcat filter token '$invalidToken' contains unsupported characters.",
             )
@@ -509,7 +506,7 @@ class DeviceReadToolProvider(
     private fun jobStatus(arguments: Map<String, Any?>): Map<String, Any> {
         val jobId =
             arguments["jobId"]?.toString()?.takeIf { it.isNotBlank() }
-                ?: return blocked("android_job_status", "missing-job-id", "jobId is required for android_job_status.")
+                ?: return blocked("missing-job-id", "jobId is required for android_job_status.")
         val snapshot = context.jobRunner().status(jobId)
         return jobEnvelope(snapshot, jobId, "status")
     }
@@ -517,7 +514,7 @@ class DeviceReadToolProvider(
     private fun jobCancel(arguments: Map<String, Any?>): Map<String, Any> {
         val jobId =
             arguments["jobId"]?.toString()?.takeIf { it.isNotBlank() }
-                ?: return blocked("android_job_cancel", "missing-job-id", "jobId is required for android_job_cancel.")
+                ?: return blocked("missing-job-id", "jobId is required for android_job_cancel.")
         val snapshot = context.jobRunner().cancel(jobId)
         return jobEnvelope(snapshot, jobId, "cancel")
     }

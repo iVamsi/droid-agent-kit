@@ -97,7 +97,6 @@ class SqliteInspector(
                 stmt.queryTimeout = timeoutSeconds.toInt().coerceAtLeast(1)
                 stmt.maxRows = maxRows + 1
                 val warnings = mutableListOf<String>()
-                val started = System.nanoTime()
                 val rs =
                     try {
                         stmt.executeQuery(validated)

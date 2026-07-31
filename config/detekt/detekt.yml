@@ -1,0 +1,61 @@
+# Deliberately narrow. Formatting is ktlint's job and correctness-at-scale is CodeQL's; this
+# ruleset covers the failure modes that review found in this codebase — silently swallowed
+# failures, dead parameters at security-relevant call sites, and locale-dependent case folding in
+# the config parser. Rules are opt-in (buildUponDefaultConfig = false) so the signal stays high
+# and no baseline file is needed.
+
+build:
+  maxIssues: 0
+
+config:
+  validation: true
+  warningsAsErrors: false
+
+empty-blocks:
+  active: true
+  EmptyCatchBlock:
+    active: true
+    allowedExceptionNameRegex: '_|(ignore|expected).*'
+  EmptyFinallyBlock:
+    active: true
+  EmptyInitBlock:
+    active: true
+  EmptyWhenBlock:
+    active: true
+
+exceptions:
+  active: true
+  PrintStackTrace:
+    active: true
+  ReturnFromFinally:
+    active: true
+  RethrowCaughtException:
+    active: true
+  ThrowingExceptionFromFinally:
+    active: true
+  ThrowingExceptionsWithoutMessageOrCause:
+    active: false
+
+potential-bugs:
+  active: true
+  ImplicitDefaultLocale:
+    active: true
+  UnreachableCode:
+    active: true
+  UnsafeCallOnNullableType:
+    active: true
+  ExplicitGarbageCollectionCall:
+    active: true
+  WrongEqualsTypeParameter:
+    active: true
+
+style:
+  active: true
+  UnusedImports:
+    active: true
+  UnusedParameter:
+    active: true
+  UnusedPrivateMember:
+    active: true
+  UnusedPrivateProperty:
+    active: true

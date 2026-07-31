@@ -15,10 +15,7 @@ import java.nio.file.Path
 import javax.imageio.ImageIO
 
 class VisualsToolProviderTest {
-    private fun config(
-        root: Path,
-        capabilities: Set<Capability> = setOf(Capability.GOLDEN_UPDATE),
-    ): DroidAgentConfig {
+    private fun config(capabilities: Set<Capability> = setOf(Capability.GOLDEN_UPDATE)): DroidAgentConfig {
         val base = DroidAgentConfig.default()
         return base.copy(safety = base.safety.copy(allowCapabilities = capabilities))
     }
@@ -31,7 +28,7 @@ class VisualsToolProviderTest {
     @Test
     fun `visuals tools are listed only when the group is exposed`() {
         val root = Files.createTempDirectory("dak-visuals-list")
-        val dispatcher = dispatcher(root, config(root))
+        val dispatcher = dispatcher(root, config())
 
         val names = dispatcher.listTools().map { it.name }
         assertTrue(names.contains("android_visual_diff"))
@@ -57,7 +54,7 @@ class VisualsToolProviderTest {
         Files.write(candidate, solidColorPngWithChangedPixel(Color.WHITE, Color.BLACK))
 
         val result =
-            dispatcher(root, config(root)).call(
+            dispatcher(root, config()).call(
                 "android_visual_diff",
                 mapOf("rootPath" to root.toString(), "baselinePath" to baseline.toString(), "candidatePath" to candidate.toString()),
             )
@@ -78,7 +75,7 @@ class VisualsToolProviderTest {
         Files.write(candidate, png)
 
         val result =
-            dispatcher(root, config(root)).call(
+            dispatcher(root, config()).call(
                 "android_visual_diff",
                 mapOf("rootPath" to root.toString(), "baselinePath" to baseline.toString(), "candidatePath" to candidate.toString()),
             )
@@ -94,7 +91,7 @@ class VisualsToolProviderTest {
         Files.write(outside, solidColorPng(Color.WHITE))
 
         val result =
-            dispatcher(root, config(root)).call(
+            dispatcher(root, config()).call(
                 "android_visual_diff",
                 mapOf(
                     "rootPath" to root.toString(),
@@ -119,7 +116,7 @@ class VisualsToolProviderTest {
         Files.write(goldenDir.resolve("phone_412x915_light_1.0_en.png"), png)
 
         val result =
-            dispatcher(root, config(root)).call(
+            dispatcher(root, config()).call(
                 "android_visual_report",
                 mapOf("rootPath" to root.toString(), "goldensDir" to goldensDir.toString()),
             )
@@ -136,7 +133,7 @@ class VisualsToolProviderTest {
         VisualCaptureEngine.persistCapture(capturesDir, "home_screen", "phone_412x915", "light", 1.0f, "en", solidColorPng(Color.WHITE), "")
 
         val result =
-            dispatcher(root, config(root)).call(
+            dispatcher(root, config()).call(
                 "android_visual_report",
                 mapOf(
                     "rootPath" to root.toString(),
@@ -157,7 +154,7 @@ class VisualsToolProviderTest {
     fun `update goldens is blocked without the golden_update capability`() {
         val root = Files.createTempDirectory("dak-visuals-update-nocap")
         val result =
-            dispatcher(root, config(root, capabilities = emptySet())).call(
+            dispatcher(root, config(capabilities = emptySet())).call(
                 "android_visual_update_goldens",
                 mapOf("rootPath" to root.toString(), "goldensDir" to root.resolve("goldens").toString(), "confirmDestructive" to true),
             )
@@ -170,7 +167,7 @@ class VisualsToolProviderTest {
     fun `update goldens is blocked without confirmDestructive`() {
         val root = Files.createTempDirectory("dak-visuals-update-noconfirm")
         val result =
-            dispatcher(root, config(root)).call(
+            dispatcher(root, config()).call(
                 "android_visual_update_goldens",
                 mapOf("rootPath" to root.toString(), "goldensDir" to root.resolve("goldens").toString()),
             )
@@ -188,7 +185,7 @@ class VisualsToolProviderTest {
         VisualCaptureEngine.persistCapture(capturesDir, "home_screen", "phone_412x915", "light", 1.0f, "en", png, "")
 
         val result =
-            dispatcher(root, config(root)).call(
+            dispatcher(root, config()).call(
                 "android_visual_update_goldens",
                 mapOf("rootPath" to root.toString(), "goldensDir" to goldensDir.toString(), "confirmDestructive" to true),
             )
