@@ -40,6 +40,11 @@ pre-release convention `0.y.z-alpha` until a stable 1.0 release.
 - Device serials and package names are validated before use. Shell injection was already handled
   by quoting, but a value beginning with `-` sits in flag position for `adb -s <serial>` and
   `run-as <pkg>`.
+- Artifact writes refuse to follow a symlink placed at the target path, and both artifact
+  registration and host-path authorization now resolve links instead of normalizing lexically. The
+  output directory sits under the inspected project (`build/droidagentkit/` by default), so a
+  repository could commit a link named like an artifact the writer produces and redirect the write
+  anywhere on disk.
 - The HTTP transport no longer resolves DNS for the `Host` and `Origin` request headers, which put
   a blocking lookup on the request path and let a name resolving to loopback satisfy the check.
   Bind-time host resolution, which comes from the operator's own command line, is unchanged.

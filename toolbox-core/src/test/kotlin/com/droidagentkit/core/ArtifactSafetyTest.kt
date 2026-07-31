@@ -7,6 +7,55 @@ import java.nio.file.Files
 
 class ArtifactSafetyTest {
     @Test
+    fun `refuses to write an artifact through a planted symlink`() {
+        // The output directory lives under the inspected project (build/droidagentkit/), so a
+        // repository can commit a link there named like an artifact the writer produces. Following
+        // it would hand the repository a write primitive pointing anywhere on disk.
+        val dir = Files.createTempDirectory("dak-art-symlink")
+        val outsideDir = Files.createTempDirectory("dak-art-outside")
+        val victim = outsideDir.resolve("authorized_keys")
+        Files.writeString(victim, "original")
+        Files.createSymbolicLink(dir.resolve("gradle-run.log"), victim)
+
+        val writer = ArtifactWriter(dir)
+
+        listOf(
+            { writer.writeText("gradle-run.log", "pwned") },
+            { writer.writeBytes("gradle-run.log", "pwned".toByteArray(Charsets.UTF_8)) },
+            { writer.writeStream("gradle-run.log", ArtifactType.LOG, "log") { it.write(1) } },
+        ).forEach { attempt ->
+            var threw = false
+            try {
+                attempt()
+            } catch (_: Exception) {
+                threw = true
+            }
+            assertTrue("expected the write to be refused", threw)
+        }
+        assertEquals("original", Files.readString(victim))
+    }
+
+    @Test
+    fun `registerExistingFile rejects a symlink escaping the output directory`() {
+        val dir = Files.createTempDirectory("dak-art-register")
+        val outsideDir = Files.createTempDirectory("dak-art-register-outside")
+        val secret = outsideDir.resolve("secret.txt")
+        Files.writeString(secret, "classified")
+        val link = dir.resolve("innocent.log")
+        Files.createSymbolicLink(link, secret)
+
+        val writer = ArtifactWriter(dir)
+
+        var threw = false
+        try {
+            writer.registerExistingFile(link, ArtifactType.LOG, "log")
+        } catch (_: IllegalArgumentException) {
+            threw = true
+        }
+        assertTrue("expected registration to be refused", threw)
+    }
+
+    @Test
     fun `writeBytes records size sha256 sensitivity and opaque id`() {
         val dir = Files.createTempDirectory("dak-art")
         val writer = ArtifactWriter(dir)

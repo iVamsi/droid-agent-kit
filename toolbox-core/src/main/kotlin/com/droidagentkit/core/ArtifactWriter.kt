@@ -22,8 +22,8 @@ class ArtifactWriter(
         sensitivity: ArtifactSensitivity = ArtifactSensitivity.PUBLIC,
     ): ArtifactRef {
         val safeName = sanitize(name)
-        val path = outputDir.resolve(safeName)
-        Files.writeString(path, text)
+        val path = outputDir.resolve(safeName).also { rejectSymlink(it) }
+        Files.newOutputStream(path, *WRITE_NOFOLLOW).use { it.write(text.toByteArray(Charsets.UTF_8)) }
         return ref(path, type, description, sensitivity, text.length.toLong(), sha256(text.toByteArray(Charsets.UTF_8)))
     }
 
@@ -35,8 +35,8 @@ class ArtifactWriter(
         sensitivity: ArtifactSensitivity = ArtifactSensitivity.PUBLIC,
     ): ArtifactRef {
         val safeName = sanitize(name)
-        val path = outputDir.resolve(safeName)
-        Files.write(path, bytes)
+        val path = outputDir.resolve(safeName).also { rejectSymlink(it) }
+        Files.newOutputStream(path, *WRITE_NOFOLLOW).use { it.write(bytes) }
         return ref(path, type, description, sensitivity, bytes.size.toLong(), sha256(bytes))
     }
 
@@ -49,11 +49,11 @@ class ArtifactWriter(
         drain: (OutputStream) -> Unit,
     ): StreamResult {
         val safeName = sanitize(name)
-        val path = outputDir.resolve(safeName)
+        val path = outputDir.resolve(safeName).also { rejectSymlink(it) }
         val digest = MessageDigest.getInstance("SHA-256")
         var written = 0L
         var truncated = false
-        Files.newOutputStream(path).use { out ->
+        Files.newOutputStream(path, *WRITE_NOFOLLOW).use { out ->
             val buf = ByteArray(BUFFER_SIZE)
             object : OutputStream() {
                 override fun write(b: Int) {
@@ -116,8 +116,10 @@ class ArtifactWriter(
         description: String,
         sensitivity: ArtifactSensitivity = ArtifactSensitivity.PUBLIC,
     ): ArtifactRef {
-        val resolved = file.toAbsolutePath().normalize()
-        val outputRoot = outputDir.toAbsolutePath().normalize()
+        // Resolved through links: a lexical check would let a symlink inside the output directory
+        // register — and hash — a file anywhere on disk.
+        val resolved = runCatching { file.toRealPath() }.getOrDefault(file.toAbsolutePath().normalize())
+        val outputRoot = runCatching { outputDir.toRealPath() }.getOrDefault(outputDir.toAbsolutePath().normalize())
         require(resolved.startsWith(outputRoot)) { "Artifact path '$resolved' is outside the configured output directory." }
         val size = Files.size(resolved)
         return ref(resolved, type, description, sensitivity, size, sha256File(resolved))
@@ -166,6 +168,20 @@ class ArtifactWriter(
         return "art_" + hex(digest.digest()).take(24)
     }
 
+    /**
+     * Refuses to write through a symlink sitting at an artifact path.
+     *
+     * [sanitize] stops traversal in the name, but the output directory lives under the target
+     * project (`build/droidagentkit/` by default), so a repository can commit a link there whose
+     * name matches an artifact this writer produces. Writing would then follow it out of the
+     * project — a write primitive controlled by the repository being inspected.
+     */
+    private fun rejectSymlink(path: Path) {
+        require(!Files.isSymbolicLink(path)) {
+            "Refusing to write artifact through symlink '$path'."
+        }
+    }
+
     private fun sanitize(name: String): String = name.replace(Regex("[^A-Za-z0-9._-]"), "-")
 
     private fun mimeTypeFor(path: Path): String =
@@ -193,5 +209,14 @@ class ArtifactWriter(
     private companion object {
         const val BUFFER_SIZE = 8 * 1024
         const val MAX_STREAM_BYTES = 256L * 1024 * 1024
+
+        /** Truncating write that fails rather than following a link placed at the target. */
+        val WRITE_NOFOLLOW =
+            arrayOf<java.nio.file.OpenOption>(
+                java.nio.file.StandardOpenOption.CREATE,
+                java.nio.file.StandardOpenOption.WRITE,
+                java.nio.file.StandardOpenOption.TRUNCATE_EXISTING,
+                java.nio.file.LinkOption.NOFOLLOW_LINKS,
+            )
     }
 }

@@ -1,5 +1,6 @@
 package com.droidagentkit.core
 
+import java.nio.file.Files
 import java.nio.file.Path
 
 enum class Capability {
@@ -100,12 +101,13 @@ class DefaultOperationPolicy(
                 "Operation '${request.operationId}' is destructive and requires confirmDestructive=true.",
             )
         }
+        val realRoots = allowedRoots.map { resolveThroughLinks(it) }
         request.hostPaths.forEach { path ->
-            val resolved = path.toAbsolutePath().normalize()
-            if (allowedRoots.none { resolved.startsWith(it) }) {
+            val resolved = resolveThroughLinks(path)
+            if (realRoots.none { resolved.startsWith(it) }) {
                 return AuthorizationDecision.Denied(
                     "host-path-denied",
-                    "Host path '$resolved' is outside the allowed roots.",
+                    "Host path '${path.toAbsolutePath().normalize()}' is outside the allowed roots.",
                 )
             }
         }
@@ -137,6 +139,25 @@ class DefaultOperationPolicy(
         // run-as-based read access to a debuggable app's own data, which is the supported path.
         val ALLOWED_DEVICE_PATH_PREFIXES =
             listOf("/sdcard/", "/storage/emulated/0/", "/storage/self/primary/")
+
+        /**
+         * Absolute path with symlinks resolved, tolerating a target that does not exist yet.
+         *
+         * `normalize()` alone is lexical, so a link inside an allowed root pointed anywhere and the
+         * containment check still passed. A pull destination legitimately may not exist, so this
+         * resolves the deepest ancestor that does and re-appends the rest — enough to catch a link
+         * anywhere along the existing part of the path.
+         */
+        fun resolveThroughLinks(path: Path): Path {
+            val absolute = path.toAbsolutePath().normalize()
+            var existing = absolute
+            while (existing.parent != null && !Files.exists(existing)) {
+                existing = existing.parent
+            }
+            val real = runCatching { existing.toRealPath() }.getOrDefault(existing)
+            val remainder = runCatching { existing.relativize(absolute) }.getOrNull()
+            return if (remainder == null || remainder.toString().isEmpty()) real else real.resolve(remainder).normalize()
+        }
 
         fun normalizeDevicePath(path: String): String {
             val segments = path.split("/")
