@@ -6,6 +6,8 @@ pre-release convention `0.y.z-alpha` until a stable 1.0 release.
 
 ## Unreleased
 
+## [0.2.5-alpha] - 2026-07-31
+
 ### Security
 
 - A project-local `.droidagentkit/config.yaml` could widen the Gradle task allowlist instead of

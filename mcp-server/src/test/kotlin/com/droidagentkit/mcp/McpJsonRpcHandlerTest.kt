@@ -21,7 +21,7 @@ class McpJsonRpcHandlerTest {
         assertTrue(response != null)
         assertTrue(response!!.contains("\"protocolVersion\":\"2025-11-25\""))
         assertTrue(response.contains("\"name\":\"droidagentkit\""))
-        assertTrue(response.contains("\"version\":\"0.2.4-alpha\""))
+        assertTrue(response.contains("\"version\":\"0.2.5-alpha\""))
         assertTrue(response.contains("\"id\":1"))
     }
 
