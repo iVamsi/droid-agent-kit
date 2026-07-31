@@ -246,11 +246,13 @@ class DeviceReadToolProviderTest {
         val jobId = start["jobId"] as String
         assertTrue(start.containsKey("logUri"))
 
-        // The fake adb exits immediately, so the job should reach a terminal state shortly.
-        var status = dispatcher.call("android_job_status", mapOf("rootPath" to root.toString(), "jobId" to jobId))
+        // The fake adb exits immediately, so the job reaches a terminal state quickly. Poll for it
+        // rather than sleeping a fixed interval and hoping, which fails on a loaded machine.
         val terminalStates = setOf("success", "failed", "cancelled", "expired")
-        if (status["jobState"] == "running") {
-            Thread.sleep(500)
+        val deadline = System.currentTimeMillis() + 10_000
+        var status = dispatcher.call("android_job_status", mapOf("rootPath" to root.toString(), "jobId" to jobId))
+        while (status["jobState"] !in terminalStates && System.currentTimeMillis() < deadline) {
+            Thread.sleep(10)
             status = dispatcher.call("android_job_status", mapOf("rootPath" to root.toString(), "jobId" to jobId))
         }
         assertTrue("expected terminal state but was ${status["jobState"]}", status["jobState"] in terminalStates)

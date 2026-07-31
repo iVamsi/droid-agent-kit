@@ -6,6 +6,24 @@ import org.junit.Test
 import java.nio.file.Files
 
 class ManagedJobRunnerTest {
+    /**
+     * Waits for a condition instead of sleeping a fixed interval. A fixed sleep is both slower than
+     * it needs to be and unreliable on a loaded machine, and it pushed these tests into accepting
+     * whichever state happened to be observed rather than the one that should be reached.
+     */
+    private fun waitUntil(
+        what: String,
+        timeoutMs: Long = 10_000,
+        condition: () -> Boolean,
+    ) {
+        val deadline = System.nanoTime() + timeoutMs * 1_000_000
+        while (System.nanoTime() < deadline) {
+            if (condition()) return
+            Thread.sleep(10)
+        }
+        throw AssertionError("timed out after ${timeoutMs}ms waiting for: $what")
+    }
+
     private fun runner(dir: java.nio.file.Path): InProcessManagedJobRunner {
         val writer = ArtifactWriter(dir)
         val redactor = Redactor(DroidAgentConfig.default().redaction)
@@ -46,9 +64,8 @@ class ManagedJobRunnerTest {
         val op = authorizedRequest()
         val snapshot = r.start(spec("fast", listOf("true"), op))
         assertEquals(JobState.RUNNING, snapshot.state)
-        Thread.sleep(300)
-        val final = r.status("fast")
-        assertTrue("expected success but was ${final.state}", final.state == JobState.SUCCEEDED || final.state == JobState.RUNNING)
+        waitUntil("job to finish") { r.status("fast").state != JobState.RUNNING }
+        assertEquals(JobState.SUCCEEDED, r.status("fast").state)
         r.shutdown()
     }
 
@@ -58,7 +75,7 @@ class ManagedJobRunnerTest {
         val r = runner(dir)
         val op = authorizedRequest()
         r.start(spec("sleep", listOf("sleep", "30"), op, timeoutSeconds = 30))
-        Thread.sleep(200)
+        waitUntil("job to be running") { r.status("sleep").state == JobState.RUNNING }
         val cancelled = r.cancel("sleep")
         assertEquals(JobState.CANCELLED, cancelled.state)
         r.shutdown()
@@ -70,7 +87,7 @@ class ManagedJobRunnerTest {
         val r = runner(dir)
         val op = authorizedRequest(serial = "emulator-5554", mutating = true)
         r.start(spec("long1", listOf("sleep", "30"), op, timeoutSeconds = 30))
-        Thread.sleep(200)
+        waitUntil("first job to hold the device lock") { r.status("long1").state == JobState.RUNNING }
         val second = r.start(spec("long2", listOf("true"), op, timeoutSeconds = 5))
         assertEquals(JobState.PENDING, second.state)
         assertTrue(second.warnings.contains("device-busy"))
