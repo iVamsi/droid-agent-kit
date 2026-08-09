@@ -14,6 +14,8 @@ import com.droidagentkit.core.ShellQuote
 import com.droidagentkit.core.ToolGroup
 import com.droidagentkit.core.ToolResult
 import com.droidagentkit.device.DeviceToolContext
+import com.droidagentkit.device.FlowEmitters
+import com.droidagentkit.device.FlowRecorder
 import com.droidagentkit.mcp.McpTool
 import java.nio.file.Files
 import java.nio.file.Path
@@ -21,7 +23,30 @@ import java.nio.file.Path
 class DeviceControlToolProvider(
     private val context: DeviceToolContext,
 ) : McpToolProvider {
+    private companion object {
+        /**
+         * Only the tools that describe a user interaction. Emulator lifecycle, file transfer, and
+         * permission changes are environment setup, not steps of a flow, and replaying them would
+         * make a recorded flow destructive.
+         */
+        val RECORDABLE_TOOLS =
+            setOf(
+                "android_app_launch",
+                "android_deep_link",
+                "android_input_tap",
+                "android_input_swipe",
+                "android_input_type",
+                "android_input_key",
+            )
+    }
+
     override val group: ToolGroup = ToolGroup.DEVICE_CONTROL
+
+    /**
+     * Records only what already happened. It grants nothing and gates nothing, so it needs no
+     * capability of its own -- every step it captures was authorized on its own terms first.
+     */
+    private val recorder = FlowRecorder()
 
     private val adbPath: String get() = context.config.safety.adbPath
     private val emulatorPath: String get() = context.config.safety.emulatorPath
@@ -46,6 +71,8 @@ class DeviceControlToolProvider(
             "android_file_pull",
             "android_file_push",
             "android_run_flow",
+            "android_flow_record_start",
+            "android_flow_record_stop",
         )
 
     override fun listTools(): List<McpTool> = buildTools()
@@ -53,6 +80,19 @@ class DeviceControlToolProvider(
     override fun supports(name: String): Boolean = name in toolNames
 
     override fun call(
+        name: String,
+        arguments: Map<String, Any?>,
+    ): Map<String, Any> {
+        val result = dispatch(name, arguments)
+        // Recorded after the fact and only on success, so a flow never replays a step that did not
+        // actually work on the device it was captured from.
+        if (name in RECORDABLE_TOOLS && (result["status"] as? String) == "success") {
+            recorder.append(name, arguments)
+        }
+        return result
+    }
+
+    private fun dispatch(
         name: String,
         arguments: Map<String, Any?>,
     ): Map<String, Any> =
@@ -75,6 +115,8 @@ class DeviceControlToolProvider(
             "android_file_pull" -> filePull(arguments)
             "android_file_push" -> filePush(arguments)
             "android_run_flow" -> runFlow(arguments)
+            "android_flow_record_start" -> flowRecordStart(arguments)
+            "android_flow_record_stop" -> flowRecordStop(arguments)
             else -> unsupported(name)
         }
 
@@ -553,6 +595,25 @@ class DeviceControlToolProvider(
                 ),
             ),
             tool(
+                "android_flow_record_start",
+                "Start recording device interactions as a replayable flow",
+                "Begin capturing subsequent device-control calls. Stop with android_flow_record_stop to write the flow as run_flow JSON, Maestro YAML, and a Compose test skeleton.",
+                schema(
+                    "name",
+                    props =
+                        mapOf(
+                            "rootPath" to rootPathProp,
+                            "name" to str("Name for the recorded flow, used for the artifact filenames."),
+                        ),
+                ),
+            ),
+            tool(
+                "android_flow_record_stop",
+                "Stop recording and write the flow",
+                "Stop the active recording and write it as run_flow JSON, Maestro YAML, and a Compose UI test skeleton under the artifact directory.",
+                schema(props = mapOf("rootPath" to rootPathProp)),
+            ),
+            tool(
                 "android_run_flow",
                 "Run a bounded flow of primitive actions",
                 "Run a sequence of registered primitive actions on a device. No nested flows. Caps at 25 actions and 120 seconds. Reauthorizes every action. Defaults stopOnError=true.",
@@ -858,6 +919,51 @@ class DeviceControlToolProvider(
         if (!Files.exists(localFile)) return blocked("missing-local-file", "Local file does not exist: $localPath")
         val result = runAdb(arguments, listOf("-s", serial, "push", localPath, remote), "Push $localPath to $serial:$remote", false)
         return context.resultMap(result)
+    }
+
+    private fun flowRecordStart(arguments: Map<String, Any?>): Map<String, Any> {
+        val name =
+            arguments["name"]?.toString()?.takeIf { it.isNotBlank() }
+                ?: return blocked("missing-name", "name is required for android_flow_record_start.")
+        return try {
+            recorder.start(name)
+            context.resultMap(
+                ToolResult(
+                    status = ResultStatus.SUCCESS,
+                    summary = "Recording flow '$name'. Device-control calls will be captured until android_flow_record_stop.",
+                ),
+            )
+        } catch (error: IllegalStateException) {
+            blocked("recording-in-progress", error.message ?: "A flow is already being recorded.")
+        }
+    }
+
+    private fun flowRecordStop(arguments: Map<String, Any?>): Map<String, Any> {
+        if (!recorder.isRecording) {
+            return blocked("no-recording", "No flow is being recorded; call android_flow_record_start first.")
+        }
+        val root = context.resolveRoot(arguments)
+        val flow = recorder.stop()
+        val safeName = flow.name.replace(Regex("[^A-Za-z0-9._-]"), "-")
+        val flowDir = context.artifactOutputDir(root).resolve("flows").also { Files.createDirectories(it) }
+        val artifacts =
+            listOf(
+                Triple("$safeName.json", FlowEmitters.toRunFlowJson(flow), "run_flow actions, replayable with android_run_flow"),
+                Triple("$safeName.yaml", FlowEmitters.toMaestroYaml(flow), "Maestro flow"),
+                Triple("$safeName.kt", FlowEmitters.toComposeTest(flow), "Compose UI test skeleton"),
+            ).map { (fileName, content, description) ->
+                val file = flowDir.resolve(fileName)
+                Files.writeString(file, content)
+                context.registerExistingArtifact(root, file, ArtifactType.REPORT, description, ArtifactSensitivity.PUBLIC)
+            }
+        return context.resultMap(
+            ToolResult(
+                status = if (flow.steps.isEmpty()) ResultStatus.PARTIAL else ResultStatus.SUCCESS,
+                summary = "Recorded ${flow.steps.size} step(s) as '${flow.name}'.",
+                artifacts = artifacts,
+                warnings = if (flow.steps.isEmpty()) listOf("no-steps-recorded") else emptyList(),
+            ),
+        )
     }
 
     @Suppress("UNCHECKED_CAST")

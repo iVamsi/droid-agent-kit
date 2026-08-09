@@ -8,10 +8,13 @@ import com.droidagentkit.core.ArtifactWriter
 import com.droidagentkit.core.AuthorizationDecision
 import com.droidagentkit.core.CancellationToken
 import com.droidagentkit.core.Capability
+import com.droidagentkit.core.CheckStatus
 import com.droidagentkit.core.CommandSpec
 import com.droidagentkit.core.DefaultOperationPolicy
 import com.droidagentkit.core.DiagnosticFinding
+import com.droidagentkit.core.DoctorChecks
 import com.droidagentkit.core.DroidAgentConfig
+import com.droidagentkit.core.DroidAgentConfigLoader
 import com.droidagentkit.core.InProcessManagedJobRunner
 import com.droidagentkit.core.InteractiveConfirmer
 import com.droidagentkit.core.Json
@@ -45,6 +48,7 @@ import com.droidagentkit.mcp.tools.ToolProviderRegistry
 import com.droidagentkit.mcp.tools.VisualsToolProvider
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.TimeUnit
 import kotlin.io.path.exists
 
 data class McpTool(
@@ -104,6 +108,8 @@ data class ToolCallContext(
         val NONE = ToolCallContext()
     }
 }
+
+private const val DOCTOR_PROBE_TIMEOUT_SECONDS = 10L
 
 interface McpDispatcher {
     val instructions: String
@@ -485,7 +491,68 @@ class DroidAgentMcpDispatcher(
                     ),
                 outputSchema = toolResultSchema,
             ),
+            McpTool(
+                name = "android_doctor",
+                title = "Check the DroidAgentKit environment",
+                description =
+                    "Report the Java version, user policy and project config health, adb and any optional binaries the " +
+                        "enabled tool groups need, ANDROID_HOME, artifact writability, and the effective tool groups and " +
+                        "capabilities. Read-only. Run this first when a tool fails for no obvious reason.",
+                inputSchema = schema(props = mapOf("rootPath" to rootPathProp)),
+                annotations = mapOf("readOnlyHint" to true),
+                outputSchema = toolResultSchema,
+            ),
         )
+
+    private fun doctor(arguments: Map<String, Any?>): Map<String, Any> {
+        val root = rootPath(arguments)
+        val report =
+            DoctorChecks(
+                probe = { command -> probeVersion(command) },
+                env = { System.getenv(it) },
+            ).run(root, DroidAgentConfigLoader.defaultUserPolicyPath())
+        val failures = report.checks.filter { it.status == CheckStatus.FAIL }
+        val warnings = report.checks.filter { it.status == CheckStatus.WARN }
+        return resultMap(
+            ToolResult(
+                status = if (report.ok) ResultStatus.SUCCESS else ResultStatus.BLOCKED,
+                summary =
+                    if (report.ok) {
+                        "Environment ready. ${warnings.size} optional item(s) not configured."
+                    } else {
+                        "Not ready: " + failures.joinToString("; ") { "${it.name} — ${it.detail}" }
+                    },
+                warnings = warnings.map { "${it.name}: ${it.detail}" },
+            ),
+        ) +
+            mapOf(
+                "checks" to
+                    report.checks.map {
+                        mapOf(
+                            "name" to it.name,
+                            "status" to it.status.name.lowercase(),
+                            "detail" to it.detail,
+                            "remedy" to (it.remedy ?: ""),
+                        )
+                    },
+            )
+    }
+
+    /**
+     * Probes a binary for its version banner. Deliberately not routed through [ProcessRunner]: the
+     * doctor runs precisely when the configuration may be broken, and a version banner needs
+     * neither artifact capture nor redaction. Failure to launch is the answer, not an error.
+     */
+    private fun probeVersion(command: List<String>): String? =
+        runCatching {
+            val process = ProcessBuilder(command).redirectErrorStream(true).start()
+            val output = process.inputStream.bufferedReader().readText()
+            if (!process.waitFor(DOCTOR_PROBE_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                process.destroyForcibly()
+                return null
+            }
+            output.takeIf { process.exitValue() == 0 && it.isNotBlank() }
+        }.getOrNull()
 
     override fun call(
         name: String,
@@ -530,6 +597,7 @@ class DroidAgentMcpDispatcher(
                 "android_build_performance" -> buildPerformance(arguments)
                 "android_test_run" -> testRun(arguments)
                 "android_build_diagnose" -> buildDiagnose(arguments)
+                "android_doctor" -> doctor(arguments)
                 else -> resultMap(ToolResult(status = ResultStatus.UNSUPPORTED, summary = "Unknown MCP tool: $name"))
             }
         } catch (error: ProjectRootViolation) {
