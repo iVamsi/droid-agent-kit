@@ -108,6 +108,24 @@ Three things worth knowing before turning it on:
 A client that never answers times out and is treated as unavailable, so a wedged host blocks
 destructive work instead of waving it through.
 
+### Blast-radius budgets
+
+Capabilities answer "may this agent do this at all?" and say nothing about volume. An agent holding
+a legitimately granted capability can still clear app data in a loop or fill the disk with
+bugreports, and every one of those calls is individually authorized. Two session-wide caps bound
+that without having to predict the abuse:
+
+```yaml
+# ~/.droidagentkit/policy.yaml
+safety:
+  maxDestructivePerMinute: 6          # default 6, sliding one-minute window
+  maxArtifactBytesPerSession: 1073741824  # default 1 GiB
+```
+
+Read-only work never consumes destructive budget, and a refused call is not counted — so a client
+that retries cannot lock itself out beyond the original burst. Like `maxCommandSeconds`, a project
+config may *lower* these but never raise them.
+
 **Redaction is best-effort.** It is a curated denylist of patterns (bearer tokens, cloud keys, PEM
 blocks, `*_TOKEN=`-style assignments). It meaningfully reduces accidental secret exposure in command
 output; it cannot guarantee a secret in an unrecognized shape is caught. Do not treat redacted output

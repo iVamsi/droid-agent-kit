@@ -11,6 +11,17 @@ class ArtifactWriter(
     private val outputDir: Path,
 ) {
     init {
+        // The leaf-file symlink check below covers artifacts written *into* this directory, but not
+        // the directory itself. A repository that commits `build/droidagentkit` as a symlink turns
+        // every artifact write into a write through that link, and every per-file check still
+        // passes because none of those files is a symlink. Verified once, here, rather than on
+        // every write.
+        require(!Files.isSymbolicLink(outputDir)) {
+            "Refusing to use artifact directory '$outputDir': it is a symlink."
+        }
+        require(!Files.exists(outputDir) || Files.isDirectory(outputDir)) {
+            "Refusing to use artifact directory '$outputDir': it exists but is not a directory."
+        }
         outputDir.createDirectories()
     }
 
