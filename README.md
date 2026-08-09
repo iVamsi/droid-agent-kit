@@ -27,14 +27,14 @@ Three pieces that work on their own or together:
 
 ## MCP tools at a glance
 
-The **core** group is on by default (17 tools): project inspect, allowlisted Gradle runs, device list, install/launch, logcat, screenshot, accessibility snapshot, report bundle, lint, crash triage, dependency check, build performance, test run, build diagnose, APK size analysis, and `android_doctor` (an environment preflight you can run when something fails for no obvious reason).
+The **core** group is on by default (18 tools): project inspect, allowlisted Gradle runs, device list, install/launch, logcat, screenshot, accessibility snapshot, report bundle, lint, crash triage, dependency check, build performance, test run, build diagnose, APK size analysis, UI element lookup, and `android_doctor` (an environment preflight you can run when something fails for no obvious reason).
 
 Turn on more by exposing tool groups when you start the server (see [security model](docs/security-and-permissions.md)):
 
 | Group | What it adds |
 | ----- | ------------ |
 | `device_read` | Permission audit, dumpsys summaries, memory/battery, bugreport, streaming logcat jobs |
-| `device_control` | Emulator control, app uninstall/clear, intents, permissions, tap/swipe/type, file push/pull, small action flows, **flow recording** |
+| `device_control` | Emulator control, app uninstall/clear, intents, permissions, tap/swipe/type, **tap-by-label**, file push/pull, small action flows, **flow recording** |
 | `perfetto` | Trace capture and Trace Processor analysis (jank, CPU, contention, binder latency, …) |
 | `visuals` | Pixel diff, visual report, golden updates |
 | `storage` | Read-only SQLite, SharedPreferences, and file tree for **debuggable** apps |

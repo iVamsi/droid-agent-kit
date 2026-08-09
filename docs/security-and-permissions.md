@@ -108,6 +108,24 @@ Three things worth knowing before turning it on:
 A client that never answers times out and is treated as unavailable, so a wedged host blocks
 destructive work instead of waving it through.
 
+### Finding and tapping by label
+
+`android_ui_find` (read-only, core) resolves an on-screen element by text, content description, or
+resource id and returns its tap point. `android_input_tap_element` (`device_control`, gated on
+`device_input` exactly like `android_input_tap`) resolves and taps in one call.
+
+Both refuse to guess. When more than one element matches, the call fails with the candidates listed
+rather than tapping the first — two buttons labelled "Delete" is precisely the case where picking
+one silently does the wrong irreversible thing. A miss reports the labels actually on screen, so the
+agent can correct itself instead of retrying blindly.
+
+### Trimming token cost
+
+`android_accessibility_snapshot` accepts `verbosity: "compact"`, which returns only interactive
+nodes inline. The complete hierarchy is written as an artifact either way, so nothing is lost — only
+deferred. The default stays `full` so no existing integration silently starts receiving less than it
+did.
+
 ### Recording flows
 
 `android_flow_record_start` / `android_flow_record_stop` (in `device_control`) capture the device
