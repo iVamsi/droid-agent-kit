@@ -81,6 +81,11 @@ class DroidAgentCliParser {
                     dryRun = options.containsKey("dry-run"),
                     applyClaude = !options.containsKey("dry-run") && !options.containsKey("no-claude-apply"),
                 )
+            "doctor" ->
+                CliCommand.Doctor(
+                    project = options["project"] ?: ".",
+                    format = options["format"] ?: "text",
+                )
             "init" ->
                 CliCommand.Init(
                     profiles =

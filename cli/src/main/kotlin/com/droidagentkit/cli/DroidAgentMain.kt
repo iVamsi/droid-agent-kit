@@ -3,8 +3,10 @@ package com.droidagentkit.cli
 import com.droidagentkit.auditor.AgentDocumentWriter
 import com.droidagentkit.auditor.AgentsDocumentGenerator
 import com.droidagentkit.auditor.ReadinessAuditor
+import com.droidagentkit.core.CheckStatus
 import com.droidagentkit.core.ConfigLoadResult
 import com.droidagentkit.core.ConfigYaml
+import com.droidagentkit.core.DoctorChecks
 import com.droidagentkit.core.DroidAgentConfig
 import com.droidagentkit.core.DroidAgentConfigLoader
 import com.droidagentkit.core.Json
@@ -17,6 +19,7 @@ import com.droidagentkit.visuals.VisualCaptureEngine
 import com.droidagentkit.visuals.VisualTolerance
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.TimeUnit
 
 internal fun resolveServerConfig(
     configResult: ConfigLoadResult,
@@ -77,7 +80,69 @@ class DroidAgentCli(
             is CliCommand.Visuals -> visuals(command)
             is CliCommand.InstallMcp -> installMcp(command)
             is CliCommand.Init -> init(command)
+            is CliCommand.Doctor -> doctor(command)
         }
+
+    private fun doctor(command: CliCommand.Doctor): Int {
+        val root = Path.of(command.project).toAbsolutePath().normalize()
+        val report =
+            DoctorChecks(
+                probe = ::probeBinary,
+                env = { System.getenv(it) },
+            ).run(root, DroidAgentConfigLoader.defaultUserPolicyPath())
+
+        if (command.format == "json") {
+            println(
+                Json.write(
+                    mapOf(
+                        "ok" to report.ok,
+                        "checks" to
+                            report.checks.map {
+                                mapOf(
+                                    "name" to it.name,
+                                    "status" to it.status.name.lowercase(),
+                                    "detail" to it.detail,
+                                    "remedy" to it.remedy,
+                                )
+                            },
+                    ),
+                ),
+            )
+        } else {
+            report.checks.forEach { check ->
+                val marker =
+                    when (check.status) {
+                        CheckStatus.OK -> "ok  "
+                        CheckStatus.WARN -> "warn"
+                        CheckStatus.FAIL -> "FAIL"
+                    }
+                println("[$marker] ${check.name}: ${check.detail}")
+                if (check.status != CheckStatus.OK && check.remedy != null) println("         → ${check.remedy}")
+            }
+            println()
+            println(if (report.ok) "Ready. Warnings above are optional tooling." else "Not ready — fix the FAIL lines above.")
+        }
+        return if (report.ok) 0 else 1
+    }
+
+    /**
+     * Probes a binary directly rather than through [com.droidagentkit.core.ProcessRunner]: this
+     * runs before any policy is known to be valid, and a version banner needs neither artifact
+     * capture nor redaction. Failure to launch is the answer, not an error.
+     */
+    private fun probeBinary(command: List<String>): String? =
+        runCatching {
+            val process =
+                ProcessBuilder(command)
+                    .redirectErrorStream(true)
+                    .start()
+            val output = process.inputStream.bufferedReader().readText()
+            if (!process.waitFor(PROBE_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                process.destroyForcibly()
+                return null
+            }
+            output.takeIf { process.exitValue() == 0 && it.isNotBlank() }
+        }.getOrNull()
 
     private fun inspect(command: CliCommand.Inspect): Int {
         val root = Path.of(command.project).toAbsolutePath().normalize()
@@ -413,6 +478,11 @@ class DroidAgentCli(
                 }
             }
         }
+    }
+
+    private companion object {
+        /** A version banner should be instant; anything slower is a broken or wedged binary. */
+        const val PROBE_TIMEOUT_SECONDS = 10L
     }
 }
 
