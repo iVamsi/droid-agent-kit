@@ -6,6 +6,40 @@ pre-release convention `0.y.z-alpha` until a stable 1.0 release.
 
 ## Unreleased
 
+## [0.2.6-alpha] - 2026-08-08
+
+### Security
+
+- Destructive operations can require a human out-of-band approval via
+  `safety.requireInteractiveConfirm` (user policy only). When enabled, the MCP server uses
+  `elicitation/create` so the host — not the model — must confirm. Without elicitation, the call
+  is denied rather than approved.
+- Session budgets cap destructive invocations per minute and (when wired) artifact bytes per
+  session, so a prompt-injected agent holding a legitimately granted capability cannot loop forever.
+- Artifact output directories that are symlinks or non-directories are refused before any write.
+- Storage `adb shell` arguments (including `fileTree` paths and `run-as` package names) are now
+  single-quoted with `ShellQuote`. An unquoted path such as `x; id` could previously break out of
+  `run-as` into the adb shell user because `adb shell` re-joins argv for `/system/bin/sh -c`.
+
+### Added
+
+- `droidagent doctor` / `android_doctor` — diagnose JDK, adb, policy, and artifact directory before
+  tools fail.
+- MCP cancellation and progress notifications for long-running tool calls; ProcessRunner kills
+  process descendants so a cancelled command cannot hang on a surviving grandchild.
+- Optional npm launcher JRE provisioning (SHA-verified) when the machine has no Java; launcher
+  forwards any CLI subcommand, not only `serve-mcp`.
+- Device: find/tap UI elements by label, compact accessibility snapshot mode, record/replay agent
+  flows (`run_flow` JSON, Maestro YAML, Compose test skeleton).
+- Triage: ProGuard/R8 retrace for release crashes; APK size analysis.
+- CI: tests on Ubuntu, macOS, and Windows × JDK 17/21 (blocking); launcher smoke + stdio E2E;
+  sample-project CLI checks; nightly emulator E2E hook; broader Kover floors.
+
+### Fixed
+
+- Closed stdout is treated as end of output, not a failure.
+- Windows test fixtures no longer assume POSIX-only paths/permissions.
+
 ## [0.2.5-alpha] - 2026-07-31
 
 ### Security

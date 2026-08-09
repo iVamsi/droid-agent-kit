@@ -232,14 +232,17 @@ class StorageToolProviderTest {
             """
             #!/bin/bash
             # ${'$'}1=-s ${'$'}2=serial ${'$'}3=verb ...
+            # Storage tools ShellQuote every post-shell argument; strip those quotes so the
+            # fixture can match verbs and paths the way a device shell would see one word each.
+            unquote() { local v="${'$'}1"; v="${'$'}{v#\'}"; v="${'$'}{v%\'}"; printf '%s' "${'$'}v"; }
             verb="${'$'}3"
             case "${'$'}verb" in
               shell)
-                cmd="${'$'}6"
+                cmd="$(unquote "${'$'}6")"
                 case "${'$'}cmd" in
                   id) echo "uid=10234" ;;
                   ls)
-                    if [ "${'$'}7" = "-la" ]; then target="${'$'}8"; else target="${'$'}7"; fi
+                    if [ "$(unquote "${'$'}7")" = "-la" ]; then target="$(unquote "${'$'}8")"; else target="$(unquote "${'$'}7")"; fi
                     case "${'$'}target" in
                       databases) echo "app.db"; echo "app.db-wal" ;;
                       shared_prefs) echo "prefs.xml" ;;

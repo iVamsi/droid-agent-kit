@@ -1,5 +1,6 @@
 package com.droidagentkit.storage
 
+import com.droidagentkit.core.ShellQuote
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -46,7 +47,7 @@ class AppDataSnapshotter(
         packageName: String,
     ): Boolean {
         val out =
-            runCatching { exec.run(listOf(adbPath, "-s", serial, "shell", "run-as", packageName, "id"), binary = false) }
+            runCatching { exec.run(shell(serial, "run-as", packageName, "id"), binary = false) }
                 .getOrDefault(ByteArray(0))
         return String(out).contains("uid=")
     }
@@ -61,7 +62,7 @@ class AppDataSnapshotter(
             throw StorageException(StorageOutcome.BLOCKED, "not-debuggable", "Package is not debuggable or run-as failed: $packageName")
         }
         // Force-stop for a consistent snapshot; warn that app state changed.
-        runCatching { exec.run(listOf(adbPath, "-s", serial, "shell", "am", "force-stop", packageName), binary = false) }
+        runCatching { exec.run(shell(serial, "am", "force-stop", packageName), binary = false) }
         val snapshotDir = hostDir.resolve("snapshot").also { Files.createDirectories(it) }
         val warnings = mutableListOf("app-force-stopped")
 
@@ -92,7 +93,7 @@ class AppDataSnapshotter(
     ): List<String> {
         val out =
             runCatching {
-                exec.run(listOf(adbPath, "-s", serial, "shell", "run-as", packageName, "ls", "shared_prefs"), binary = false)
+                exec.run(shell(serial, "run-as", packageName, "ls", "shared_prefs"), binary = false)
             }.getOrDefault(ByteArray(0))
         return String(out).lines().map { it.trim() }.filter { it.endsWith(".xml") }
     }
@@ -121,11 +122,11 @@ class AppDataSnapshotter(
         val out =
             if (recursive) {
                 runCatching {
-                    exec.run(listOf(adbPath, "-s", serial, "shell", "run-as", packageName, "find", rel), binary = false)
+                    exec.run(shell(serial, "run-as", packageName, "find", rel), binary = false)
                 }.getOrDefault(ByteArray(0))
             } else {
                 runCatching {
-                    exec.run(listOf(adbPath, "-s", serial, "shell", "run-as", packageName, "ls", "-la", rel), binary = false)
+                    exec.run(shell(serial, "run-as", packageName, "ls", "-la", rel), binary = false)
                 }.getOrDefault(ByteArray(0))
             }
         val text = String(out)
@@ -147,7 +148,7 @@ class AppDataSnapshotter(
     ): List<String> {
         val out =
             runCatching {
-                exec.run(listOf(adbPath, "-s", serial, "shell", "run-as", packageName, "ls", "databases"), binary = false)
+                exec.run(shell(serial, "run-as", packageName, "ls", "databases"), binary = false)
             }.getOrDefault(ByteArray(0))
         return String(out).lines().map { it.trim() }.filter { it.isNotBlank() }
     }
@@ -162,6 +163,17 @@ class AppDataSnapshotter(
         val bytes = exec.run(listOf(adbPath, "-s", serial, "exec-out", "run-as", packageName, "cat", deviceRel), binary = true)
         Files.write(dest, bytes)
     }
+
+    /**
+     * Builds `adb -s <serial> shell …` with every post-shell argument single-quoted.
+     *
+     * `adb shell` re-joins those arguments into `/system/bin/sh -c`, so an unquoted path or package
+     * name can inject a second command outside `run-as`. [ShellQuote] closes that.
+     */
+    private fun shell(
+        serial: String,
+        vararg args: String,
+    ): List<String> = listOf(adbPath, "-s", serial, "shell") + args.map(ShellQuote::quote)
 
     /**
      * A device-listed name must be a bare filename before it is resolved against a host directory.

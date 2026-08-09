@@ -63,6 +63,32 @@ class AppDataSnapshotterTest {
     }
 
     @Test
+    fun `fileTree quotes shell arguments so metacharacters cannot break out of run-as`() {
+        // adb shell re-joins post-shell argv into /system/bin/sh -c. Without quoting, a path like
+        // "x; id" becomes a second shell command outside run-as. ShellQuote makes each arg one word.
+        val captured = mutableListOf<List<String>>()
+        val exec =
+            object : AdbExecutor {
+                override fun run(
+                    command: List<String>,
+                    binary: Boolean,
+                ): ByteArray {
+                    captured += command
+                    return ByteArray(0)
+                }
+            }
+        val snapshotter = AppDataSnapshotter(adbPath = "adb")
+
+        snapshotter.fileTree(exec, "emulator-5554", "com.example.app", "x; id", recursive = true)
+
+        val findCmd = captured.single { cmd -> cmd.any { it.contains("find") } }
+        assertEquals(
+            listOf("adb", "-s", "emulator-5554", "shell", "'run-as'", "'com.example.app'", "'find'", "'x; id'"),
+            findCmd,
+        )
+    }
+
+    @Test
     fun `fileTree parses ls output into bounded entries`() {
         val output =
             """
@@ -133,7 +159,17 @@ class AppDataSnapshotterTest {
                 command: List<String>,
                 binary: Boolean,
             ): ByteArray {
-                val key = command.drop(3).joinToString(" ") // drop adb, -s, serial
+                // Strip ShellQuote so fixture keys stay readable (`run-as pkg ls …`).
+                val key =
+                    command
+                        .drop(3)
+                        .joinToString(" ") { arg ->
+                            if (arg.startsWith("'") && arg.endsWith("'") && arg.length >= 2) {
+                                arg.substring(1, arg.length - 1).replace("'\\''", "'")
+                            } else {
+                                arg
+                            }
+                        }
                 return responses.entries.firstOrNull { key.contains(it.key) }?.value ?: ByteArray(0)
             }
         }

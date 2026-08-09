@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "com.droidagentkit"
-version = "0.2.5-alpha"
+version = "0.2.6-alpha"
 
 // Unfiltered, project-wide coverage. toolbox-core narrows its own report to the classes its
 // verification rule gates, so the whole-project view lives here.
