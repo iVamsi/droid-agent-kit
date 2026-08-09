@@ -72,10 +72,16 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ github.ref }}
+      # Both versions, not just the matrix one: the build pins jvmToolchain(17), and the Windows
+      # runner image has no preinstalled JDK 17 for Gradle to auto-detect, so the JDK 21 leg failed
+      # to resolve a toolchain at all. Linux and macOS images happen to ship 17, which is why this
+      # only showed up on Windows.
       - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
         with:
           distribution: temurin
-          java-version: ${{ matrix.java }}
+          java-version: |
+            17
+            ${{ matrix.java }}
       - name: Test
         run: ./gradlew test --no-configuration-cache --stacktrace
       - name: Upload test reports
