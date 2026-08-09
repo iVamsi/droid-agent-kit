@@ -94,6 +94,9 @@ fun interface InteractiveConfirmer {
 class DefaultOperationPolicy(
     private val config: SafetyConfig,
     private val allowedRoots: List<Path>,
+    // `budget` precedes `confirmer` so the trailing-lambda form at call sites keeps binding to the
+    // confirmer rather than silently changing meaning -- the same trap ProcessRunner.run has.
+    private val budget: InvocationBudget = InvocationBudget(config.budgets),
     private val confirmer: InteractiveConfirmer = InteractiveConfirmer.UNAVAILABLE,
 ) : OperationPolicy {
     override fun authorize(request: OperationRequest): AuthorizationDecision {
@@ -126,6 +129,14 @@ class DefaultOperationPolicy(
                 "destructive-confirmation-required",
                 "Operation '${request.operationId}' is destructive and requires confirmDestructive=true.",
             )
+        }
+        // Budget is checked before the human prompt so a runaway loop is stopped by the machine
+        // rather than by someone clicking "no" two hundred times.
+        if (request.destructive) {
+            val decision = budget.recordDestructive(request.operationId)
+            if (decision is BudgetDecision.Exceeded) {
+                return AuthorizationDecision.Denied(decision.code, decision.reason)
+            }
         }
         // Deliberately *after* the capability and confirmDestructive checks: asking a human to
         // approve something the policy already forbids trains them to click through prompts.

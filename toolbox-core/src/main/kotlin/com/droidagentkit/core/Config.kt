@@ -52,6 +52,8 @@ data class SafetyConfig(
      * config that could turn it *off* would defeat the point.
      */
     val requireInteractiveConfirm: Boolean = false,
+    /** Session-wide blast-radius caps. Privileged: raising them is a grant. */
+    val budgets: BudgetLimits = BudgetLimits(),
 ) {
     /**
      * A wildcard pattern must never sweep in a task that rewrites the working tree — `:*:lint*`
@@ -165,12 +167,16 @@ object DroidAgentConfigLoader {
             "safety.allowEmulatorStart",
             "safety.allowCapabilities",
             "safety.requireInteractiveConfirm",
+            "safety.maxDestructivePerMinute",
+            "safety.maxArtifactBytesPerSession",
             "safety.adbPath",
             "safety.emulatorPath",
             "safety.traceProcessorPath",
             "safety.mitmProxyPath",
             "safety.maxCommandSeconds",
             "safety.requireInteractiveConfirm",
+            "safety.maxDestructivePerMinute",
+            "safety.maxArtifactBytesPerSession",
             "mcp.exposedGroups",
             "reports.outputDir",
             "redaction.enabled",
@@ -185,6 +191,8 @@ object DroidAgentConfigLoader {
             "safety.allowEmulatorStart",
             "safety.allowCapabilities",
             "safety.requireInteractiveConfirm",
+            "safety.maxDestructivePerMinute",
+            "safety.maxArtifactBytesPerSession",
             "safety.adbPath",
             "safety.emulatorPath",
             "safety.traceProcessorPath",
@@ -281,6 +289,18 @@ object DroidAgentConfigLoader {
                         mitmProxyPath = policy.safety.mitmProxyPath,
                         maxCommandSeconds = timeout,
                         requireInteractiveConfirm = policy.safety.requireInteractiveConfirm,
+                        // Narrowed rather than replaced, like maxCommandSeconds: a project may
+                        // choose to be *more* restrained than the policy, never less.
+                        budgets =
+                            BudgetLimits(
+                                maxDestructivePerMinute =
+                                    minOf(project.safety.budgets.maxDestructivePerMinute, policy.safety.budgets.maxDestructivePerMinute),
+                                maxArtifactBytesPerSession =
+                                    minOf(
+                                        project.safety.budgets.maxArtifactBytesPerSession,
+                                        policy.safety.budgets.maxArtifactBytesPerSession,
+                                    ),
+                            ),
                     ),
                 mcp = McpConfig(exposedGroups = policy.mcp.exposedGroups),
                 redaction =
@@ -383,6 +403,8 @@ object DroidAgentConfigLoader {
         var aliasUsedWithCapabilities = false
         var maxCommandSeconds = 600L
         var requireInteractiveConfirm = false
+        var maxDestructivePerMinute = BudgetLimits().maxDestructivePerMinute
+        var maxArtifactBytesPerSession = BudgetLimits().maxArtifactBytesPerSession
         var adbPath = "adb"
         var emulatorPath = "emulator"
         var traceProcessorPath = ""
@@ -488,6 +510,12 @@ object DroidAgentConfigLoader {
                 "safety.requireInteractiveConfirm" ->
                     requireInteractiveConfirm =
                         value.toStrictBooleanOrError(lineNumber, fullKey, errors) ?: requireInteractiveConfirm
+                "safety.maxDestructivePerMinute" ->
+                    maxDestructivePerMinute =
+                        value.toLongOrError(lineNumber, fullKey, errors)?.toInt() ?: maxDestructivePerMinute
+                "safety.maxArtifactBytesPerSession" ->
+                    maxArtifactBytesPerSession =
+                        value.toLongOrError(lineNumber, fullKey, errors) ?: maxArtifactBytesPerSession
                 "safety.adbPath" -> adbPath = value
                 "safety.emulatorPath" -> emulatorPath = value
                 "safety.traceProcessorPath" -> traceProcessorPath = value
@@ -531,6 +559,7 @@ object DroidAgentConfigLoader {
                 mitmProxyPath = mitmProxyPath,
                 maxCommandSeconds = maxCommandSeconds,
                 requireInteractiveConfirm = requireInteractiveConfirm,
+                budgets = BudgetLimits(maxDestructivePerMinute, maxArtifactBytesPerSession),
             )
         return ConfigLoadResult.Loaded(
             DroidAgentConfig(

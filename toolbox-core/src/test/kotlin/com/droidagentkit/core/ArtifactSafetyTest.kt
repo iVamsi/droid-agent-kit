@@ -1,6 +1,7 @@
 package com.droidagentkit.core
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.nio.file.Files
@@ -112,5 +113,30 @@ class ArtifactSafetyTest {
         assertEquals(false, result.truncated)
         assertEquals(payload.size.toLong(), result.artifact.sizeBytes)
         assertEquals("application/vnd.sqlite3", result.artifact.mimeType)
+    }
+
+    @Test
+    fun `refuses an artifact directory that is itself a symlink`() {
+        // The per-file symlink check cannot catch this: no individual artifact is a symlink, yet
+        // every write lands wherever the directory points.
+        val base = Files.createTempDirectory("dak-artifact-spine")
+        val realTarget = Files.createDirectories(base.resolve("elsewhere"))
+        val link = base.resolve("droidagentkit")
+        Files.createSymbolicLink(link, realTarget)
+
+        val error = assertThrows(IllegalArgumentException::class.java) { ArtifactWriter(link) }
+
+        assertTrue("should name the reason: ${error.message}", error.message!!.contains("symlink"))
+    }
+
+    @Test
+    fun `refuses an artifact directory that is a regular file`() {
+        val base = Files.createTempDirectory("dak-artifact-notdir")
+        val file = base.resolve("droidagentkit")
+        Files.writeString(file, "not a directory")
+
+        val error = assertThrows(IllegalArgumentException::class.java) { ArtifactWriter(file) }
+
+        assertTrue("should name the reason: ${error.message}", error.message!!.contains("not a directory"))
     }
 }
