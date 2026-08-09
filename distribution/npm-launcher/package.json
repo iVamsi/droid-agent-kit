@@ -33,6 +33,8 @@
   },
   "files": [
     "index.js",
+    "jre.js",
+    "jre-manifest.json",
     "README.md"
   ],
   "scripts": {

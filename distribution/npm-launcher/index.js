@@ -13,13 +13,14 @@
  */
 "use strict";
 
-const { spawn, spawnSync } = require("node:child_process");
+const { spawn } = require("node:child_process");
 const { existsSync, mkdirSync, renameSync, unlinkSync, createWriteStream, readFileSync } = require("node:fs");
 const path = require("node:path");
 const os = require("node:os");
 const http = require("node:http");
 const https = require("node:https");
 const crypto = require("node:crypto");
+const { resolveJava, MIN_JAVA } = require("./jre.js");
 
 const LAUNCHER_VERSION = require("./package.json").version;
 
@@ -147,10 +148,6 @@ async function ensureCliJar(version) {
   return finalPath;
 }
 
-function javaAvailable() {
-  return !spawnSync("java", ["-version"]).error;
-}
-
 function spawnServer(command, args) {
   const child = spawn(command, args, { stdio: "inherit" });
   child.on("error", (err) => {
@@ -178,7 +175,9 @@ function printHelp() {
       "\n" +
       "Env:\n" +
       "  DROIDAGENT_BIN        absolute path to an existing droidagent CLI (skips auto-fetch)\n" +
-      "  DROIDAGENT_CACHE_DIR  override the jar download cache (default ~/.droidagentkit/cli)\n"
+      "  DROIDAGENT_CACHE_DIR  override the jar download cache (default ~/.droidagentkit/cli)\n" +
+      "  DROIDAGENT_JAVA       absolute path to a java binary (skips JRE detection/provisioning)\n" +
+      "  DROIDAGENT_JRE_CACHE_DIR  override the provisioned JRE cache (default ~/.droidagentkit/jre)\n"
   );
 }
 
@@ -226,11 +225,16 @@ async function main(argv) {
     return null;
   }
 
-  if (!javaAvailable()) {
+  // A JVM is provisioned rather than demanded: requiring a preinstalled JDK was the one
+  // prerequisite that made "npx and you're done" false for anyone who did not already have Java.
+  let javaBin;
+  try {
+    javaBin = await resolveJava();
+  } catch (err) {
     process.stderr.write(
-      "droidagent-mcp: no working `java` found on PATH.\n" +
-        "DroidAgentKit's server is a JVM tool and needs a JDK 17+ runtime (e.g. https://adoptium.net).\n" +
-        "Alternatively, set DROIDAGENT_BIN to a prebuilt droidagent CLI.\n"
+      `droidagent-mcp: could not find or provision a JDK ${MIN_JAVA}+ runtime: ${err.message}\n` +
+        "Install one from https://adoptium.net, or set DROIDAGENT_JAVA to an existing java binary,\n" +
+        "or set DROIDAGENT_BIN to a prebuilt droidagent CLI.\n"
     );
     process.exit(1);
   }
@@ -246,7 +250,7 @@ async function main(argv) {
     process.exit(1);
   }
 
-  spawnServer("java", ["-jar", jarPath, ...cliArgs]);
+  spawnServer(javaBin, ["-jar", jarPath, ...cliArgs]);
   return null;
 }
 
