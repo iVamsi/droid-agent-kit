@@ -1,0 +1,45 @@
+{
+  "manifest_version": "0.3",
+  "name": "android-agent-kit",
+  "display_name": "DroidAgentKit",
+  "version": "0.0.0-managed-by-build-script",
+  "description": "Android development MCP server: Gradle, adb, logcat, lint, crash triage, Perfetto, emulator control.",
+  "long_description": "Gives an AI coding agent real Android tools through a local, permissioned MCP server instead of raw shell access. Inspect Gradle projects, run allowlisted build tasks, capture logcat and screenshots, triage crashes (de-obfuscating release traces with an R8 mapping), analyze APK size, and — behind explicit capability grants — drive an emulator or device. Everything runs locally, command output is redacted, and grants live only in a user policy the agent cannot modify.",
+  "author": {
+    "name": "Vamsi",
+    "url": "https://github.com/iVamsi"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/iVamsi/droid-agent-kit"
+  },
+  "homepage": "https://github.com/iVamsi/droid-agent-kit",
+  "documentation": "https://github.com/iVamsi/droid-agent-kit/blob/main/docs/README.md",
+  "support": "https://github.com/iVamsi/droid-agent-kit/issues",
+  "license": "Apache-2.0",
+  "keywords": [
+    "android",
+    "adb",
+    "gradle",
+    "emulator",
+    "logcat",
+    "perfetto",
+    "jetpack-compose",
+    "android-studio"
+  ],
+  "server": {
+    "type": "node",
+    "entry_point": "server/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/server/index.js"],
+      "env": {}
+    }
+  },
+  "compatibility": {
+    "platforms": ["darwin", "linux", "win32"],
+    "runtimes": {
+      "node": ">=18.0.0"
+    }
+  }
+}

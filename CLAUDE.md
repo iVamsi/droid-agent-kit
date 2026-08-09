@@ -37,7 +37,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Distribution
 
-- **Packaging decision:** thin npm launcher is the primary install path; MCPB (`distribution/mcp.json`) is secondary; OCI is rejected (no proven host adb/USB/socket passthrough). Registry metadata (`distribution/server.json`) is published only after clean-machine smoke tests pass.
+- **Packaging decision:** thin npm launcher is the primary install path; MCPB (`distribution/mcpb/manifest.json`, packed by `scripts/build-mcpb.sh`) is secondary; OCI is rejected (no proven host adb/USB/socket passthrough). Registry metadata (`distribution/server.json`) is published only after clean-machine smoke tests pass.
 - **npm launcher:** `distribution/npm-launcher/` spawns `droidagent serve-mcp --transport stdio --project auto`; override with `DROIDAGENT_BIN`. Node is install-time only — the runtime is pure JVM.
 - **Smoke test:** `distribution/smoke-test.sh` verifies the launcher prints immutable version metadata; set `DROIDAGENT_E2E=1` to also build the CLI and run a stdio `initialize` round-trip.
 

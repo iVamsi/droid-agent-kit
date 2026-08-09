@@ -43,9 +43,8 @@ check "npm launcher package.json" \
   "$root/distribution/npm-launcher/package.json" \
   "\"version\": \"$version\""
 
-check "MCPB manifest" \
-  "$root/distribution/mcp.json" \
-  "\"version\": \"$version\""
+# distribution/mcpb/manifest.json deliberately carries a placeholder version: scripts/build-mcpb.sh
+# stamps the real one from build.gradle.kts at pack time, so there is no second copy to drift.
 
 check "MCP registry metadata" \
   "$root/distribution/server.json" \

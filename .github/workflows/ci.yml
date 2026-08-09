@@ -142,6 +142,42 @@ jobs:
       - name: Exercise samples
         run: bash scripts/ci-samples-check.sh
 
+  # Builds the MCPB bundle on every PR. It is only exercised at release time otherwise, which is
+  # the worst moment to discover the manifest stopped validating.
+  mcpb:
+    name: MCPB bundle builds and validates
+    runs-on: ubuntu-latest
+    env:
+      JAVA_TOOL_OPTIONS: -Djava.awt.headless=true
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: "22"
+      # Built first: the round-trip below points DROIDAGENT_BIN at it, so the bundle exercises a
+      # real server instead of trying to fetch a release jar that may not exist for this version.
+      - name: Build CLI
+        run: |
+          chmod +x gradlew
+          ./gradlew :cli:installDist --no-configuration-cache --stacktrace
+      - name: Build and validate bundle
+        run: bash scripts/build-mcpb.sh
+      - name: Bundle entry point speaks MCP
+        env:
+          DROIDAGENT_BIN: ${{ github.workspace }}/cli/build/install/droidagent/bin/droidagent
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version = "\(.*\)"$/\1/p' build.gradle.kts | head -n1)"
+          npx -y @anthropic-ai/mcpb@2.1.2 unpack \
+            "build/distribution/android-agent-kit-${version}.mcpb" build/mcpb-unpacked
+          # A bundle that packs but whose entry point cannot answer initialize is worthless, and
+          # nothing else in CI would notice.
+          node distribution/test-fixtures/stdio-initialize.js build/mcpb-unpacked/server/index.js 30000
+
   # Catches version drift and packaging breakage at PR time instead of at tag time, when the
   # release workflow is already running and half the artifacts are published.
   release-readiness:
