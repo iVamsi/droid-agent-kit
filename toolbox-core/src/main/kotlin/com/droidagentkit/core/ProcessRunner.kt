@@ -180,12 +180,20 @@ class ProcessRunner(
         val bytes = java.io.ByteArrayOutputStream()
         val buffer = ByteArray(BUFFER_SIZE)
         var truncated = false
-        while (true) {
-            val count = input.read(buffer)
-            if (count == -1) break
-            val remaining = MAX_TEXT_CAPTURE_BYTES - bytes.size()
-            if (remaining > 0) bytes.write(buffer, 0, minOf(count, remaining))
-            if (count > remaining) truncated = true
+        try {
+            while (true) {
+                val count = input.read(buffer)
+                if (count == -1) break
+                val remaining = MAX_TEXT_CAPTURE_BYTES - bytes.size()
+                if (remaining > 0) bytes.write(buffer, 0, minOf(count, remaining))
+                if (count > remaining) truncated = true
+            }
+        } catch (_: java.io.IOException) {
+            // Destroying a process closes its stdout under this reader, which surfaces as
+            // "Stream closed" rather than a clean EOF. On the timeout and cancellation paths that
+            // is the expected end of the stream, not a failure -- the bytes already read are still
+            // the best account of what the command produced, and throwing here would replace a
+            // useful partial result with an opaque ExecutionException.
         }
         return CapturedOutput(bytes.toByteArray(), truncated)
     }
