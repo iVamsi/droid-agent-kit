@@ -6,6 +6,18 @@ pre-release convention `0.y.z-alpha` until a stable 1.0 release.
 
 ## Unreleased
 
+### Added
+
+- **MCPB bundle** attached to every release (`android-agent-kit-<version>.mcpb`), for one-click
+  install in hosts that support it. Built and schema-validated by `scripts/build-mcpb.sh` on every
+  PR, not just at release time. The previous `distribution/mcp.json` was replaced: it used a
+  bespoke `bundle`/`server`/`runtime` shape that conformed to no published spec, so nothing could
+  have consumed it.
+- **Homebrew formula** generated per release by `scripts/generate-homebrew-formula.sh`, pinning the
+  checksum from the release's own published `.sha256` asset. Shipped as a workflow artifact until a
+  tap repository exists; pushing is opt-in via a `HOMEBREW_TAP_TOKEN` secret, so a release never
+  fails because the tap has not been created yet.
+
 ### Changed
 
 - **MCP registry listing renamed** to `io.github.iVamsi/android-agent-kit` (was

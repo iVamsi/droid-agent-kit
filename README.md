@@ -81,6 +81,17 @@ Or install with one click:
 [![Install in Cursor](https://img.shields.io/badge/Cursor-Install_DroidAgentKit-0098FF?logo=cursor&logoColor=white)](cursor://anysphere.cursor-deeplink/mcp/install?name=droidagentkit&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIkBkcm9pZGFnZW50a2l0L2xhdW5jaGVyIl19)
 [![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_DroidAgentKit-007ACC?logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=droidagentkit&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40droidagentkit%2Flauncher%22%5D%7D)
 
+### Other install paths
+
+```bash
+brew install iVamsi/droidagentkit/droidagent
+```
+
+Every release also attaches an `.mcpb` bundle. Drop it into an MCP host that supports one-click
+install and the server registers itself. The bundle carries the launcher only — the JVM server, and
+a verified Temurin JRE if you have no JDK, are fetched on first run — so the download is ~10 KB
+rather than ~160 MB.
+
 ### Building from source
 
 If you're contributing, or want to run a version that isn't released yet:
