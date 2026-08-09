@@ -6,6 +6,25 @@ pre-release convention `0.y.z-alpha` until a stable 1.0 release.
 
 ## Unreleased
 
+## [0.3.0-alpha] - 2026-08-09
+
+### Security
+
+- **Recorded flows no longer leak typed secrets.** `android_input_type` captures whatever was
+  typed, so a recorded login flow contained the password — and the three emitted files were marked
+  `PUBLIC`, which is the exact flag report bundles and `audit --redact-public` use to decide what is
+  safe to share. Flow artifacts are now `SENSITIVE`, their contents pass through the same redactor
+  as command output, and the tool result carries a `flow-contains-typed-text` warning. Redaction is
+  still pattern-based and will not recognise an arbitrary password, hence the explicit warning.
+
+### Changed
+
+- npm releases now choose their dist-tag instead of always publishing to `latest`. Stable versions
+  take `latest`; prereleases take `next`, and additionally claim `latest` only while no stable
+  release has ever shipped — `npx` resolves `latest`, so without that condition the documented
+  install command would break before 1.0. After the first stable release, a later prerelease can no
+  longer hide it from `npm install`. This removes the last blocker on shipping a non-alpha version.
+
 ## [0.2.7-alpha] - 2026-08-09
 
 ### Added

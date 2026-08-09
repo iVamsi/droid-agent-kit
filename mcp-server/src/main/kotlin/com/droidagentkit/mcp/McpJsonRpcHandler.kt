@@ -22,7 +22,7 @@ private const val RESOURCE_NOT_FOUND = -32002
 private const val INVALID_PARAMS = -32602
 
 private const val SERVER_NAME = "droidagentkit"
-private const val SERVER_VERSION = "0.2.7-alpha"
+private const val SERVER_VERSION = "0.3.0-alpha"
 internal const val MCP_PROTOCOL_VERSION = "2025-11-25"
 private const val MAX_MESSAGE_CHARS = 1_048_576
 private const val ELICITATION_TIMEOUT_SECONDS = 300L
