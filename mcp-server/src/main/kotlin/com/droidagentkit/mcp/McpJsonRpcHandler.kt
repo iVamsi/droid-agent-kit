@@ -1,6 +1,7 @@
 package com.droidagentkit.mcp
 
 import com.droidagentkit.core.CancellationToken
+import com.droidagentkit.core.InteractiveConfirmation
 import com.droidagentkit.core.Json
 import com.droidagentkit.core.ProgressReporter
 import kotlinx.serialization.json.JsonArray
@@ -24,6 +25,7 @@ private const val SERVER_NAME = "droidagentkit"
 private const val SERVER_VERSION = "0.2.5-alpha"
 internal const val MCP_PROTOCOL_VERSION = "2025-11-25"
 private const val MAX_MESSAGE_CHARS = 1_048_576
+private const val ELICITATION_TIMEOUT_SECONDS = 300L
 
 private val ERROR_STATUSES = setOf("failed", "blocked", "unsupported")
 private val SUPPORTED_PROTOCOL_VERSIONS = setOf(MCP_PROTOCOL_VERSION)
@@ -45,6 +47,18 @@ class McpJsonRpcHandler(
      * a cancellation to its call.
      */
     private val inFlight = java.util.concurrent.ConcurrentHashMap<String, CancellationToken>()
+
+    /** Server-initiated requests awaiting a client response, keyed by the id we generated. */
+    private val pendingElicitations =
+        java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.CompletableFuture<JsonObject?>>()
+
+    private val elicitationIds =
+        java.util.concurrent.atomic
+            .AtomicLong(0)
+
+    /** Set from the client's `initialize`; elicitation is only attempted when it was advertised. */
+    @Volatile
+    private var clientSupportsElicitation = false
 
     /** True for methods that can run long enough to be worth executing off the reader thread. */
     fun isLongRunning(rawMessage: String): Boolean =
@@ -72,6 +86,12 @@ class McpJsonRpcHandler(
         }
 
         if (method == null) {
+            // A frame with an id and no method is the client *answering* something we asked --
+            // the only server-initiated request we make is elicitation/create.
+            if (hasId && (root.containsKey("result") || root.containsKey("error"))) {
+                completeElicitation(idKey(id), root["result"] as? JsonObject)
+                return null
+            }
             return if (hasId) errorResponse(id, INVALID_REQUEST, "Invalid Request") else null
         }
 
@@ -106,7 +126,79 @@ class McpJsonRpcHandler(
         inFlight[idKey(requestId)]?.cancel()
     }
 
+    /**
+     * Asks the human, through the client, to approve a destructive operation.
+     *
+     * Returns UNAVAILABLE rather than blocking when the client never advertised elicitation, or
+     * when it fails to answer inside the timeout. Failing closed matters here: the caller turns an
+     * UNAVAILABLE into a denial, so a silent client blocks the operation instead of waving it
+     * through.
+     */
+    fun elicitConfirmation(
+        title: String,
+        message: String,
+        timeoutSeconds: Long = ELICITATION_TIMEOUT_SECONDS,
+    ): InteractiveConfirmation {
+        if (!clientSupportsElicitation) return InteractiveConfirmation.UNAVAILABLE
+        val id = "dak-elicit-" + elicitationIds.incrementAndGet()
+        val future = java.util.concurrent.CompletableFuture<JsonObject?>()
+        pendingElicitations[id] = future
+        try {
+            notify(
+                Json.write(
+                    mapOf(
+                        "jsonrpc" to "2.0",
+                        "id" to id,
+                        "method" to "elicitation/create",
+                        "params" to
+                            mapOf(
+                                "message" to message,
+                                "requestedSchema" to
+                                    mapOf(
+                                        "type" to "object",
+                                        "title" to title,
+                                        "properties" to
+                                            mapOf(
+                                                "approve" to
+                                                    mapOf(
+                                                        "type" to "boolean",
+                                                        "description" to "Approve this destructive operation?",
+                                                    ),
+                                            ),
+                                        "required" to listOf("approve"),
+                                    ),
+                            ),
+                    ),
+                ),
+            )
+            val response =
+                runCatching { future.get(timeoutSeconds, java.util.concurrent.TimeUnit.SECONDS) }
+                    .getOrElse { return InteractiveConfirmation.UNAVAILABLE }
+                    ?: return InteractiveConfirmation.UNAVAILABLE
+
+            // The spec distinguishes accept/decline/cancel; only an explicit accept carrying
+            // approve=true is treated as consent. Anything else means no.
+            val action = (response["action"] as? JsonPrimitive)?.content
+            if (action != null && action != "accept") return InteractiveConfirmation.DECLINED
+            val approved =
+                ((response["content"] as? JsonObject)?.get("approve") as? JsonPrimitive)?.booleanOrNull
+                    ?: (response["approve"] as? JsonPrimitive)?.booleanOrNull
+                    ?: false
+            return if (approved) InteractiveConfirmation.APPROVED else InteractiveConfirmation.DECLINED
+        } finally {
+            pendingElicitations.remove(id)
+        }
+    }
+
+    private fun completeElicitation(
+        key: String,
+        result: JsonObject?,
+    ) {
+        pendingElicitations[key]?.complete(result)
+    }
+
     private fun handleInitialize(params: JsonObject?): Map<String, Any?> {
+        clientSupportsElicitation = (params?.get("capabilities") as? JsonObject)?.containsKey("elicitation") == true
         val requestedVersion = (params?.get("protocolVersion") as? JsonPrimitive)?.content
         val protocolVersion = requestedVersion?.takeIf { it in SUPPORTED_PROTOCOL_VERSIONS } ?: MCP_PROTOCOL_VERSION
         return mapOf(
@@ -250,6 +342,18 @@ class McpJsonRpcHandler(
                     ToolCallContext(
                         cancellation = token,
                         progress = progressReporter(progressToken),
+                        confirmer = { request ->
+                            elicitConfirmation(
+                                title = "Confirm destructive operation",
+                                message =
+                                    buildString {
+                                        append("DroidAgentKit wants to run '${request.operationId}'")
+                                        request.packageName?.let { append(" on package $it") }
+                                        request.deviceSerial?.let { append(" (device $it)") }
+                                        append(". This is destructive and cannot be undone. Approve?")
+                                    },
+                            )
+                        },
                     ),
                 )
             } finally {
