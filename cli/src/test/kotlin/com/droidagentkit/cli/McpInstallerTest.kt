@@ -22,6 +22,12 @@ class McpInstallerTest {
             .of("/opt/droidagent/bin/droidagent")
     private val binText: String = binPath.toString()
 
+    /**
+     * TOML escapes backslashes, so on Windows the file holds `\\opt\\...` while [binText] is raw.
+     * The installer already does this correctly; asserting the raw form was the test's bug.
+     */
+    private val binTextToml: String = binText.replace("\\", "\\\\")
+
     @Test
     fun `codex installer writes a user-wide mcp server block idempotently`() {
         val home = Files.createTempDirectory("dak-home")
@@ -48,7 +54,7 @@ class McpInstallerTest {
 
         val config = Files.readString(home.resolve(".codex/config.toml"))
         assertTrue(config.contains("[mcp_servers.droidagentkit]"))
-        assertTrue(config.contains("command = \"$binText\""))
+        assertTrue(config.contains("command = \"$binTextToml\""))
         assertTrue(config.contains("args = [\"serve-mcp\", \"--transport\", \"stdio\", \"--project\", \"auto\"]"))
         assertEquals(1, Regex("\\[mcp_servers\\.droidagentkit]").findAll(config).count())
         assertTrue(first.messages.any { it.contains("Codex") })
