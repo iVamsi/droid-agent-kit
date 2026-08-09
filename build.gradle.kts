@@ -66,3 +66,35 @@ subprojects {
         }
     }
 }
+
+/**
+ * Per-module coverage floors beyond toolbox-core's policy-class gate.
+ *
+ * A single project-wide average can stay healthy while one module rots, so each of these carries
+ * its own rule. The floors sit roughly ten points below the measured value at the time they were
+ * added (mcp-server 84%, android-device-core 91%, android-inspector 94%, auditor-cli 96%): the
+ * point is to catch a real regression, not to force a retune on every commit.
+ *
+ * toolbox-core is deliberately absent -- it configures a stricter, class-filtered rule of its own.
+ */
+val coverageFloors =
+    mapOf(
+        ":mcp-server" to 75,
+        ":android-device-core" to 80,
+        ":android-inspector" to 85,
+        ":auditor-cli" to 85,
+    )
+
+coverageFloors.forEach { (path, floor) ->
+    project(path) {
+        extensions.configure<kotlinx.kover.gradle.plugin.dsl.KoverProjectExtension>("kover") {
+            reports {
+                verify {
+                    rule("$path line coverage") {
+                        minBound(floor)
+                    }
+                }
+            }
+        }
+    }
+}

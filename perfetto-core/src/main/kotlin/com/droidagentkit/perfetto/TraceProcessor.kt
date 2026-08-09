@@ -45,6 +45,14 @@ object TraceProcessorCommands {
 sealed interface TraceProcessorQueryResult {
     data class Rows(
         val rows: List<Map<String, Any?>>,
+        /**
+         * Lines that could not be parsed and were skipped.
+         *
+         * Previously these were dropped in silence, so a query whose output was mostly garbage
+         * returned a short row list that looked like a real answer. Surfacing the count lets the
+         * caller tell "the trace had two matching slices" apart from "we could only read two".
+         */
+        val skippedLines: Int = 0,
     ) : TraceProcessorQueryResult
 
     data class Error(
@@ -75,6 +83,9 @@ object TraceProcessorOutputParser {
         }
     }
 
+    /** Test seam: parsing is the part with the interesting edge cases, and it needs no binary. */
+    internal fun parseRowsForTest(text: String): TraceProcessorQueryResult = parseRows(text)
+
     private fun parseRows(text: String): TraceProcessorQueryResult {
         // Try whole-object first; on failure (e.g. JSON-lines, trailing chars) fall back per-line.
         val firstNonWs = text.first { !it.isWhitespace() }
@@ -90,17 +101,18 @@ object TraceProcessorOutputParser {
         }
         // JSON-lines: one object per line.
         val rows = mutableListOf<Map<String, Any?>>()
+        var skipped = 0
         text.lineSequence().filter { it.isNotBlank() }.forEach { line ->
             try {
                 val value = MiniJson.parse(line)
                 val lineRows = rowsFromValue(value)
                 if (lineRows != null) rows.addAll(lineRows) else rows.addAll(listOf(mapOf("value" to value)))
             } catch (_: Exception) {
-                // Skip unparseable line.
+                skipped++
             }
         }
         return if (rows.isNotEmpty()) {
-            TraceProcessorQueryResult.Rows(rows)
+            TraceProcessorQueryResult.Rows(rows, skippedLines = skipped)
         } else {
             TraceProcessorQueryResult.Error("no rows in trace_processor output")
         }
