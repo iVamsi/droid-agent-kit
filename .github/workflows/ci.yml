@@ -60,9 +60,10 @@ jobs:
   test:
     name: Test (${{ matrix.os }}, JDK ${{ matrix.java }})
     runs-on: ${{ matrix.os }}
-    # Windows and macOS start advisory: this is their first run, and the point of adding them is
-    # to learn what breaks. Flip continue-on-error off once the failures they surface are fixed.
-    continue-on-error: ${{ matrix.os != 'ubuntu-latest' }}
+    # Blocking on all three OSes. They started advisory while the failures they surfaced were
+    # fixed -- a POSIX-only test fixture class, a toolchain the Windows image lacks, and two
+    # assertions that hardcoded POSIX path separators -- and all three are green now, so a
+    # regression should fail the build rather than be quietly tolerated.
     strategy:
       fail-fast: false
       matrix:
