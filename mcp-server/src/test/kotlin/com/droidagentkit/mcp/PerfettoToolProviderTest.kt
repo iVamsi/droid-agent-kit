@@ -156,6 +156,7 @@ class PerfettoToolProviderTest {
             exit 0
             """.trimIndent(),
         )
+        assumePosixFilesystem()
         Files.setPosixFilePermissions(script, PosixFilePermissions.fromString("rwxr-xr-x"))
         return script.toString()
     }
@@ -171,6 +172,7 @@ class PerfettoToolProviderTest {
             exit 0
             """.trimIndent(),
         )
+        assumePosixFilesystem()
         Files.setPosixFilePermissions(script, PosixFilePermissions.fromString("rwxr-xr-x"))
         return script.toString()
     }

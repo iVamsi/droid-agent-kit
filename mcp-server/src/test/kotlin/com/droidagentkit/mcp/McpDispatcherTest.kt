@@ -245,6 +245,7 @@ class McpDispatcherTest {
     private fun writeFakeGradlew(root: java.nio.file.Path) {
         val wrapper = root.resolve("gradlew")
         Files.writeString(wrapper, "#!/bin/sh\nexit 0\n")
+        assumePosixFilesystem()
         Files.setPosixFilePermissions(
             wrapper,
             java.nio.file.attribute.PosixFilePermissions
@@ -363,6 +364,7 @@ class McpDispatcherTest {
             )
         val wrapper = root.resolve("gradlew")
         Files.writeString(wrapper, "#!/bin/sh\necho \"e: file:///project/App.kt:4:2 Unresolved reference\"\nexit 1\n")
+        assumePosixFilesystem()
         Files.setPosixFilePermissions(
             wrapper,
             java.nio.file.attribute.PosixFilePermissions
@@ -402,6 +404,7 @@ class McpDispatcherTest {
             exit 0
             """.trimIndent(),
         )
+        assumePosixFilesystem()
         Files.setPosixFilePermissions(
             adb,
             java.nio.file.attribute.PosixFilePermissions
