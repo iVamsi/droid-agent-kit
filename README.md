@@ -84,7 +84,7 @@ Or install with one click:
 ### Other install paths
 
 ```bash
-brew install iVamsi/droidagentkit/droidagent
+brew install iVamsi/android-agent-kit/droidagent
 ```
 
 Every release also attaches an `.mcpb` bundle. Drop it into an MCP host that supports one-click

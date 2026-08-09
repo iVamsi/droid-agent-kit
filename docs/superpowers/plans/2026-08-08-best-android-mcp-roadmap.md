@@ -184,8 +184,8 @@ Ordered by user impact. WS1-T1 removes the single biggest funnel drop (JDK prere
 
 **Files:**
 - Create: `scripts/generate-homebrew-formula.sh` (emits formula from release version + jar SHA-256; formula wraps `java -jar` with a JDK dependency)
-- Modify: `.github/workflows/release.yml` (job to push formula to `iVamsi/homebrew-droidagentkit` via a repo-scoped token)
-- Docs: README install section gains `brew install iVamsi/droidagentkit/droidagent`
+- Modify: `.github/workflows/release.yml` (job to push formula to `iVamsi/homebrew-android-agent-kit` via a repo-scoped token)
+- Docs: README install section gains `brew install iVamsi/android-agent-kit/droidagent`
 
 **Steps:**
 
