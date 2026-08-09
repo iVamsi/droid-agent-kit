@@ -11,6 +11,17 @@ import java.nio.file.Files
 import java.nio.file.Path
 
 class McpInstallerTest {
+    /**
+     * Rendered once and reused, rather than repeating the literal in assertions.
+     *
+     * The installer writes whatever `Path.toString` produces, which uses the platform separator, so
+     * a hardcoded "/opt/..." expectation passes on POSIX and fails on Windows for no real reason.
+     */
+    private val binPath: java.nio.file.Path =
+        java.nio.file.Path
+            .of("/opt/droidagent/bin/droidagent")
+    private val binText: String = binPath.toString()
+
     @Test
     fun `codex installer writes a user-wide mcp server block idempotently`() {
         val home = Files.createTempDirectory("dak-home")
@@ -20,7 +31,7 @@ class McpInstallerTest {
             installer.install(
                 McpInstallOptions(
                     targets = setOf(McpInstallTarget.CODEX),
-                    binPath = Path.of("/opt/droidagent/bin/droidagent"),
+                    binPath = binPath,
                     dryRun = false,
                     applyClaude = false,
                 ),
@@ -29,7 +40,7 @@ class McpInstallerTest {
             installer.install(
                 McpInstallOptions(
                     targets = setOf(McpInstallTarget.CODEX),
-                    binPath = Path.of("/opt/droidagent/bin/droidagent"),
+                    binPath = binPath,
                     dryRun = false,
                     applyClaude = false,
                 ),
@@ -37,7 +48,7 @@ class McpInstallerTest {
 
         val config = Files.readString(home.resolve(".codex/config.toml"))
         assertTrue(config.contains("[mcp_servers.droidagentkit]"))
-        assertTrue(config.contains("command = \"/opt/droidagent/bin/droidagent\""))
+        assertTrue(config.contains("command = \"$binText\""))
         assertTrue(config.contains("args = [\"serve-mcp\", \"--transport\", \"stdio\", \"--project\", \"auto\"]"))
         assertEquals(1, Regex("\\[mcp_servers\\.droidagentkit]").findAll(config).count())
         assertTrue(first.messages.any { it.contains("Codex") })
@@ -58,7 +69,7 @@ class McpInstallerTest {
             installer.install(
                 McpInstallOptions(
                     targets = setOf(McpInstallTarget.CLAUDE),
-                    binPath = Path.of("/opt/droidagent/bin/droidagent"),
+                    binPath = binPath,
                     dryRun = false,
                     applyClaude = true,
                 ),
@@ -75,7 +86,7 @@ class McpInstallerTest {
                 "stdio",
                 "droidagentkit",
                 "--",
-                "/opt/droidagent/bin/droidagent",
+                binText,
                 "serve-mcp",
                 "--transport",
                 "stdio",
@@ -95,7 +106,7 @@ class McpInstallerTest {
             installer.install(
                 McpInstallOptions(
                     targets = setOf(McpInstallTarget.GENERIC),
-                    binPath = Path.of("/opt/droidagent/bin/droidagent"),
+                    binPath = binPath,
                     dryRun = true,
                     applyClaude = false,
                 ),
@@ -149,7 +160,7 @@ class McpInstallerTest {
         installer.install(
             McpInstallOptions(
                 targets = setOf(McpInstallTarget.CURSOR),
-                binPath = Path.of("/opt/droidagent/bin/droidagent"),
+                binPath = binPath,
                 dryRun = false,
                 applyClaude = false,
             ),
@@ -158,7 +169,7 @@ class McpInstallerTest {
             installer.install(
                 McpInstallOptions(
                     targets = setOf(McpInstallTarget.CURSOR),
-                    binPath = Path.of("/opt/droidagent/bin/droidagent"),
+                    binPath = binPath,
                     dryRun = false,
                     applyClaude = false,
                 ),
@@ -167,7 +178,7 @@ class McpInstallerTest {
         val config = Files.readString(home.resolve(".cursor/mcp.json"))
         val servers = Json.parseToJsonElement(config).jsonObject["mcpServers"]!!.jsonObject
         assertEquals(1, servers.size)
-        assertEquals("/opt/droidagent/bin/droidagent", servers["droidagentkit"]!!.jsonObject["command"]!!.jsonPrimitive.content)
+        assertEquals(binText, servers["droidagentkit"]!!.jsonObject["command"]!!.jsonPrimitive.content)
         assertTrue(result.messages.any { it.contains("Cursor") })
     }
 
@@ -184,7 +195,7 @@ class McpInstallerTest {
         installer.install(
             McpInstallOptions(
                 targets = setOf(McpInstallTarget.ZED),
-                binPath = Path.of("/opt/droidagent/bin/droidagent"),
+                binPath = binPath,
                 dryRun = false,
                 applyClaude = false,
             ),
@@ -196,7 +207,7 @@ class McpInstallerTest {
         val servers = root["context_servers"]!!.jsonObject
         assertEquals(2, servers.size)
         assertEquals("/bin/other", servers["other-tool"]!!.jsonObject["command"]!!.jsonPrimitive.content)
-        assertEquals("/opt/droidagent/bin/droidagent", servers["droidagentkit"]!!.jsonObject["command"]!!.jsonPrimitive.content)
+        assertEquals(binText, servers["droidagentkit"]!!.jsonObject["command"]!!.jsonPrimitive.content)
     }
 
     @Test
@@ -207,7 +218,7 @@ class McpInstallerTest {
         installer.install(
             McpInstallOptions(
                 targets = setOf(McpInstallTarget.ZED),
-                binPath = Path.of("/opt/droidagent/bin/droidagent"),
+                binPath = binPath,
                 dryRun = false,
                 applyClaude = false,
             ),
@@ -224,7 +235,7 @@ class McpInstallerTest {
         installer.install(
             McpInstallOptions(
                 targets = setOf(McpInstallTarget.VSCODE),
-                binPath = Path.of("/opt/droidagent/bin/droidagent"),
+                binPath = binPath,
                 dryRun = false,
                 applyClaude = false,
             ),
@@ -243,7 +254,7 @@ class McpInstallerTest {
         installer.install(
             McpInstallOptions(
                 targets = setOf(McpInstallTarget.VSCODE),
-                binPath = Path.of("/opt/droidagent/bin/droidagent"),
+                binPath = binPath,
                 dryRun = false,
                 applyClaude = false,
             ),
@@ -263,7 +274,7 @@ class McpInstallerTest {
             installer.install(
                 McpInstallOptions(
                     targets = setOf(McpInstallTarget.CURSOR),
-                    binPath = Path.of("/opt/droidagent/bin/droidagent"),
+                    binPath = binPath,
                     dryRun = false,
                     applyClaude = false,
                 ),
@@ -291,7 +302,7 @@ class McpInstallerTest {
         val options =
             McpInstallOptions(
                 targets = setOf(McpInstallTarget.ANDROID_STUDIO),
-                binPath = Path.of("/opt/droidagent/bin/droidagent"),
+                binPath = binPath,
                 projectRoot = project,
                 dryRun = false,
                 applyClaude = false,
@@ -313,7 +324,7 @@ class McpInstallerTest {
 
         val plist = Files.list(home.resolve("Library/LaunchAgents")).use { paths -> paths.findFirst().orElseThrow() }
         val plistText = Files.readString(plist)
-        assertTrue(plistText.contains("/opt/droidagent/bin/droidagent"))
+        assertTrue(plistText.contains(binText))
         assertTrue(plistText.contains(project.toString()))
         assertTrue(plistText.contains("--bearer-token-file"))
         assertTrue(executed.any { it.take(3) == listOf("launchctl", "load", "-w") })
@@ -331,7 +342,7 @@ class McpInstallerTest {
             installer.install(
                 McpInstallOptions(
                     targets = setOf(McpInstallTarget.ANDROID_STUDIO),
-                    binPath = Path.of("/opt/droidagent/bin/droidagent"),
+                    binPath = binPath,
                     projectRoot = Files.createTempDirectory("dak-project-studio-dry"),
                     dryRun = true,
                     applyClaude = false,
@@ -356,7 +367,7 @@ class McpInstallerTest {
         installer.install(
             McpInstallOptions(
                 targets = setOf(McpInstallTarget.ANDROID_STUDIO),
-                binPath = Path.of("/opt/droidagent/bin/droidagent"),
+                binPath = binPath,
                 projectRoot = project,
                 projectsRoot = workspace,
                 dryRun = false,
@@ -380,7 +391,7 @@ class McpInstallerTest {
             installer.install(
                 McpInstallOptions(
                     targets = setOf(McpInstallTarget.ANDROID_STUDIO),
-                    binPath = Path.of("/opt/droidagent/bin/droidagent"),
+                    binPath = binPath,
                     projectRoot = Files.createTempDirectory("dak-project"),
                     projectsRoot = home.resolve("missing"),
                     dryRun = false,

@@ -14,6 +14,19 @@ import java.util.concurrent.TimeUnit
  * is the exact failure this is meant to prevent.
  */
 class ProcessRunnerCancellationTest {
+    /**
+     * These exercise real process spawning, so they need a real shell. `/bin/sh` is the portable
+     * choice on POSIX; a batch equivalent would be testing a different thing, so on Windows they
+     * skip rather than pretend.
+     */
+    @org.junit.Before
+    fun requirePosixShell() {
+        org.junit.Assume.assumeTrue(
+            "spawns /bin/sh",
+            !System.getProperty("os.name").startsWith("Windows"),
+        )
+    }
+
     private fun runner(dir: java.nio.file.Path) =
         ProcessRunner(
             redactor = Redactor(RedactionConfig()),

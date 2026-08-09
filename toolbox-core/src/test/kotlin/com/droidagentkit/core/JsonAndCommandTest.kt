@@ -27,6 +27,9 @@ class JsonAndCommandTest {
 
     @Test
     fun `process runner captures output artifact and redacts summary`() {
+        // Spawns a real /bin/sh; a batch equivalent would be testing something else, so this
+        // skips on Windows rather than pretending.
+        org.junit.Assume.assumeTrue("spawns /bin/sh", !System.getProperty("os.name").startsWith("Windows"))
         val outputDir = Files.createTempDirectory("dak-command")
         val runner =
             ProcessRunner(
@@ -54,6 +57,9 @@ class JsonAndCommandTest {
 
     @Test
     fun `process runner preserves binary output without text corruption`() {
+        // Spawns a real /bin/sh; a batch equivalent would be testing something else, so this
+        // skips on Windows rather than pretending.
+        org.junit.Assume.assumeTrue("spawns /bin/sh", !System.getProperty("os.name").startsWith("Windows"))
         val outputDir = Files.createTempDirectory("dak-binary")
         val runner =
             ProcessRunner(
@@ -92,6 +98,9 @@ class JsonAndCommandTest {
 
     @Test
     fun `process runner drains verbose output while the process is still running`() {
+        // Spawns a real /bin/sh; a batch equivalent would be testing something else, so this
+        // skips on Windows rather than pretending.
+        org.junit.Assume.assumeTrue("spawns /bin/sh", !System.getProperty("os.name").startsWith("Windows"))
         val outputDir = Files.createTempDirectory("dak-verbose")
         val runner = ProcessRunner(Redactor(DroidAgentConfig.default().redaction), ArtifactWriter(outputDir))
 
