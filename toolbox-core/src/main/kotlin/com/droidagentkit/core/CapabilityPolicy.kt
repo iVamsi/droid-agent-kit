@@ -66,9 +66,35 @@ interface OperationPolicy {
     fun authorize(request: OperationRequest): AuthorizationDecision
 }
 
+/** Outcome of asking a human, out of band, to approve a destructive operation. */
+enum class InteractiveConfirmation {
+    APPROVED,
+    DECLINED,
+
+    /** No channel exists to ask on -- the host does not support it, or none is connected. */
+    UNAVAILABLE,
+}
+
+/**
+ * Asks a human to approve a destructive operation through a channel the agent does not control.
+ *
+ * This is the answer to the honest limitation documented on [OperationRequest.confirmDestructive]:
+ * that flag arrives in the tool arguments, so a prompt-injected agent simply sets it. A confirmer
+ * reaches past the model to the person, which is the only way to make consent mean anything.
+ */
+fun interface InteractiveConfirmer {
+    fun confirm(request: OperationRequest): InteractiveConfirmation
+
+    companion object {
+        /** For transports with no way to ask; every attempt reports [InteractiveConfirmation.UNAVAILABLE]. */
+        val UNAVAILABLE = InteractiveConfirmer { InteractiveConfirmation.UNAVAILABLE }
+    }
+}
+
 class DefaultOperationPolicy(
     private val config: SafetyConfig,
     private val allowedRoots: List<Path>,
+    private val confirmer: InteractiveConfirmer = InteractiveConfirmer.UNAVAILABLE,
 ) : OperationPolicy {
     override fun authorize(request: OperationRequest): AuthorizationDecision {
         request.deviceSerial?.let { serial ->
@@ -100,6 +126,25 @@ class DefaultOperationPolicy(
                 "destructive-confirmation-required",
                 "Operation '${request.operationId}' is destructive and requires confirmDestructive=true.",
             )
+        }
+        // Deliberately *after* the capability and confirmDestructive checks: asking a human to
+        // approve something the policy already forbids trains them to click through prompts.
+        if (request.destructive && config.requireInteractiveConfirm) {
+            when (confirmer.confirm(request)) {
+                InteractiveConfirmation.APPROVED -> Unit
+                InteractiveConfirmation.DECLINED ->
+                    return AuthorizationDecision.Denied(
+                        "user-declined",
+                        "A human declined '${request.operationId}'.",
+                    )
+                InteractiveConfirmation.UNAVAILABLE ->
+                    return AuthorizationDecision.Denied(
+                        "interactive-confirm-unavailable",
+                        "safety.requireInteractiveConfirm is on, but this host cannot prompt a human " +
+                            "(it did not advertise MCP elicitation). Use a host that supports elicitation, " +
+                            "or turn the setting off in ~/.droidagentkit/policy.yaml.",
+                    )
+            }
         }
         val realRoots = allowedRoots.map { resolveThroughLinks(it) }
         request.hostPaths.forEach { path ->

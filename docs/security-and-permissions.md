@@ -77,6 +77,37 @@ arrives in the tool arguments, so the model supplies it; a prompt-injected agent
 control that actually bounds a hostile agent is the capability set — so grant `app_destructive`,
 `file_import`, `permission_mutation`, and `network_interception` only when you want them used.
 
+### Requiring a human, not the model, to approve
+
+`safety.requireInteractiveConfirm: true` in the user policy closes that gap for destructive
+operations. When it is on, the server sends an MCP `elicitation/create` request and proceeds only if
+a person answers yes in their client. The agent cannot forge that answer — it travels on the
+client→server channel the model does not author, which is precisely what `confirmDestructive` is
+missing.
+
+```yaml
+# ~/.droidagentkit/policy.yaml
+safety:
+  requireInteractiveConfirm: true
+```
+
+Three things worth knowing before turning it on:
+
+- **It needs an elicitation-capable host.** If the client did not advertise `elicitation` at
+  `initialize`, destructive calls are **denied** with `interactive-confirm-unavailable` rather than
+  allowed. Failing closed is deliberate: silently proceeding would leave you believing every
+  destructive call was approved by a human while none were.
+- **It is checked last.** Capability and `confirmDestructive` checks run first, so you are never
+  prompted to approve something the policy already forbids. Prompts that can only be answered one
+  way train people to click through them.
+- **It is policy-only, in both directions.** Like every other grant, a project's
+  `.droidagentkit/config.yaml` cannot turn it on — and, unlike the other keys, an attempt to set it
+  to `false` is reported rather than silently ignored, since that is a repository trying to switch a
+  protection off.
+
+A client that never answers times out and is treated as unavailable, so a wedged host blocks
+destructive work instead of waving it through.
+
 **Redaction is best-effort.** It is a curated denylist of patterns (bearer tokens, cloud keys, PEM
 blocks, `*_TOKEN=`-style assignments). It meaningfully reduces accidental secret exposure in command
 output; it cannot guarantee a secret in an unrecognized shape is caught. Do not treat redacted output
