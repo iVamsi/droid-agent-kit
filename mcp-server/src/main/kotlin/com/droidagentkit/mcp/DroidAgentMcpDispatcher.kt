@@ -30,6 +30,9 @@ import com.droidagentkit.core.ShellQuote
 import com.droidagentkit.core.ToolGroup
 import com.droidagentkit.core.ToolResult
 import com.droidagentkit.device.DeviceToolContext
+import com.droidagentkit.device.UiElementFinder
+import com.droidagentkit.device.UiElementMatch
+import com.droidagentkit.device.UiFindResult
 import com.droidagentkit.inspector.AndroidProjectInspector
 import com.droidagentkit.mcp.tools.ApkAnalyzer
 import com.droidagentkit.mcp.tools.BuildFailureParser
@@ -391,6 +394,11 @@ class DroidAgentMcpDispatcher(
                             mapOf(
                                 "deviceSerial" to deviceSerialProp,
                                 "outputName" to str("Base name for the output XML artifact. Optional."),
+                                "verbosity" to
+                                    str(
+                                        "'full' (default) returns every node inline; 'compact' returns only interactive " +
+                                            "nodes, cutting payload size. The complete hierarchy is written as an artifact either way.",
+                                    ),
                                 "compressed" to bool("Pass --compressed to uiautomator dump. Default true."),
                             ),
                     ),
@@ -491,6 +499,30 @@ class DroidAgentMcpDispatcher(
                                 "timeoutSeconds" to num("Override command timeout in seconds."),
                             ),
                     ),
+                outputSchema = toolResultSchema,
+            ),
+            McpTool(
+                name = "android_ui_find",
+                title = "Find a UI element by label",
+                description =
+                    "Locate an on-screen element by text, content description, or resource id and return its tap point. " +
+                        "Read-only. Ambiguous matches are reported with candidates rather than guessed; misses list what is " +
+                        "actually on screen.",
+                inputSchema =
+                    schema(
+                        "deviceSerial",
+                        props =
+                            mapOf(
+                                "rootPath" to rootPathProp,
+                                "deviceSerial" to str("adb device serial."),
+                                "text" to str("Visible text to match."),
+                                "contentDesc" to str("Content description to match (for icon-only controls)."),
+                                "resourceId" to str("Resource id to match."),
+                                "exact" to bool("Require an exact match instead of a case-insensitive substring. Defaults to false."),
+                                "clickableOnly" to bool("Only consider clickable nodes. Defaults to true."),
+                            ),
+                    ),
+                annotations = mapOf("readOnlyHint" to true),
                 outputSchema = toolResultSchema,
             ),
             McpTool(
@@ -620,6 +652,7 @@ class DroidAgentMcpDispatcher(
                 "android_build_diagnose" -> buildDiagnose(arguments)
                 "android_doctor" -> doctor(arguments)
                 "android_apk_analyze" -> apkAnalyze(arguments)
+                "android_ui_find" -> uiFind(arguments)
                 else -> resultMap(ToolResult(status = ResultStatus.UNSUPPORTED, summary = "Unknown MCP tool: $name"))
             }
         } catch (error: ProjectRootViolation) {
@@ -1086,11 +1119,106 @@ class DroidAgentMcpDispatcher(
                 description = "Raw UIAutomator accessibility XML (accessibility hierarchy, not Layout Inspector)",
                 sensitivity = com.droidagentkit.core.ArtifactSensitivity.SENSITIVE,
             )
+        // The full tree is the single largest payload any tool returns -- a busy screen runs to
+        // tens of thousands of tokens. In compact mode only the interactive nodes come back
+        // inline; the complete hierarchy is still on disk as an artifact either way, so nothing is
+        // lost, only deferred.
+        val compact = isCompact(arguments)
+        val inlineNodes =
+            if (compact) {
+                parsed.nodes.filter { it["clickable"] == true || (it["text"]?.toString()).isNullOrBlank().not() }
+            } else {
+                parsed.nodes
+            }
+        val summary =
+            if (compact) {
+                "Captured accessibility tree: ${parsed.nodeCount} node(s); ${inlineNodes.size} interactive returned inline (compact)."
+            } else {
+                "Captured accessibility tree: ${parsed.nodeCount} node(s)."
+            }
         return resultMapWithFindings(
-            runResult.copy(artifacts = runResult.artifacts + rawRef, summary = "Captured accessibility tree: ${parsed.nodeCount} node(s)."),
+            runResult.copy(artifacts = runResult.artifacts + rawRef, summary = summary),
             parsed.findings,
-        ) + mapOf("accessibilityTree" to parsed.nodes)
+        ) + mapOf("accessibilityTree" to inlineNodes)
     }
+
+    /**
+     * Whether the caller asked for the trimmed payload.
+     *
+     * Defaults to full so no existing integration silently starts receiving less than it did.
+     */
+    private fun isCompact(arguments: Map<String, Any?>): Boolean = arguments["verbosity"]?.toString() == "compact"
+
+    private fun uiFind(arguments: Map<String, Any?>): Map<String, Any> {
+        val serial =
+            arguments["deviceSerial"]?.toString()
+                ?: return resultMap(
+                    ToolResult(
+                        status = ResultStatus.BLOCKED,
+                        summary = "deviceSerial is required for android_ui_find.",
+                        warnings = listOf("missing-device-serial"),
+                    ),
+                )
+        val result = findUiElement(arguments + mapOf("deviceSerial" to serial))
+        return when (result) {
+            is UiFindResult.Found ->
+                resultMap(
+                    ToolResult(
+                        status = ResultStatus.SUCCESS,
+                        summary = "Matched '${result.match.text.ifBlank {
+                            result.match.contentDesc
+                        }}' at (${result.match.centerX},${result.match.centerY}).",
+                    ),
+                ) + mapOf("element" to matchMap(result.match))
+            is UiFindResult.Ambiguous ->
+                resultMap(
+                    ToolResult(
+                        status = ResultStatus.FAILED,
+                        summary = "${result.matches.size} elements matched; refine with resourceId or exact=true.",
+                        warnings = listOf("ambiguous-match"),
+                    ),
+                ) + mapOf("candidates" to result.matches.map { matchMap(it) })
+            is UiFindResult.NotFound ->
+                resultMap(
+                    ToolResult(
+                        status = ResultStatus.FAILED,
+                        summary = "No element matched. On screen now: ${result.suggestions.joinToString(
+                            ", ",
+                        ).ifBlank { "(no labelled elements)" }}",
+                        warnings = listOf("no-match"),
+                    ),
+                ) + mapOf("suggestions" to result.suggestions)
+        }
+    }
+
+    override fun findUiElement(arguments: Map<String, Any?>): UiFindResult {
+        val serial = arguments["deviceSerial"]?.toString().orEmpty()
+        val snapshot = accessibilitySnapshot(mapOf("deviceSerial" to serial, "rootPath" to (arguments["rootPath"] ?: "")))
+
+        @Suppress("UNCHECKED_CAST")
+        val nodes = snapshot["accessibilityTree"] as? List<Map<String, Any>> ?: emptyList()
+        return UiElementFinder.find(
+            nodes = nodes,
+            text = arguments["text"]?.toString()?.takeIf { it.isNotBlank() },
+            contentDesc = arguments["contentDesc"]?.toString()?.takeIf { it.isNotBlank() },
+            resourceId = arguments["resourceId"]?.toString()?.takeIf { it.isNotBlank() },
+            exact = arguments["exact"]?.toString()?.toBooleanStrictOrNull() ?: false,
+            clickableOnly = arguments["clickableOnly"]?.toString()?.toBooleanStrictOrNull() ?: true,
+        )
+    }
+
+    private fun matchMap(match: UiElementMatch): Map<String, Any> =
+        mapOf(
+            "text" to match.text,
+            "contentDesc" to match.contentDesc,
+            "resourceId" to match.resourceId,
+            "className" to match.className,
+            "bounds" to match.bounds,
+            "clickable" to match.clickable,
+            "enabled" to match.enabled,
+            "centerX" to match.centerX,
+            "centerY" to match.centerY,
+        )
 
     private fun reportBundle(arguments: Map<String, Any?>): Map<String, Any> {
         val root = rootPath(arguments)

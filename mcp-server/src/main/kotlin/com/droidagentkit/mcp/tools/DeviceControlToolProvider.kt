@@ -16,6 +16,7 @@ import com.droidagentkit.core.ToolResult
 import com.droidagentkit.device.DeviceToolContext
 import com.droidagentkit.device.FlowEmitters
 import com.droidagentkit.device.FlowRecorder
+import com.droidagentkit.device.UiFindResult
 import com.droidagentkit.mcp.McpTool
 import java.nio.file.Files
 import java.nio.file.Path
@@ -34,6 +35,7 @@ class DeviceControlToolProvider(
                 "android_app_launch",
                 "android_deep_link",
                 "android_input_tap",
+                "android_input_tap_element",
                 "android_input_swipe",
                 "android_input_type",
                 "android_input_key",
@@ -71,6 +73,7 @@ class DeviceControlToolProvider(
             "android_file_pull",
             "android_file_push",
             "android_run_flow",
+            "android_input_tap_element",
             "android_flow_record_start",
             "android_flow_record_stop",
         )
@@ -115,6 +118,7 @@ class DeviceControlToolProvider(
             "android_file_pull" -> filePull(arguments)
             "android_file_push" -> filePush(arguments)
             "android_run_flow" -> runFlow(arguments)
+            "android_input_tap_element" -> inputTapElement(arguments)
             "android_flow_record_start" -> flowRecordStart(arguments)
             "android_flow_record_stop" -> flowRecordStop(arguments)
             else -> unsupported(name)
@@ -595,6 +599,24 @@ class DeviceControlToolProvider(
                 ),
             ),
             tool(
+                "android_input_tap_element",
+                "Tap an element by label",
+                "Find an on-screen element by text, content description, or resource id and tap its center. " +
+                    "Refuses to guess when more than one element matches.",
+                schema(
+                    "deviceSerial",
+                    props =
+                        mapOf(
+                            "rootPath" to rootPathProp,
+                            "deviceSerial" to deviceSerialProp,
+                            "text" to str("Visible text to match."),
+                            "contentDesc" to str("Content description to match."),
+                            "resourceId" to str("Resource id to match."),
+                            "exact" to bool("Require an exact match instead of a case-insensitive substring. Defaults to false."),
+                        ),
+                ),
+            ),
+            tool(
                 "android_flow_record_start",
                 "Start recording device interactions as a replayable flow",
                 "Begin capturing subsequent device-control calls. Stop with android_flow_record_stop to write the flow as run_flow JSON, Maestro YAML, and a Compose test skeleton.",
@@ -823,6 +845,71 @@ class DeviceControlToolProvider(
         val serial = requireSerial(arguments) ?: return missingSerial("android_input_tap")
         val result = runAdbShell(arguments, listOf("input", "tap", x.toString(), y.toString()), "Tap ($x,$y) on $serial", false)
         return context.resultMap(result)
+    }
+
+    /**
+     * Taps what a human would name rather than a coordinate.
+     *
+     * Coordinate taps encode a screen size and a layout, so a recorded one stops meaning anything
+     * the moment either changes. Resolution happens through the same finder the read-only
+     * android_ui_find uses, then delegates to the ordinary tap path so authorization, recording,
+     * and redaction all behave identically.
+     */
+    private fun inputTapElement(arguments: Map<String, Any?>): Map<String, Any> {
+        val (_, denied) = authorize("android_input_tap_element", setOf(Capability.DEVICE_INPUT), false, arguments)
+        if (denied != null) return denied
+        val serial = requireSerial(arguments) ?: return missingSerial("android_input_tap_element")
+        if (listOf("text", "contentDesc", "resourceId").none { arguments[it]?.toString()?.isNotBlank() == true }) {
+            return blocked("missing-selector", "One of text, contentDesc, or resourceId is required for android_input_tap_element.")
+        }
+
+        val found = context.findUiElement(arguments)
+        return when (found) {
+            is UiFindResult.Found -> {
+                val match = found.match
+                val tapResult =
+                    call(
+                        "android_input_tap",
+                        arguments + mapOf("x" to match.centerX, "y" to match.centerY, "deviceSerial" to serial),
+                    )
+                tapResult +
+                    mapOf(
+                        "element" to
+                            mapOf(
+                                "text" to match.text,
+                                "resourceId" to match.resourceId,
+                                "centerX" to match.centerX,
+                                "centerY" to match.centerY,
+                            ),
+                    )
+            }
+            is UiFindResult.Ambiguous ->
+                context.resultMap(
+                    ToolResult(
+                        status = ResultStatus.FAILED,
+                        summary =
+                            "${found.matches.size} elements matched; refine with resourceId or exact=true " +
+                                "rather than tapping a guess.",
+                        warnings = listOf("ambiguous-match"),
+                    ),
+                ) +
+                    mapOf(
+                        "candidates" to
+                            found.matches.map {
+                                mapOf("text" to it.text, "resourceId" to it.resourceId, "bounds" to it.bounds)
+                            },
+                    )
+            is UiFindResult.NotFound ->
+                context.resultMap(
+                    ToolResult(
+                        status = ResultStatus.FAILED,
+                        summary = "No element matched. On screen now: ${found.suggestions.joinToString(
+                            ", ",
+                        ).ifBlank { "(no labelled elements)" }}",
+                        warnings = listOf("no-match"),
+                    ),
+                ) + mapOf("suggestions" to found.suggestions)
+        }
     }
 
     private fun inputSwipe(arguments: Map<String, Any?>): Map<String, Any> {

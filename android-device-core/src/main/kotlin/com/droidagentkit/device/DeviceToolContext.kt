@@ -43,5 +43,14 @@ interface DeviceToolContext {
 
     fun authorize(request: OperationRequest): AuthorizationDecision
 
+    /**
+     * Resolves a UI element by label on the given device.
+     *
+     * Lives on the context because the accessibility dump is a core-group capability while the tap
+     * that uses it is device-control; routing through here keeps the provider from reaching across
+     * groups directly.
+     */
+    fun findUiElement(arguments: Map<String, Any?>): UiFindResult
+
     fun safeId(value: String): String
 }

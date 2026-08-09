@@ -603,4 +603,44 @@ class DeviceControlToolProviderTest {
         val doctorTool = dispatcher.listTools().first { it.name == "android_doctor" }
         assertEquals(true, doctorTool.annotations["readOnlyHint"])
     }
+
+    @Test
+    fun `tap by element refuses when the selector is missing`() {
+        val root = Files.createTempDirectory("dak-tap-elem-nosel")
+        val dispatcher = dispatcher(root, controlConfig(root, setOf(Capability.DEVICE_INPUT)))
+
+        val result =
+            dispatcher.call(
+                "android_input_tap_element",
+                mapOf("rootPath" to root.toString(), "deviceSerial" to "emulator-5554"),
+            )
+
+        assertEquals("blocked", result["status"])
+        @Suppress("UNCHECKED_CAST")
+        val warnings = result["warnings"] as List<String>
+        assertTrue("should say what is missing: $warnings", warnings.contains("missing-selector"))
+    }
+
+    @Test
+    fun `tap by element still requires the device_input capability`() {
+        // Resolving by label must not become a way around the capability that gates tapping.
+        val root = Files.createTempDirectory("dak-tap-elem-nocap")
+        val dispatcher = dispatcher(root, controlConfig(root, emptySet()))
+
+        val result =
+            dispatcher.call(
+                "android_input_tap_element",
+                mapOf("rootPath" to root.toString(), "deviceSerial" to "emulator-5554", "text" to "Sign in"),
+            )
+
+        assertEquals("blocked", result["status"])
+    }
+
+    @Test
+    fun `tap by element is listed with the other input tools`() {
+        val root = Files.createTempDirectory("dak-tap-elem-list")
+        val dispatcher = dispatcher(root, controlConfig(root))
+
+        assertTrue(dispatcher.listTools().map { it.name }.contains("android_input_tap_element"))
+    }
 }
