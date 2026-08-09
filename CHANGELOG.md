@@ -14,9 +14,11 @@ pre-release convention `0.y.z-alpha` until a stable 1.0 release.
   bespoke `bundle`/`server`/`runtime` shape that conformed to no published spec, so nothing could
   have consumed it.
 - **Homebrew formula** generated per release by `scripts/generate-homebrew-formula.sh`, pinning the
-  checksum from the release's own published `.sha256` asset. Shipped as a workflow artifact until a
-  tap repository exists; pushing is opt-in via a `HOMEBREW_TAP_TOKEN` secret, so a release never
-  fails because the tap has not been created yet.
+  checksum from the release's own published `.sha256` asset. The tap
+  ([iVamsi/homebrew-android-agent-kit](https://github.com/iVamsi/homebrew-android-agent-kit)) is
+  live: `brew install iVamsi/android-agent-kit/droidagent`. Automated formula updates on release
+  are opt-in via a `HOMEBREW_TAP_TOKEN` secret, so a release never fails when that secret is
+  absent — the formula still ships as a workflow artifact.
 
 ### Changed
 
