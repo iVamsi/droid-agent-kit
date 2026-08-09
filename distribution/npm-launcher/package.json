@@ -1,6 +1,6 @@
 {
   "name": "@droidagentkit/launcher",
-  "version": "0.2.6-alpha",
+  "version": "0.2.7-alpha",
   "mcpName": "io.github.iVamsi/android-agent-kit",
   "description": "Android development MCP server: Gradle, adb, logcat, lint, crash triage, Perfetto, emulator control. Thin Node launcher for the DroidAgentKit JVM MCP server — locates the `droidagent` CLI (or a fetched archive), verifies its SHA-256, and spawns `droidagent serve-mcp --transport stdio`. Node is an install-time dependency only; the server runtime is pure JVM.",
   "keywords": [

@@ -6,6 +6,8 @@ pre-release convention `0.y.z-alpha` until a stable 1.0 release.
 
 ## Unreleased
 
+## [0.2.7-alpha] - 2026-08-09
+
 ### Added
 
 - **MCPB bundle** attached to every release (`android-agent-kit-<version>.mcpb`), for one-click
