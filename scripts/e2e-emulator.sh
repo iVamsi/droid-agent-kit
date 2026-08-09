@@ -91,8 +91,16 @@ resp="$(call_tool android_logcat_capture "{\"deviceSerial\":\"$SERIAL\",\"maxLin
 assert_status "logcat" "$resp" "success" || fail=1
 
 echo "e2e: android_dumpsys (device_read group)"
-resp="$(call_tool android_dumpsys "{\"deviceSerial\":\"$SERIAL\",\"service\":\"battery\"}")"
-assert_status "dumpsys" "$resp" "success" || fail=1
+# `preset`, not `service`: the tool exposes a fixed set (meminfo, gfxinfo, cpuinfo, batterystats,
+# package) rather than arbitrary service names, precisely so an agent cannot dumpsys anything it
+# likes. The first nightly caught this script guessing the wrong argument name.
+resp="$(call_tool android_dumpsys "{\"deviceSerial\":\"$SERIAL\",\"preset\":\"meminfo\"}")"
+assert_status "dumpsys meminfo" "$resp" "success" || fail=1
+
+echo "e2e: android_dumpsys rejects an unknown preset"
+# The allowlist is the point of the tool; a passing meminfo says nothing about whether it holds.
+resp="$(call_tool android_dumpsys "{\"deviceSerial\":\"$SERIAL\",\"preset\":\"anything-goes\"}")"
+assert_status "unknown preset is refused" "$resp" "blocked" || fail=1
 
 echo "e2e: a capability that was NOT granted is refused"
 # Proves the policy is actually in force on a real device, not just in unit tests.

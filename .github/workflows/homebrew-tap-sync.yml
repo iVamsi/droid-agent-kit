@@ -1,0 +1,93 @@
+name: Homebrew tap sync
+
+# Two entry points on purpose.
+#
+# `workflow_call` is how the release pipeline updates the tap, so the formula tracks releases
+# automatically. `workflow_dispatch` exists so the tap can be re-synced — or the HOMEBREW_TAP_TOKEN
+# secret verified — without cutting a release, which would otherwise be the only way to find out
+# whether the token works.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Released version to publish, e.g. 0.2.6-alpha (a v prefix is stripped)"
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+    secrets:
+      HOMEBREW_TAP_TOKEN:
+        required: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  sync:
+    name: Generate and publish formula
+    runs-on: ubuntu-latest
+    env:
+      # Secrets cannot be referenced directly in an `if:`, so the presence check is lifted into an
+      # env var here. The value itself is never exposed by this comparison.
+      HAS_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Generate formula
+        id: generate
+        run: |
+          set -euo pipefail
+          # Callers pass a tag (v0.2.6-alpha) or a bare version; normalize both.
+          version="${{ inputs.version }}"
+          version="${version#v}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          mkdir -p build/homebrew/Formula
+          # Pins the checksum from the release's own published .sha256, so the formula describes
+          # exactly what shipped. This also fails loudly if the version was never released.
+          bash scripts/generate-homebrew-formula.sh "$version" build/homebrew/Formula/droidagent.rb
+          cat build/homebrew/Formula/droidagent.rb
+
+      - name: Upload formula
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: homebrew-formula
+          path: build/homebrew/Formula/droidagent.rb
+          retention-days: 30
+
+      - name: Report missing token
+        if: env.HAS_TAP_TOKEN != 'true'
+        run: |
+          echo "::warning::HOMEBREW_TAP_TOKEN is not set, so the tap was not updated." \
+            "The formula is attached to this run as an artifact. See docs/cli-reference.md."
+
+      - name: Push to tap
+        if: env.HAS_TAP_TOKEN == 'true'
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          VERSION: ${{ steps.generate.outputs.version }}
+        run: |
+          set -euo pipefail
+          git clone --depth 1 \
+            "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/iVamsi/homebrew-android-agent-kit.git" tap
+          mkdir -p tap/Formula
+          cp build/homebrew/Formula/droidagent.rb tap/Formula/droidagent.rb
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/droidagent.rb
+          # Re-running for a version already published is a no-op rather than an error, so the
+          # dispatch path is safe to use as a token check.
+          if git diff --cached --quiet; then
+            echo "Formula already at ${VERSION}; nothing to push."
+            exit 0
+          fi
+          git commit -m "droidagent ${VERSION}"
+          git push
+          echo "Pushed droidagent ${VERSION} to the tap."

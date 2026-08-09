@@ -43,3 +43,29 @@ The rename has two halves, and the second is easy to forget:
 2. **After** that release succeeds, run `scripts/deprecate-old-registry-listing.sh --confirm` once,
    to mark the old listing deprecated with a pointer to the new one. Skipping this leaves two
    `active` listings competing, with the stale one giving no hint where the project went.
+
+## Homebrew tap
+
+`brew install iVamsi/android-agent-kit/droidagent`, served from
+[iVamsi/homebrew-android-agent-kit](https://github.com/iVamsi/homebrew-android-agent-kit).
+
+`Formula/droidagent.rb` is generated, never hand-edited: `scripts/generate-homebrew-formula.sh`
+pins the SHA-256 from the release's own published `.sha256` asset, so the formula describes exactly
+what shipped rather than a locally rebuilt jar users could not reproduce.
+
+Updating the tap needs a token, because the release workflow runs in this repository and has to
+push to a different one — the built-in `GITHUB_TOKEN` is scoped to the running repository and
+cannot. Create a **fine-grained** PAT limited to the tap repository with `Contents: Read and write`,
+and add it here as `HOMEBREW_TAP_TOKEN`. A classic token with `repo` scope would grant write access
+to every repository you own, including this one; the fine-grained token can only ever touch the tap.
+
+To verify the token, or to re-sync the tap without cutting a release, run the **Homebrew tap sync**
+workflow manually with a released version:
+
+```bash
+gh workflow run homebrew-tap-sync.yml -f version=0.2.6-alpha
+```
+
+Re-running for a version already in the tap is a no-op, so it is safe to use purely as a token
+check. Without the secret the workflow still succeeds and attaches the formula as an artifact, so a
+missing token never fails a release.

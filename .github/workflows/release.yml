@@ -133,44 +133,11 @@ jobs:
           echo "mcp-publisher publish failed after 3 attempts" >&2
           exit 1
 
+  # Delegates to the reusable workflow so the release path and the on-demand path cannot drift.
   homebrew-formula:
-    name: Generate Homebrew formula
+    name: Update Homebrew tap
     needs: build-and-release
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - name: Generate formula
-        run: |
-          set -euo pipefail
-          version="${GITHUB_REF_NAME#v}"
-          mkdir -p build/homebrew/Formula
-          # Reads the checksum from the release asset published by the previous job, so the formula
-          # pins exactly what shipped rather than a locally rebuilt jar that would not match.
-          bash scripts/generate-homebrew-formula.sh "$version" build/homebrew/Formula/droidagent.rb
-          cat build/homebrew/Formula/droidagent.rb
-      - name: Upload formula
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: homebrew-formula
-          path: build/homebrew/Formula/droidagent.rb
-          retention-days: 30
-      # Pushing is opt-in: the tap repository is created once by hand, and the token is only
-      # present after that. Until then the formula ships as an artifact, so a release never fails
-      # because a tap does not exist yet.
-      - name: Push to tap
-        if: env.HOMEBREW_TAP_TOKEN != ''
-        env:
-          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-        run: |
-          set -euo pipefail
-          version="${GITHUB_REF_NAME#v}"
-          git clone --depth 1 \
-            "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/iVamsi/homebrew-android-agent-kit.git" tap
-          mkdir -p tap/Formula
-          cp build/homebrew/Formula/droidagent.rb tap/Formula/droidagent.rb
-          cd tap
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Formula/droidagent.rb
-          git commit -m "droidagent ${version}" || { echo "formula unchanged"; exit 0; }
-          git push
+    uses: ./.github/workflows/homebrew-tap-sync.yml
+    with:
+      version: ${{ github.ref_name }}
+    secrets: inherit
