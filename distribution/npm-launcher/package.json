@@ -36,6 +36,7 @@
     "README.md"
   ],
   "scripts": {
-    "smoke": "node index.js --version"
+    "smoke": "node index.js --version",
+    "test": "node --test test/*.test.js"
   }
 }

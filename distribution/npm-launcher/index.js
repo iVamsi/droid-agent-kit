@@ -166,12 +166,39 @@ function spawnServer(command, args) {
 function printHelp() {
   process.stdout.write(
     "Usage: droidagent-mcp [--version | --help]\n" +
+      "       droidagent-mcp <command> [args...]\n" +
       "       (no args)  fetch (if needed) and run the DroidAgentKit MCP server over stdio\n" +
+      "\n" +
+      "Any command is forwarded to the droidagent CLI, so the launcher is a complete entry\n" +
+      "point rather than a server-only shim:\n" +
+      "  droidagent-mcp init --profile device-control\n" +
+      "  droidagent-mcp audit --project /path/to/android --write-agents\n" +
+      "  droidagent-mcp doctor\n" +
+      "Run `droidagent-mcp <command> --help` for a command's own flags.\n" +
       "\n" +
       "Env:\n" +
       "  DROIDAGENT_BIN        absolute path to an existing droidagent CLI (skips auto-fetch)\n" +
       "  DROIDAGENT_CACHE_DIR  override the jar download cache (default ~/.droidagentkit/cli)\n"
   );
+}
+
+const DEFAULT_SERVE_ARGS = ["serve-mcp", "--transport", "stdio", "--project", "auto"];
+
+/**
+ * Decides what this invocation means, with no side effects so it can be tested directly.
+ *
+ * `--version`/`--help` count as launcher flags only in leading position. Matching them anywhere
+ * in argv would swallow `audit --help`, which belongs to the CLI. A bare invocation keeps the
+ * historic stdio serve-mcp default, because that is what every existing MCP host config does.
+ * Anything else is forwarded verbatim -- including an explicit `serve-mcp`, whose flags are the
+ * caller's choice and must not be merged with the defaults.
+ */
+function resolveInvocation(argv) {
+  if (argv.length === 0) return { mode: "spawn", args: DEFAULT_SERVE_ARGS };
+  const first = argv[0];
+  if (first === "--version" || first === "-v") return { mode: "version" };
+  if (first === "--help" || first === "-h") return { mode: "help" };
+  return { mode: "spawn", args: argv };
 }
 
 function resolveOverrideBin() {
@@ -182,18 +209,20 @@ function resolveOverrideBin() {
 }
 
 async function main(argv) {
-  if (argv.includes("--version") || argv.includes("-v")) {
+  const invocation = resolveInvocation(argv);
+  if (invocation.mode === "version") {
     process.stdout.write(`droidagent-mcp launcher ${LAUNCHER_VERSION}\n`);
     return 0;
   }
-  if (argv.includes("--help") || argv.includes("-h")) {
+  if (invocation.mode === "help") {
     printHelp();
     return 0;
   }
+  const cliArgs = invocation.args;
 
   const overrideBin = resolveOverrideBin();
   if (overrideBin) {
-    spawnServer(overrideBin, ["serve-mcp", "--transport", "stdio", "--project", "auto"]);
+    spawnServer(overrideBin, cliArgs);
     return null;
   }
 
@@ -217,15 +246,20 @@ async function main(argv) {
     process.exit(1);
   }
 
-  spawnServer("java", ["-jar", jarPath, "serve-mcp", "--transport", "stdio", "--project", "auto"]);
+  spawnServer("java", ["-jar", jarPath, ...cliArgs]);
   return null;
 }
 
-main(process.argv.slice(2))
-  .then((code) => {
-    if (code !== null && code !== undefined) process.exit(code);
-  })
-  .catch((err) => {
-    process.stderr.write(`droidagent-mcp: unexpected error: ${err.message}\n`);
-    process.exit(1);
-  });
+// Guarded so the arg-resolution tests can require this file without launching anything.
+if (require.main === module) {
+  main(process.argv.slice(2))
+    .then((code) => {
+      if (code !== null && code !== undefined) process.exit(code);
+    })
+    .catch((err) => {
+      process.stderr.write(`droidagent-mcp: unexpected error: ${err.message}\n`);
+      process.exit(1);
+    });
+}
+
+module.exports = { resolveInvocation };
