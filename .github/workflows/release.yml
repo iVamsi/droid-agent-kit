@@ -87,11 +87,20 @@ jobs:
       # whatever setup-node's cached Node 22 build happens to bundle.
       - name: Ensure npm supports OIDC trusted publishing
         run: npm install -g npm@latest
+      - name: Decide dist-tag
+        id: disttag
+        working-directory: ${{ github.workspace }}
+        run: bash scripts/npm-dist-tag.sh "${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
       - name: Publish
-        # Every release moves `latest` while pre-1.0, so `npm install`/`npx` resolve to the
-        # newest build. The tag must be passed explicitly: npm refuses to publish a prerelease
-        # version with no --tag rather than implicitly moving `latest`.
-        run: npm publish --access public --tag latest
+        # The tag is computed rather than hardcoded. Prereleases go to `next`, stable to `latest`
+        # -- but while no stable has ever shipped, a prerelease also claims `latest`, because
+        # `npx` resolves `latest` and the documented install command would otherwise break.
+        run: npm publish --access public --tag "${{ steps.disttag.outputs.tag }}"
+      - name: Point latest at this prerelease
+        # Only while nothing stable exists. Once 1.0 ships this stops running, which is precisely
+        # what stops a later prerelease from hiding the stable release from `npm install`.
+        if: steps.disttag.outputs.also_latest == 'true'
+        run: npm dist-tag add "@droidagentkit/launcher@${GITHUB_REF_NAME#v}" latest
 
   publish-mcp-registry:
     name: Publish to MCP registry (OIDC)

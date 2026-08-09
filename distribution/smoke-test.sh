@@ -67,7 +67,7 @@ else
   out="$(DROIDAGENT_CACHE_DIR="$CACHE_GOOD" DROIDAGENT_RELEASE_BASE_URL="http://127.0.0.1:$MOCK_PORT" \
     node "$LAUNCHER" 2>&1 || true)"
   stop_mock
-  if [ ! -f "$CACHE_GOOD/droidagent-cli-0.2.7-alpha.jar" ]; then
+  if [ ! -f "$CACHE_GOOD/droidagent-cli-0.3.0-alpha.jar" ]; then
     echo "smoke: auto-fetch did not cache the jar. Output:" >&2
     echo "$out" >&2
     exit 1

@@ -47,6 +47,7 @@ fails the build on any accidental drift. The alpha label reflects two things tha
 - Two consecutive releases with no security fix.
 - The 3-OS test matrix blocking rather than advisory.
 - Device tools verified against a real emulator on a schedule, not only against fakes.
-- A dist-tag policy in the release workflow, so a prerelease can no longer overwrite `latest`
-  (`scripts/check-release-version.sh` currently fails on any stable version specifically to force
-  this decision).
+- ~~A dist-tag policy in the release workflow~~ **done.** `scripts/npm-dist-tag.sh` computes the
+  tag: stable goes to `latest`, prereleases to `next`, and a prerelease additionally claims
+  `latest` only while no stable has ever shipped (otherwise `npx`, which resolves `latest`, would
+  break pre-1.0). Table-driven tests run on every PR.

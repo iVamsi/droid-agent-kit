@@ -9,6 +9,7 @@ import com.droidagentkit.core.JobState
 import com.droidagentkit.core.ManagedJobSpec
 import com.droidagentkit.core.OperationRequest
 import com.droidagentkit.core.OutputMode
+import com.droidagentkit.core.Redactor
 import com.droidagentkit.core.ResultStatus
 import com.droidagentkit.core.ShellQuote
 import com.droidagentkit.core.ToolGroup
@@ -1033,22 +1034,43 @@ class DeviceControlToolProvider(
         val flow = recorder.stop()
         val safeName = flow.name.replace(Regex("[^A-Za-z0-9._-]"), "-")
         val flowDir = context.artifactOutputDir(root).resolve("flows").also { Files.createDirectories(it) }
+        // A recording captures android_input_type verbatim, which means it captures whatever was
+        // typed -- including a password entered during a login flow. Two consequences follow, and
+        // both were wrong in the first version of this feature.
+        //
+        // Redaction runs over the emitted text, so token- and key-shaped values are masked the same
+        // way they are in command output. And the artifacts are SENSITIVE, not PUBLIC: the
+        // sensitivity flag is what report bundles and `audit --redact-public` key off, so marking a
+        // file containing typed credentials PUBLIC actively defeats those controls.
+        //
+        // Redaction is still best-effort pattern matching -- it will not recognise "hunter2" as a
+        // password -- so the result also says plainly that the flow may contain secrets.
+        val redactor = Redactor(context.config.redaction)
+        val redactions = mutableListOf<String>()
+        val typedText = flow.steps.any { it.tool == "android_input_type" }
         val artifacts =
             listOf(
                 Triple("$safeName.json", FlowEmitters.toRunFlowJson(flow), "run_flow actions, replayable with android_run_flow"),
                 Triple("$safeName.yaml", FlowEmitters.toMaestroYaml(flow), "Maestro flow"),
                 Triple("$safeName.kt", FlowEmitters.toComposeTest(flow), "Compose UI test skeleton"),
             ).map { (fileName, content, description) ->
+                val redacted = redactor.redact(content)
+                redactions += redacted.applied
                 val file = flowDir.resolve(fileName)
-                Files.writeString(file, content)
-                context.registerExistingArtifact(root, file, ArtifactType.REPORT, description, ArtifactSensitivity.PUBLIC)
+                Files.writeString(file, redacted.text)
+                context.registerExistingArtifact(root, file, ArtifactType.REPORT, description, ArtifactSensitivity.SENSITIVE)
             }
         return context.resultMap(
             ToolResult(
                 status = if (flow.steps.isEmpty()) ResultStatus.PARTIAL else ResultStatus.SUCCESS,
                 summary = "Recorded ${flow.steps.size} step(s) as '${flow.name}'.",
                 artifacts = artifacts,
-                warnings = if (flow.steps.isEmpty()) listOf("no-steps-recorded") else emptyList(),
+                redactionsApplied = redactions.distinct(),
+                warnings =
+                    buildList {
+                        if (flow.steps.isEmpty()) add("no-steps-recorded")
+                        if (typedText) add("flow-contains-typed-text")
+                    },
             ),
         )
     }

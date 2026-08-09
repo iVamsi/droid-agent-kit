@@ -661,4 +661,42 @@ class DeviceControlToolProviderTest {
 
         assertTrue(dispatcher.listTools().map { it.name }.contains("android_input_tap_element"))
     }
+
+    @Test
+    fun `a recorded flow is marked sensitive and passes its text through redaction`() {
+        // android_input_type captures whatever was typed, so a recorded login flow contains the
+        // password. The first version of this feature wrote those files as PUBLIC, which is the
+        // exact flag report bundles and `audit --redact-public` use to decide what is safe to
+        // share -- so it actively defeated both controls.
+        val root = Files.createTempDirectory("dak-flow-secrets")
+        val dispatcher = dispatcher(root, controlConfig(root, setOf(Capability.DEVICE_INPUT, Capability.APP_CONTROL)))
+
+        dispatcher.call("android_flow_record_start", mapOf("name" to "login"))
+        dispatcher.call(
+            "android_input_type",
+            mapOf(
+                "rootPath" to root.toString(),
+                "deviceSerial" to "emulator-5554",
+                "text" to "Authorization: Bearer abc.def.ghi",
+            ),
+        )
+        val stopped = dispatcher.call("android_flow_record_stop", mapOf("rootPath" to root.toString()))
+
+        @Suppress("UNCHECKED_CAST")
+        val artifacts = stopped["artifacts"] as List<Map<*, *>>
+        assertTrue("expected three flow artifacts", artifacts.size == 3)
+        artifacts.forEach {
+            assertEquals("flow artifacts must not be public: ${it["path"]}", "sensitive", it["sensitivity"])
+        }
+
+        @Suppress("UNCHECKED_CAST")
+        val warnings = stopped["warnings"] as List<String>
+        assertTrue(
+            "the result must say the flow may contain typed secrets: $warnings",
+            warnings.contains("flow-contains-typed-text"),
+        )
+
+        val json = Files.readString(root.resolve("build/droidagentkit/flows/login.json"))
+        assertTrue("a bearer token must not survive into the flow file: $json", !json.contains("abc.def.ghi"))
+    }
 }

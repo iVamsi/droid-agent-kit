@@ -197,3 +197,7 @@ jobs:
       - name: npm launcher packs cleanly
         working-directory: distribution/npm-launcher
         run: npm pack --dry-run
+      # Exercised here because it otherwise only runs during a release, where a wrong dist-tag is
+      # visible to users before it is visible to us.
+      - name: npm dist-tag policy
+        run: bash scripts/test-npm-dist-tag.sh
