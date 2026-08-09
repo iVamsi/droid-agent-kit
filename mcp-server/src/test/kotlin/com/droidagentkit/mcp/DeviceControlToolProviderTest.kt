@@ -523,4 +523,84 @@ class DeviceControlToolProviderTest {
         Files.setPosixFilePermissions(script, PosixFilePermissions.fromString("rwxr-xr-x"))
         return script.toString()
     }
+
+    @Test
+    fun `flow recording captures interactions and writes all three formats`() {
+        val root = Files.createTempDirectory("dak-flow-record")
+        val dispatcher = dispatcher(root, controlConfig(root, setOf(Capability.DEVICE_INPUT, Capability.APP_CONTROL)))
+
+        assertEquals("success", dispatcher.call("android_flow_record_start", mapOf("name" to "login"))["status"])
+        dispatcher.call(
+            "android_input_tap",
+            mapOf("rootPath" to root.toString(), "deviceSerial" to "emulator-5554", "x" to 100, "y" to 200),
+        )
+        val stopped = dispatcher.call("android_flow_record_stop", mapOf("rootPath" to root.toString()))
+
+        assertEquals("success", stopped["status"])
+        val flowDir = root.resolve("build/droidagentkit/flows")
+        assertTrue("run_flow json should exist", Files.exists(flowDir.resolve("login.json")))
+        assertTrue("maestro yaml should exist", Files.exists(flowDir.resolve("login.yaml")))
+        assertTrue("compose skeleton should exist", Files.exists(flowDir.resolve("login.kt")))
+        assertTrue(
+            "the recorded tap should be in the flow",
+            Files.readString(flowDir.resolve("login.json")).contains("android_input_tap"),
+        )
+    }
+
+    @Test
+    fun `stopping without starting is refused`() {
+        val root = Files.createTempDirectory("dak-flow-nostart")
+        val dispatcher = dispatcher(root, controlConfig(root))
+
+        val result = dispatcher.call("android_flow_record_stop", mapOf("rootPath" to root.toString()))
+
+        assertEquals("blocked", result["status"])
+    }
+
+    @Test
+    fun `starting a second recording is refused rather than silently replacing the first`() {
+        val root = Files.createTempDirectory("dak-flow-double")
+        val dispatcher = dispatcher(root, controlConfig(root))
+        dispatcher.call("android_flow_record_start", mapOf("name" to "one"))
+
+        val second = dispatcher.call("android_flow_record_start", mapOf("name" to "two"))
+
+        assertEquals("blocked", second["status"])
+    }
+
+    @Test
+    fun `a denied interaction is not recorded`() {
+        // Recording after the fact and only on success keeps a flow from replaying a step that
+        // never actually worked -- the capability here is deliberately absent.
+        val root = Files.createTempDirectory("dak-flow-denied")
+        val dispatcher = dispatcher(root, controlConfig(root, emptySet()))
+        dispatcher.call("android_flow_record_start", mapOf("name" to "denied"))
+
+        dispatcher.call(
+            "android_input_tap",
+            mapOf("rootPath" to root.toString(), "deviceSerial" to "emulator-5554", "x" to 1, "y" to 2),
+        )
+        val stopped = dispatcher.call("android_flow_record_stop", mapOf("rootPath" to root.toString()))
+
+        assertEquals("partial", stopped["status"])
+        assertTrue(
+            "an unauthorized step must not end up in a replayable flow",
+            !Files.readString(root.resolve("build/droidagentkit/flows/denied.json")).contains("android_input_tap"),
+        )
+    }
+
+    @Test
+    fun `android_doctor reports checks and stays read-only`() {
+        val root = Files.createTempDirectory("dak-doctor-tool")
+        val dispatcher = dispatcher(root, controlConfig(root))
+
+        val result = dispatcher.call("android_doctor", mapOf("rootPath" to root.toString()))
+
+        @Suppress("UNCHECKED_CAST")
+        val checks = result["checks"] as List<Map<*, *>>
+        assertTrue("should report several checks", checks.size >= 5)
+        assertTrue("java must be among them", checks.any { it["name"] == "java" })
+        val doctorTool = dispatcher.listTools().first { it.name == "android_doctor" }
+        assertEquals(true, doctorTool.annotations["readOnlyHint"])
+    }
 }

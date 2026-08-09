@@ -27,14 +27,14 @@ Three pieces that work on their own or together:
 
 ## MCP tools at a glance
 
-The **core** group is on by default (15 tools): project inspect, allowlisted Gradle runs, device list, install/launch, logcat, screenshot, accessibility snapshot, report bundle, lint, crash triage, dependency check, build performance, test run, and build diagnose.
+The **core** group is on by default (16 tools): project inspect, allowlisted Gradle runs, device list, install/launch, logcat, screenshot, accessibility snapshot, report bundle, lint, crash triage, dependency check, build performance, test run, build diagnose, and `android_doctor` (an environment preflight you can run when something fails for no obvious reason).
 
 Turn on more by exposing tool groups when you start the server (see [security model](docs/security-and-permissions.md)):
 
 | Group | What it adds |
 | ----- | ------------ |
 | `device_read` | Permission audit, dumpsys summaries, memory/battery, bugreport, streaming logcat jobs |
-| `device_control` | Emulator control, app uninstall/clear, intents, permissions, tap/swipe/type, file push/pull, small action flows |
+| `device_control` | Emulator control, app uninstall/clear, intents, permissions, tap/swipe/type, file push/pull, small action flows, **flow recording** |
 | `perfetto` | Trace capture and Trace Processor analysis (jank, CPU, contention, binder latency, …) |
 | `visuals` | Pixel diff, visual report, golden updates |
 | `storage` | Read-only SQLite, SharedPreferences, and file tree for **debuggable** apps |
@@ -112,6 +112,7 @@ After `install-mcp`, open an Android project and ask things like:
 - "Capture logcat and triage the crash."
 - "What's in the app's SQLite schema?" (with `storage` + `app_data_read` enabled)
 - "Capture a Perfetto trace and summarize frame jank." (with `perfetto` enabled)
+- "Record what you just did as a flow I can replay." (with `device_control` enabled)
 
 You describe the goal; the agent picks tools from the list it was given at startup.
 
