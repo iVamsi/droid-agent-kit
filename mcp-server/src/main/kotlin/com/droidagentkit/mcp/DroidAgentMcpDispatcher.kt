@@ -6,6 +6,7 @@ import com.droidagentkit.core.ArtifactSensitivity
 import com.droidagentkit.core.ArtifactType
 import com.droidagentkit.core.ArtifactWriter
 import com.droidagentkit.core.AuthorizationDecision
+import com.droidagentkit.core.CancellationToken
 import com.droidagentkit.core.Capability
 import com.droidagentkit.core.CommandSpec
 import com.droidagentkit.core.DefaultOperationPolicy
@@ -17,6 +18,7 @@ import com.droidagentkit.core.ManagedJobRunner
 import com.droidagentkit.core.OperationPolicy
 import com.droidagentkit.core.OperationRequest
 import com.droidagentkit.core.ProcessRunner
+import com.droidagentkit.core.ProgressReporter
 import com.droidagentkit.core.Redactor
 import com.droidagentkit.core.ResultStatus
 import com.droidagentkit.core.Severity
@@ -53,6 +55,49 @@ data class McpTool(
     val annotations: Map<String, Boolean> = emptyMap(),
 )
 
+/**
+ * Carries the active [ToolCallContext] to the one place that spawns processes.
+ *
+ * A thread-local rather than a parameter because every tool routes through a deep, entirely
+ * synchronous call graph before reaching `run`, and threading a transport concern through ~40
+ * private methods would put it in reach of code that has no business seeing it. The stdio server
+ * executes one call per pooled thread, so the binding is exact; anything that never sets it reads
+ * [ToolCallContext.NONE] and behaves exactly as before.
+ */
+internal object CurrentToolCall {
+    private val current = ThreadLocal.withInitial { ToolCallContext.NONE }
+
+    fun <T> with(
+        context: ToolCallContext,
+        block: () -> T,
+    ): T {
+        val previous = current.get()
+        current.set(context)
+        return try {
+            block()
+        } finally {
+            current.set(previous)
+        }
+    }
+
+    fun context(): ToolCallContext = current.get()
+}
+
+/**
+ * Cancellation and progress plumbing for one tool call.
+ *
+ * Passed separately from `arguments` because it is transport state, not tool input: it must never
+ * appear in a tool's input schema or be settable by the model.
+ */
+data class ToolCallContext(
+    val cancellation: CancellationToken = CancellationToken.NONE,
+    val progress: ProgressReporter = ProgressReporter.NONE,
+) {
+    companion object {
+        val NONE = ToolCallContext()
+    }
+}
+
 interface McpDispatcher {
     val instructions: String
 
@@ -62,6 +107,16 @@ interface McpDispatcher {
         name: String,
         arguments: Map<String, Any?>,
     ): Map<String, Any>
+
+    /**
+     * Defaulted so dispatchers that cannot be cancelled (or do not care) keep working unchanged;
+     * the ones that run long processes override this.
+     */
+    fun call(
+        name: String,
+        arguments: Map<String, Any?>,
+        context: ToolCallContext,
+    ): Map<String, Any> = call(name, arguments)
 
     /** MCP resources/prompts are advertised only to hosts that support them; AS stays tools-only. */
     fun resourceRegistry(): McpResourceRegistry = McpResourceRegistry()
@@ -420,6 +475,12 @@ class DroidAgentMcpDispatcher(
                 outputSchema = toolResultSchema,
             ),
         )
+
+    override fun call(
+        name: String,
+        arguments: Map<String, Any?>,
+        context: ToolCallContext,
+    ): Map<String, Any> = CurrentToolCall.with(context) { call(name, arguments) }
 
     override fun call(
         name: String,
@@ -1161,7 +1222,11 @@ class DroidAgentMcpDispatcher(
     override fun run(
         root: Path,
         spec: CommandSpec,
-    ): ToolResult = runner(root).run(spec)
+    ): ToolResult {
+        val context = CurrentToolCall.context()
+        context.progress.report(null, null, "running ${'$'}{spec.id}")
+        return runner(root).run(spec, cancellation = context.cancellation)
+    }
 
     override fun registerExistingArtifact(
         root: Path,
