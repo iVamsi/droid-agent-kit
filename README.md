@@ -27,7 +27,7 @@ Three pieces that work on their own or together:
 
 ## MCP tools at a glance
 
-The **core** group is on by default (16 tools): project inspect, allowlisted Gradle runs, device list, install/launch, logcat, screenshot, accessibility snapshot, report bundle, lint, crash triage, dependency check, build performance, test run, build diagnose, and `android_doctor` (an environment preflight you can run when something fails for no obvious reason).
+The **core** group is on by default (17 tools): project inspect, allowlisted Gradle runs, device list, install/launch, logcat, screenshot, accessibility snapshot, report bundle, lint, crash triage, dependency check, build performance, test run, build diagnose, APK size analysis, and `android_doctor` (an environment preflight you can run when something fails for no obvious reason).
 
 Turn on more by exposing tool groups when you start the server (see [security model](docs/security-and-permissions.md)):
 
@@ -109,7 +109,8 @@ After `install-mcp`, open an Android project and ask things like:
 - "Inspect this Android project with DroidAgentKit."
 - "Run the safe unit tests for the app module."
 - "Audit this repo for agent readiness and write AGENTS.md."
-- "Capture logcat and triage the crash."
+- "Capture logcat and triage the crash." (release builds are de-obfuscated automatically when an R8 mapping is present)
+- "Why did the APK grow since the last build?"
 - "What's in the app's SQLite schema?" (with `storage` + `app_data_read` enabled)
 - "Capture a Perfetto trace and summarize frame jank." (with `perfetto` enabled)
 - "Record what you just did as a flow I can replay." (with `device_control` enabled)

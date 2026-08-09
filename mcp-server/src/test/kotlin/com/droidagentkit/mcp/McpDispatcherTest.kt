@@ -31,6 +31,7 @@ class McpDispatcherTest {
                 "android_build_performance",
                 "android_test_run",
                 "android_build_diagnose",
+                "android_apk_analyze",
                 "android_doctor",
             ),
             tools,
@@ -91,7 +92,7 @@ class McpDispatcherTest {
 
         val tools = dispatcher.listTools()
 
-        assertEquals(16, tools.size)
+        assertEquals(17, tools.size)
         tools.forEach { tool ->
             assertEquals("tool ${tool.name} missing type:object", "object", tool.inputSchema["type"])
             assertTrue(
