@@ -1,5 +1,18 @@
 # Troubleshooting
 
+## Start here: `droidagent doctor`
+
+```bash
+npx -y @droidagentkit/launcher doctor --project /path/to/android
+```
+
+Checks the Java version, the user policy and project config (including keys that were ignored
+because a project file cannot grant authority), `adb` and any optional binaries the enabled tool
+groups need, `ANDROID_HOME`, and whether artifacts can be written. It exits non-zero only for
+things that are actually broken -- missing optional tooling is reported as a warning, so a clean
+`doctor` on a project-only setup is expected not to mention devices at all. Add `--format json`
+to consume it from a script.
+
 ## `npx -y @droidagentkit/launcher` fails
 
 1. Confirm the package exists: `npm view @droidagentkit/launcher version`.

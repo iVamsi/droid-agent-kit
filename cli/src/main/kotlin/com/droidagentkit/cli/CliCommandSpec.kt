@@ -100,6 +100,14 @@ object CliCommandRegistry {
                 ),
             ),
             CliCommandSpec(
+                "doctor",
+                "Check the environment, config, and tooling DroidAgentKit needs.",
+                listOf(
+                    CliOption("--project", "Project root path. Defaults to cwd."),
+                    CliOption("--format", "Output format: text or json. Defaults to text."),
+                ),
+            ),
+            CliCommandSpec(
                 "init",
                 "Generate .droidagentkit/config.yaml interactively or from a named profile.",
                 listOf(

@@ -61,6 +61,11 @@ sealed class CliCommand {
         val project: String,
     ) : CliCommand()
 
+    data class Doctor(
+        val project: String,
+        val format: String,
+    ) : CliCommand()
+
     data class Help(
         val error: String? = null,
         val commandName: String? = null,
