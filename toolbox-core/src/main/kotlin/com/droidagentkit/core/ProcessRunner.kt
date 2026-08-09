@@ -11,11 +11,15 @@ class ProcessRunner(
     private val redactor: Redactor,
     private val artifactWriter: ArtifactWriter,
 ) {
+    // `cancellation` deliberately precedes `onProcessStarted` so the trailing-lambda form used at
+    // existing call sites keeps binding to onProcessStarted rather than silently changing meaning.
     fun run(
         spec: CommandSpec,
+        cancellation: CancellationToken = CancellationToken.NONE,
         onProcessStarted: ((Process) -> Unit)? = null,
     ): ToolResult {
         val started = Instant.now()
+        if (cancellation.isCancelled) return cancelledResult(spec, 0)
         val process =
             try {
                 val builder =
@@ -41,6 +45,10 @@ class ProcessRunner(
                 )
             }
         onProcessStarted?.invoke(process)
+        // Registered after start, so the token has to tolerate a cancel that already happened --
+        // see CancellationToken.onCancel. Reuses the timeout path's descendant kill, because a
+        // Gradle daemon or adb child outliving `destroy()` on the parent is the normal case.
+        cancellation.onCancel { terminate(process) }
 
         val outputExecutor = Executors.newSingleThreadExecutor()
         val captured = outputExecutor.submit<CapturedOutput> { readOutput(process.inputStream) }
@@ -54,6 +62,10 @@ class ProcessRunner(
             outputExecutor.shutdownNow()
         }
         val durationMs = Duration.between(started, Instant.now()).toMillis()
+        // Checked after the wait rather than before: the process is already dead by now (the hook
+        // killed it), and reporting "cancelled" is more useful to the agent than the exit code a
+        // SIGKILL happens to produce.
+        if (cancellation.isCancelled) return cancelledResult(spec, durationMs)
 
         if (spec.outputMode == OutputMode.BINARY) {
             return writeBinaryArtifact(spec, process, capturedOutput, completed, durationMs)
@@ -129,6 +141,16 @@ class ProcessRunner(
             warnings = warnings(completed, captured.truncated || result.truncated),
         )
     }
+
+    private fun cancelledResult(
+        spec: CommandSpec,
+        durationMs: Long,
+    ): ToolResult =
+        ToolResult(
+            status = ResultStatus.PARTIAL,
+            summary = "${spec.id} was cancelled by the client after ${durationMs}ms.",
+            warnings = listOf("cancelled"),
+        )
 
     private fun terminate(process: Process) {
         process.toHandle().descendants().forEach(ProcessHandle::destroy)

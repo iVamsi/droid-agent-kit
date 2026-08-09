@@ -1,6 +1,8 @@
 package com.droidagentkit.mcp
 
+import com.droidagentkit.core.CancellationToken
 import com.droidagentkit.core.Json
+import com.droidagentkit.core.ProgressReporter
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -28,7 +30,28 @@ private val SUPPORTED_PROTOCOL_VERSIONS = setOf(MCP_PROTOCOL_VERSION)
 
 class McpJsonRpcHandler(
     private val dispatcher: McpDispatcher,
+    /**
+     * Sink for server-initiated frames (progress notifications). Defaults to discarding them, which
+     * is correct for the HTTP JSON-response transport: it has no channel to push on, so a call
+     * there simply produces no progress.
+     */
+    private val notify: (String) -> Unit = {},
 ) {
+    /**
+     * Tokens for calls currently executing, keyed by their JSON-RPC id rendered as a string.
+     *
+     * Ids are `string | number` on the wire, and a host is free to send `1` for one request and
+     * `"1"` for the next, so both normalize to the same key rather than silently failing to match
+     * a cancellation to its call.
+     */
+    private val inFlight = java.util.concurrent.ConcurrentHashMap<String, CancellationToken>()
+
+    /** True for methods that can run long enough to be worth executing off the reader thread. */
+    fun isLongRunning(rawMessage: String): Boolean =
+        runCatching {
+            (KJson.parseToJsonElement(rawMessage).jsonObject["method"] as? JsonPrimitive)?.content == "tools/call"
+        }.getOrDefault(false)
+
     fun handle(rawMessage: String): String? {
         if (rawMessage.length > MAX_MESSAGE_CHARS) {
             return errorResponse(null, INVALID_REQUEST, "Request exceeds $MAX_MESSAGE_CHARS character limit")
@@ -55,7 +78,10 @@ class McpJsonRpcHandler(
         return when (method) {
             "initialize" -> successResponse(id, handleInitialize(root["params"] as? JsonObject))
             "notifications/initialized" -> null
-            "notifications/cancelled" -> null
+            "notifications/cancelled" -> {
+                handleCancelled(root["params"] as? JsonObject)
+                null
+            }
             "ping" -> successResponse(id, emptyMap())
             "tools/list" -> successResponse(id, handleToolsList())
             "tools/call" -> handleToolsCall(id, root["params"] as? JsonObject)
@@ -66,6 +92,18 @@ class McpJsonRpcHandler(
             "prompts/get" -> handlePromptsGet(id, root["params"] as? JsonObject)
             else -> if (hasId) errorResponse(id, METHOD_NOT_FOUND, "Method not found: $method") else null
         }
+    }
+
+    /**
+     * Cancels the matching in-flight call, if it is still running.
+     *
+     * A cancellation for an unknown id is ignored rather than answered with an error: the spec
+     * treats it as a race the client is allowed to lose, and by the time it arrives the call has
+     * usually just finished.
+     */
+    private fun handleCancelled(params: JsonObject?) {
+        val requestId = params?.get("requestId")?.toKotlinValue() ?: return
+        inFlight[idKey(requestId)]?.cancel()
     }
 
     private fun handleInitialize(params: JsonObject?): Map<String, Any?> {
@@ -197,7 +235,26 @@ class McpJsonRpcHandler(
             } else {
                 emptyMap()
             }
-        val result = dispatcher.call(name, arguments)
+        val progressToken = (params["_meta"] as? JsonObject)?.get("progressToken")?.toKotlinValue()
+        val token = CancellationToken()
+        val key = idKey(id)
+        // A notification has no id and so cannot be cancelled; registering it under a shared key
+        // would let one notification's cancel abort another's call.
+        if (id != null) inFlight[key] = token
+
+        val result =
+            try {
+                dispatcher.call(
+                    name,
+                    arguments,
+                    ToolCallContext(
+                        cancellation = token,
+                        progress = progressReporter(progressToken),
+                    ),
+                )
+            } finally {
+                if (id != null) inFlight.remove(key)
+            }
         val isError = ERROR_STATUSES.contains(result["status"])
         return successResponse(
             id,
@@ -207,6 +264,20 @@ class McpJsonRpcHandler(
                 "isError" to isError,
             ),
         )
+    }
+
+    private fun progressReporter(progressToken: Any?): ProgressReporter {
+        if (progressToken == null) return ProgressReporter.NONE
+        return ProgressReporter { progress, total, message ->
+            val params =
+                buildMap<String, Any?> {
+                    put("progressToken", progressToken)
+                    put("progress", progress ?: 0.0)
+                    if (total != null) put("total", total)
+                    if (message.isNotBlank()) put("message", message)
+                }
+            notify(Json.write(mapOf("jsonrpc" to "2.0", "method" to "notifications/progress", "params" to params)))
+        }
     }
 
     private fun successResponse(
@@ -220,6 +291,9 @@ class McpJsonRpcHandler(
         message: String,
     ): String = Json.write(mapOf("jsonrpc" to "2.0", "id" to id, "error" to mapOf("code" to code, "message" to message)))
 }
+
+/** Normalizes a JSON-RPC id to a stable map key; 1 and "1" must denote the same request. */
+private fun idKey(id: Any?): String = id.toString()
 
 private fun JsonElement.toKotlinValue(): Any? =
     when (this) {
