@@ -48,22 +48,26 @@ Full tool list and capability IDs: [`docs/security-and-permissions.md`](docs/sec
 
 ## Quick start
 
-**Prerequisites:** JDK 17+ on `PATH`, Node 18+ (install-time only for the launcher). Optional:
-Android `adb` / platform-tools for device tools; set `ANDROID_HOME` or configure `adbPath` in the
-user policy (`~/.droidagentkit/policy.yaml`).
+**Prerequisites:** Node 18+ (install-time only for the launcher). A JDK 17+ is used if you have
+one — on `PATH`, in `JAVA_HOME`, or named by `DROIDAGENT_JAVA` — and otherwise a pinned Eclipse
+Temurin JRE is downloaded once, SHA-256 verified, and cached under `~/.droidagentkit/jre`.
+Optional: Android `adb` / platform-tools for device tools; set `ANDROID_HOME` or configure
+`adbPath` in the user policy (`~/.droidagentkit/policy.yaml`). Run `doctor` to check all of this.
 
 The `@droidagentkit/launcher` npm package downloads and caches the matching `droidagent-cli` jar from
 [GitHub Releases](https://github.com/iVamsi/droid-agent-kit/releases) the first time it runs,
-verifying its SHA-256 before executing it. Run it bare to start the MCP server, or pass any CLI
-command straight through:
-
-```bash
-npx -y @droidagentkit/launcher init --profile device-control
-npx -y @droidagentkit/launcher audit --project /path/to/android --write-agents
-```
+verifying its SHA-256 before executing it.
 
 ```bash
 npx -y @droidagentkit/launcher --version
+```
+
+Run it bare to start the MCP server, or pass any CLI command straight through:
+
+```bash
+npx -y @droidagentkit/launcher doctor
+npx -y @droidagentkit/launcher init --profile device-control
+npx -y @droidagentkit/launcher audit --project /path/to/android --write-agents
 ```
 
 Point your agent's MCP config at it directly, e.g. for Claude Code:
