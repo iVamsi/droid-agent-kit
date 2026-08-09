@@ -488,7 +488,7 @@ published and un-deletable.
   descriptions, the launcher had no `keywords` array at all, and this is fully reversible.
   Landed in `distribution/npm-launcher/package.json`.
 - [ ] **Step 2 (DECISION REQUIRED — not actioned):** whether to republish the registry entry as
-  `io.github.iVamsi/android-droidagentkit` (or similar). Gains `?search=android` visibility;
+  `io.github.iVamsi/android-agent-kit`. Gains `?search=android` visibility;
   costs a permanently orphaned old listing and a matching `mcpName` change in `package.json`
   (the registry verifies ownership through that field). User-facing install commands reference
   the npm package `@droidagentkit/launcher`, not the registry name, so **no existing user

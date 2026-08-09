@@ -6,6 +6,20 @@ pre-release convention `0.y.z-alpha` until a stable 1.0 release.
 
 ## Unreleased
 
+### Changed
+
+- **MCP registry listing renamed** to `io.github.iVamsi/android-agent-kit` (was
+  `io.github.iVamsi/droidagentkit`). The registry's `search` matches the server name only — not the
+  description — so a search for "android", the most obvious term for this project, never returned
+  it. `name` is the registry's primary key, so becoming findable required a new one.
+
+  **No action needed for users:** installs reference the npm package `@droidagentkit/launcher`,
+  which is unchanged.
+
+  Maintainers: the new name publishes automatically on the next release tag. After that release
+  succeeds, run `scripts/deprecate-old-registry-listing.sh --confirm` once to mark the old listing
+  deprecated with a pointer to the new one.
+
 ## [0.2.6-alpha] - 2026-08-08
 
 ### Security

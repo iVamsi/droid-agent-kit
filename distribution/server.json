@@ -1,6 +1,6 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.iVamsi/droidagentkit",
+  "name": "io.github.iVamsi/android-agent-kit",
   "title": "DroidAgentKit",
   "description": "Local-first Android development MCP: Gradle, adb, logcat, lint, crash triage, Perfetto, visuals.",
   "version": "0.2.6-alpha",

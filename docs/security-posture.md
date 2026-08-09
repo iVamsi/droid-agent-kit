@@ -41,11 +41,11 @@ mcp-publisher login github
 mcp-publisher publish distribution/server.json
 ```
 
-If `@droidagentkit/launcher` or `io.github.iVamsi/droidagentkit` ever need to be recreated (new
+If `@droidagentkit/launcher` or `io.github.iVamsi/android-agent-kit` ever need to be recreated (new
 scope, new registry name), repeat this manual bootstrap once, then trusted publishing takes over.
 
 ```bash
-curl "https://registry.modelcontextprotocol.io/v0/servers?search=io.github.iVamsi/droidagentkit"
+curl "https://registry.modelcontextprotocol.io/v0/servers?search=io.github.iVamsi/android-agent-kit"
 ```
 
 

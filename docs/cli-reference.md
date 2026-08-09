@@ -21,3 +21,25 @@ any other command straight through: `npx -y @droidagentkit/launcher doctor`.
 
 Run `droidagent <command> --help` for flags. Env for `--project auto`: see
 [`docs/troubleshooting.md`](troubleshooting.md).
+
+## Registry identity
+
+The MCP registry lists this server as `io.github.iVamsi/android-agent-kit`.
+
+It was renamed from `io.github.iVamsi/droidagentkit` for one reason: the registry's `search`
+matches the server **name only** — not the description, not the title. Verified directly, the terms
+`perfetto`, `logcat`, and `gradle` all appear in our registry description and return zero results,
+while every hit for `android` carries it in the name. Since `name` is the registry's primary key,
+being findable meant publishing under a new one.
+
+Nothing changed for users: installs reference the npm package `@droidagentkit/launcher`, which kept
+its name.
+
+The rename has two halves, and the second is easy to forget:
+
+1. `distribution/server.json` `name` and `distribution/npm-launcher/package.json` `mcpName` must
+   match exactly — the registry verifies ownership through that npm field. Publishing happens
+   automatically on the next release tag.
+2. **After** that release succeeds, run `scripts/deprecate-old-registry-listing.sh --confirm` once,
+   to mark the old listing deprecated with a pointer to the new one. Skipping this leaves two
+   `active` listings competing, with the stale one giving no hint where the project went.
