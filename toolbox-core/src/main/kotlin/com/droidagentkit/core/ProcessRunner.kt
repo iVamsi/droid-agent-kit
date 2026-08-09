@@ -57,7 +57,17 @@ class ProcessRunner(
         try {
             completed = process.waitFor(spec.timeoutSeconds, TimeUnit.SECONDS)
             if (!completed) terminate(process)
-            capturedOutput = captured.get()
+            // Bounded rather than an open-ended get(). The reader blocks until the stdout pipe
+            // closes, and a grandchild that inherited the pipe can hold it open after the process
+            // we spawned is dead -- `sh -c "sleep 120"` forking `sleep` is the simple case. Waiting
+            // forever there would hang the whole tool call on a process nobody is waiting for.
+            capturedOutput =
+                try {
+                    captured.get(OUTPUT_DRAIN_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                } catch (_: java.util.concurrent.TimeoutException) {
+                    captured.cancel(true)
+                    CapturedOutput(java.io.ByteArrayOutputStream().toByteArray(), truncated = true)
+                }
         } finally {
             outputExecutor.shutdownNow()
         }
@@ -160,6 +170,10 @@ class ProcessRunner(
             process.destroyForcibly()
             process.waitFor(1, TimeUnit.SECONDS)
         }
+        // Re-enumerated deliberately. The first sweep races the parent's own forking: a shell that
+        // had not yet spawned its child when we listed descendants leaves that child running, still
+        // holding the stdout pipe. Sweeping again after the parent is dead catches it.
+        process.toHandle().descendants().forEach(ProcessHandle::destroyForcibly)
     }
 
     private fun readOutput(input: InputStream): CapturedOutput {
@@ -193,6 +207,14 @@ class ProcessRunner(
     private companion object {
         const val BUFFER_SIZE = 8 * 1024
         const val MAX_TEXT_CAPTURE_BYTES = 10 * 1024 * 1024
+
+        /**
+         * How long to keep draining output after the process itself has exited.
+         *
+         * Generous, because a legitimately noisy build can still have buffered output in flight;
+         * bounded, because a surviving grandchild holding the pipe must not hang the call.
+         */
+        const val OUTPUT_DRAIN_TIMEOUT_SECONDS = 15L
     }
 }
 
