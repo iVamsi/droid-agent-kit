@@ -8,9 +8,15 @@
 #
 # So the rule is conditional on whether a stable release exists yet:
 #
-#   stable version                        -> publish to `latest`
-#   prerelease, no stable published yet   -> publish to `next`, and also move `latest`
-#   prerelease, a stable already exists   -> publish to `next` only, leaving `latest` alone
+#   stable version                        -> `latest`
+#   prerelease, no stable published yet   -> `latest`  (npx resolves `latest`; nothing else can)
+#   prerelease, a stable already exists   -> `next`    (must not shadow the stable release)
+#
+# One tag, chosen up front, and no second command. The first version published prereleases to
+# `next` and then ran `npm dist-tag add ... latest`, which fails under OIDC trusted publishing:
+# OIDC mints a credential scoped to `npm publish` alone, so the follow-up call gets E401. The
+# release still half-succeeded -- the package published, `latest` never moved -- which is a worse
+# failure than not publishing at all.
 #
 # That last line is the one that matters after 1.0: without it, the next prerelease would silently
 # overwrite `latest` and hide the stable release from every plain `npm install`.
@@ -68,14 +74,11 @@ while IFS= read -r v; do
   fi
 done <<< "$published"
 
-if is_prerelease "$VERSION"; then
+if is_prerelease "$VERSION" && [ "$stable_exists" = true ]; then
+  # A stable release exists, so this prerelease must not take `latest` from it.
   tag="next"
-  # Claim `latest` only while nothing stable has ever shipped, so `npx` keeps working pre-1.0.
-  if [ "$stable_exists" = true ]; then also_latest=false; else also_latest=true; fi
 else
   tag="latest"
-  also_latest=false
 fi
 
 echo "tag=$tag"
-echo "also_latest=$also_latest"
