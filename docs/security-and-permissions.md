@@ -108,6 +108,20 @@ Three things worth knowing before turning it on:
 A client that never answers times out and is treated as unavailable, so a wedged host blocks
 destructive work instead of waving it through.
 
+### Recording flows
+
+`android_flow_record_start` / `android_flow_record_stop` (in `device_control`) capture the device
+interactions an agent performs and write them as replayable `android_run_flow` JSON, Maestro YAML,
+and a Compose UI test skeleton under `build/droidagentkit/flows/`.
+
+Recording grants nothing. It observes calls that were already authorized on their own terms, needs
+no capability of its own, and captures a step only *after* it succeeded — so a flow never replays
+something that was denied or that failed on the device it was recorded from. Only interaction tools
+are recorded (launch, deep link, tap, swipe, type, key); emulator lifecycle, file transfer, and
+permission changes are environment setup rather than flow steps, and replaying them would make a
+recorded flow destructive. The device serial is stripped, since it identifies the recording machine
+rather than the flow.
+
 ### Blast-radius budgets
 
 Capabilities answer "may this agent do this at all?" and say nothing about volume. An agent holding
