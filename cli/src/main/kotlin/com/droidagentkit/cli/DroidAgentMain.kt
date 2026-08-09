@@ -222,10 +222,9 @@ class DroidAgentCli(
                 }
             } ?: projectDispatcher
         if (command.transport == "stdio") {
-            val stdio = DroidAgentStdioServer(dispatcher)
-            generateSequence { readlnOrNull() }.forEach { line ->
-                stdio.runOnce(line)?.let { println(it) }
-            }
+            // run() executes tool calls off the reader thread so a cancellation notification sent
+            // during a long build is actually read while that build is still running.
+            DroidAgentStdioServer(dispatcher).run(generateSequence { readlnOrNull() }) { println(it) }
         } else {
             val configuredToken =
                 command.bearerTokenFile?.let { tokenFile ->

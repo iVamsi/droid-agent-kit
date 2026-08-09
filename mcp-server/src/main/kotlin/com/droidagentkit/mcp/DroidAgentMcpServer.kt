@@ -11,6 +11,7 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.Base64
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 class DroidAgentMcpHttpServer(
     private val dispatcher: McpDispatcher,
@@ -157,8 +158,59 @@ class DroidAgentMcpHttpServer(
 
 class DroidAgentStdioServer(
     private val dispatcher: McpDispatcher = DroidAgentMcpDispatcher(DroidAgentConfig.default(), Path.of(".")),
+    private val maxConcurrentCalls: Int = DEFAULT_MAX_CONCURRENT_CALLS,
 ) {
-    private val rpcHandler = McpJsonRpcHandler(dispatcher)
+    private val writeLock = Any()
+    private var sink: ((String) -> Unit)? = null
 
+    private val rpcHandler = McpJsonRpcHandler(dispatcher) { frame -> emit(frame) }
+
+    /** Single-message entry point, for tests and for callers driving their own loop. */
     fun runOnce(line: String): String? = rpcHandler.handle(line)
+
+    /**
+     * Runs the stdio message loop until [lines] is exhausted.
+     *
+     * Tool calls execute on a worker pool rather than on the reader thread. That is what makes
+     * cancellation possible at all: the loop previously handled one message to completion before
+     * reading the next, so a `notifications/cancelled` sent during a ten-minute Gradle build was
+     * not read until that build had already finished. Everything else (initialize, tools/list,
+     * the cancellation notification itself) stays on the reader thread, where it is both fast and
+     * correctly ordered.
+     *
+     * Writes are serialized: JSON-RPC frames are newline-delimited, so two threads writing at once
+     * would interleave into unparseable output.
+     */
+    fun run(
+        lines: Sequence<String>,
+        write: (String) -> Unit,
+    ) {
+        sink = write
+        val pool = Executors.newFixedThreadPool(maxConcurrentCalls)
+        try {
+            lines.forEach { line ->
+                if (rpcHandler.isLongRunning(line)) {
+                    pool.submit { rpcHandler.handle(line)?.let { emit(it) } }
+                } else {
+                    rpcHandler.handle(line)?.let { emit(it) }
+                }
+            }
+        } finally {
+            pool.shutdown()
+            // Let in-flight calls finish writing their responses before the process exits;
+            // a client that closed stdin still deserves the answer to what it already asked.
+            if (!pool.awaitTermination(SHUTDOWN_GRACE_SECONDS, TimeUnit.SECONDS)) pool.shutdownNow()
+            sink = null
+        }
+    }
+
+    private fun emit(frame: String) {
+        val target = sink ?: return
+        synchronized(writeLock) { target(frame) }
+    }
+
+    private companion object {
+        const val DEFAULT_MAX_CONCURRENT_CALLS = 4
+        const val SHUTDOWN_GRACE_SECONDS = 30L
+    }
 }
