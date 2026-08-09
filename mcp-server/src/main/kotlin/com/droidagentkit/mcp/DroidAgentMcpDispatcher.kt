@@ -13,6 +13,7 @@ import com.droidagentkit.core.DefaultOperationPolicy
 import com.droidagentkit.core.DiagnosticFinding
 import com.droidagentkit.core.DroidAgentConfig
 import com.droidagentkit.core.InProcessManagedJobRunner
+import com.droidagentkit.core.InteractiveConfirmer
 import com.droidagentkit.core.Json
 import com.droidagentkit.core.ManagedJobRunner
 import com.droidagentkit.core.OperationPolicy
@@ -92,6 +93,12 @@ internal object CurrentToolCall {
 data class ToolCallContext(
     val cancellation: CancellationToken = CancellationToken.NONE,
     val progress: ProgressReporter = ProgressReporter.NONE,
+    /**
+     * Reaches the human behind the client. Defaults to unavailable, which the policy turns into a
+     * denial rather than a pass -- a transport with no way to ask must not be able to satisfy a
+     * requirement that a human approved something.
+     */
+    val confirmer: InteractiveConfirmer = InteractiveConfirmer.UNAVAILABLE,
 ) {
     companion object {
         val NONE = ToolCallContext()
@@ -140,7 +147,11 @@ class DroidAgentMcpDispatcher(
     override val instructions: String = "Use DroidAgentKit only for the project root selected when this server started."
 
     private val operationPolicy: OperationPolicy =
-        DefaultOperationPolicy(config.safety, listOf(projectRoot))
+        // The confirmer is read per call rather than injected once: it belongs to whichever
+        // client connection is asking, and the policy outlives any single call.
+        DefaultOperationPolicy(config.safety, listOf(projectRoot)) { request ->
+            CurrentToolCall.context().confirmer.confirm(request)
+        }
 
     private val managedJobRunner: ManagedJobRunner by lazy {
         InProcessManagedJobRunner(

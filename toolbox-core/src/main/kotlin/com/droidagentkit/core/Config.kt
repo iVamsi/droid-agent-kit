@@ -46,6 +46,12 @@ data class SafetyConfig(
     val traceProcessorPath: String = "",
     val mitmProxyPath: String = "",
     val maxCommandSeconds: Long = 600,
+    /**
+     * When set, a destructive operation additionally needs a human to approve it out of band --
+     * see [OperationPolicy]. Privileged: only the user policy may turn this on, since a project
+     * config that could turn it *off* would defeat the point.
+     */
+    val requireInteractiveConfirm: Boolean = false,
 ) {
     /**
      * A wildcard pattern must never sweep in a task that rewrites the working tree — `:*:lint*`
@@ -158,11 +164,13 @@ object DroidAgentConfigLoader {
             "safety.allowAppInstall",
             "safety.allowEmulatorStart",
             "safety.allowCapabilities",
+            "safety.requireInteractiveConfirm",
             "safety.adbPath",
             "safety.emulatorPath",
             "safety.traceProcessorPath",
             "safety.mitmProxyPath",
             "safety.maxCommandSeconds",
+            "safety.requireInteractiveConfirm",
             "mcp.exposedGroups",
             "reports.outputDir",
             "redaction.enabled",
@@ -176,6 +184,7 @@ object DroidAgentConfigLoader {
             "safety.allowAdbInput",
             "safety.allowEmulatorStart",
             "safety.allowCapabilities",
+            "safety.requireInteractiveConfirm",
             "safety.adbPath",
             "safety.emulatorPath",
             "safety.traceProcessorPath",
@@ -271,6 +280,7 @@ object DroidAgentConfigLoader {
                         traceProcessorPath = policy.safety.traceProcessorPath,
                         mitmProxyPath = policy.safety.mitmProxyPath,
                         maxCommandSeconds = timeout,
+                        requireInteractiveConfirm = policy.safety.requireInteractiveConfirm,
                     ),
                 mcp = McpConfig(exposedGroups = policy.mcp.exposedGroups),
                 redaction =
@@ -372,6 +382,7 @@ object DroidAgentConfigLoader {
         val exposedGroups = mutableSetOf<ToolGroup>()
         var aliasUsedWithCapabilities = false
         var maxCommandSeconds = 600L
+        var requireInteractiveConfirm = false
         var adbPath = "adb"
         var emulatorPath = "emulator"
         var traceProcessorPath = ""
@@ -443,6 +454,11 @@ object DroidAgentConfigLoader {
             if (source == ConfigSource.PROJECT && fullKey in privilegedKeys) {
                 val isDefaultNoop =
                     when (fullKey) {
+                        // requireInteractiveConfirm is deliberately absent: for every other key
+                        // here the dangerous direction is `true`, so "equals the default" is a
+                        // harmless no-op worth staying quiet about. For this one the dangerous
+                        // direction is `false` -- a project trying to switch a protection *off* --
+                        // and that must never be swallowed silently.
                         "safety.allowAdbInput", "safety.allowEmulatorStart", "safety.allowAnyGradleTask" -> value == "false"
                         "redaction.enabled" -> value == "true"
                         else -> false
@@ -469,6 +485,9 @@ object DroidAgentConfigLoader {
                     allowEmulatorStart =
                         value.toStrictBooleanOrError(lineNumber, fullKey, errors) ?: allowEmulatorStart
                 "safety.maxCommandSeconds" -> maxCommandSeconds = value.toLongOrError(lineNumber, fullKey, errors) ?: maxCommandSeconds
+                "safety.requireInteractiveConfirm" ->
+                    requireInteractiveConfirm =
+                        value.toStrictBooleanOrError(lineNumber, fullKey, errors) ?: requireInteractiveConfirm
                 "safety.adbPath" -> adbPath = value
                 "safety.emulatorPath" -> emulatorPath = value
                 "safety.traceProcessorPath" -> traceProcessorPath = value
@@ -511,6 +530,7 @@ object DroidAgentConfigLoader {
                 traceProcessorPath = traceProcessorPath,
                 mitmProxyPath = mitmProxyPath,
                 maxCommandSeconds = maxCommandSeconds,
+                requireInteractiveConfirm = requireInteractiveConfirm,
             )
         return ConfigLoadResult.Loaded(
             DroidAgentConfig(
