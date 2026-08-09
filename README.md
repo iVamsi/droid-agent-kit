@@ -54,8 +54,13 @@ user policy (`~/.droidagentkit/policy.yaml`).
 
 The `@droidagentkit/launcher` npm package downloads and caches the matching `droidagent-cli` jar from
 [GitHub Releases](https://github.com/iVamsi/droid-agent-kit/releases) the first time it runs,
-verifying its SHA-256 before executing it. The launcher always runs `serve-mcp` — for `init` /
-`install-mcp` / `audit` use `java -jar` on the downloaded jar or build from source.
+verifying its SHA-256 before executing it. Run it bare to start the MCP server, or pass any CLI
+command straight through:
+
+```bash
+npx -y @droidagentkit/launcher init --profile device-control
+npx -y @droidagentkit/launcher audit --project /path/to/android --write-agents
+```
 
 ```bash
 npx -y @droidagentkit/launcher --version

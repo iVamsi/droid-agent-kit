@@ -126,6 +126,18 @@ fi
 echo "smoke: launcher spawns droidagent serve-mcp via DROIDAGENT_BIN"
 DROIDAGENT_BIN="$CLI" node "$LAUNCHER" --version >/dev/null
 
+echo "smoke: launcher arg resolution unit tests"
+(cd "$ROOT/distribution/npm-launcher" && node --test test/*.test.js >/dev/null)
+
+echo "smoke: launcher forwards subcommands to the CLI"
+# The launcher used to run serve-mcp and nothing else, so `init`/`audit`/`doctor` needed a
+# hand-written `java -jar`. Assert a forwarded command actually reaches the CLI and answers.
+out="$(DROIDAGENT_BIN="$CLI" node "$LAUNCHER" inspect --project "$ROOT/samples/basic-compose" --format json)"
+case "$out" in
+  *BasicComposeSample*) echo "smoke: subcommand passthrough answered" ;;
+  *) echo "smoke: subcommand passthrough failed: $out" >&2; exit 1 ;;
+esac
+
 # stdio initialize round-trip: send initialize, expect a well-formed JSON-RPC result.
 #
 # The hang guard is in Node rather than `timeout`, which is absent on macOS. Guarding with
