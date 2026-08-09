@@ -123,6 +123,7 @@ class RetraceEngineTest {
                 "echo 'FATAL EXCEPTION: main'\n" +
                 "echo '\tat a.b.c.a(SourceFile:3)'\n",
         )
+        com.droidagentkit.mcp.assumePosixFilesystem()
         java.nio.file.Files.setPosixFilePermissions(
             fakeAdb,
             java.nio.file.attribute.PosixFilePermissions

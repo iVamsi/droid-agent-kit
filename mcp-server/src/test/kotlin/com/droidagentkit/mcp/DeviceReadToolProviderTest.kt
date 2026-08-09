@@ -346,6 +346,7 @@ class DeviceReadToolProviderTest {
             exit 0
             """.trimIndent(),
         )
+        assumePosixFilesystem()
         Files.setPosixFilePermissions(script, PosixFilePermissions.fromString("rwxr-xr-x"))
         return script.toString()
     }

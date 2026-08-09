@@ -341,6 +341,7 @@ class NetworkToolProviderTest {
             exit 0
             """.trimIndent(),
         )
+        assumePosixFilesystem()
         Files.setPosixFilePermissions(script, PosixFilePermissions.fromString("rwxr-xr-x"))
         return script.toString()
     }
@@ -362,6 +363,7 @@ class NetworkToolProviderTest {
             esac
             """.trimIndent(),
         )
+        assumePosixFilesystem()
         Files.setPosixFilePermissions(script, PosixFilePermissions.fromString("rwxr-xr-x"))
         return script
     }
