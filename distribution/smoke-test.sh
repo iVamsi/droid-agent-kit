@@ -126,26 +126,13 @@ fi
 echo "smoke: launcher spawns droidagent serve-mcp via DROIDAGENT_BIN"
 DROIDAGENT_BIN="$CLI" node "$LAUNCHER" --version >/dev/null
 
-# stdio initialize round-trip: send initialize, expect a JSON-RPC response with capabilities.
-# Needs a hang guard since the server keeps the stdio loop open after answering; `timeout` is
-# standard on Linux but not preinstalled on macOS (only `gtimeout` via `brew install coreutils`).
-TIMEOUT_CMD=""
-if command -v timeout >/dev/null 2>&1; then
-  TIMEOUT_CMD="timeout"
-elif command -v gtimeout >/dev/null 2>&1; then
-  TIMEOUT_CMD="gtimeout"
-fi
-
-if [ -z "$TIMEOUT_CMD" ]; then
-  echo "smoke: skipping stdio initialize round-trip (no timeout/gtimeout on PATH)"
-else
-  echo "smoke: stdio initialize round-trip"
-  init='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"smoke","version":"0"}}}'
-  resp="$(printf '%s\n' "$init" | DROIDAGENT_BIN="$CLI" "$TIMEOUT_CMD" 20 node "$LAUNCHER" 2>/dev/null | head -n1 || true)"
-  case "$resp" in
-    *serverInfo*|*capabilities*) echo "smoke: initialize answered" ;;
-    *) echo "smoke: initialize did not answer: $resp" >&2; exit 1 ;;
-  esac
-fi
+# stdio initialize round-trip: send initialize, expect a well-formed JSON-RPC result.
+#
+# The hang guard is in Node rather than `timeout`, which is absent on macOS. Guarding with
+# `timeout` meant this assertion skipped itself on every macOS run -- and this is the one check
+# that proves the shipped launcher actually speaks MCP, so silently not running it defeats the
+# point of the smoke test. Node is already required here, so it costs no new dependency.
+echo "smoke: stdio initialize round-trip"
+DROIDAGENT_BIN="$CLI" node "$ROOT/distribution/test-fixtures/stdio-initialize.js" "$LAUNCHER" 30000
 
 echo "smoke: OK"

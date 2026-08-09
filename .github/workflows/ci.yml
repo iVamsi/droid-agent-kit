@@ -8,13 +8,19 @@ on:
 permissions:
   contents: read
 
+# Windows runners default to pwsh, where `./gradlew` (a shell script) does not run at all.
+# GitHub-hosted Windows images ship Git Bash, so making bash the default everywhere keeps one
+# set of commands working on all three OSes instead of branching per platform.
+defaults:
+  run:
+    shell: bash
+
 jobs:
-  test:
+  # Fast lane: the checks that only need to run once. Kept off the OS matrix so a formatting
+  # nit fails in one place rather than three.
+  static:
+    name: Lint, static analysis, coverage
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        java: ["17", "21"]
     env:
       JAVA_TOOL_OPTIONS: -Djava.awt.headless=true
     steps:
@@ -25,7 +31,7 @@ jobs:
       - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
         with:
           distribution: temurin
-          java-version: ${{ matrix.java }}
+          java-version: "17"
       - name: Ensure build inputs are intact
         run: |
           set -euo pipefail
@@ -43,9 +49,105 @@ jobs:
           ./gradlew ktlintCheck --no-configuration-cache --stacktrace
       - name: Static analysis
         run: ./gradlew detekt --no-configuration-cache --stacktrace
-      - name: Test
-        run: ./gradlew test --no-configuration-cache --stacktrace
       # Gated on the classes that decide authority rather than a project-wide average, which can
       # stay healthy while exactly the security-critical code loses coverage.
       - name: Coverage (policy classes)
         run: ./gradlew :toolbox-core:koverVerify --no-configuration-cache --stacktrace
+
+  test:
+    name: Test (${{ matrix.os }}, JDK ${{ matrix.java }})
+    runs-on: ${{ matrix.os }}
+    # Windows and macOS start advisory: this is their first run, and the point of adding them is
+    # to learn what breaks. Flip continue-on-error off once the failures they surface are fixed.
+    continue-on-error: ${{ matrix.os != 'ubuntu-latest' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        java: ["17", "21"]
+    env:
+      JAVA_TOOL_OPTIONS: -Djava.awt.headless=true
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref }}
+      - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+      - name: Test
+        run: ./gradlew test --no-configuration-cache --stacktrace
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: test-reports-${{ matrix.os }}-jdk${{ matrix.java }}
+          path: "**/build/reports/tests/**"
+          retention-days: 7
+
+  # Proves the artifact users actually install works: the npm launcher fetches and verifies the
+  # jar, then speaks a real MCP initialize round-trip over stdio.
+  smoke:
+    name: Launcher smoke + stdio E2E (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    env:
+      JAVA_TOOL_OPTIONS: -Djava.awt.headless=true
+      DROIDAGENT_E2E: "1"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: "22"
+      - name: Smoke test (fetch, verify, stdio initialize)
+        run: |
+          chmod +x gradlew
+          bash distribution/smoke-test.sh
+
+  # Drives the built CLI against the checked-in sample projects. The inspector and auditor are
+  # static parsers, so this needs no Android SDK -- cheap enough to run on every PR.
+  samples:
+    name: CLI against sample projects
+    runs-on: ubuntu-latest
+    env:
+      JAVA_TOOL_OPTIONS: -Djava.awt.headless=true
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Build CLI
+        run: |
+          chmod +x gradlew
+          ./gradlew :cli:installDist --no-configuration-cache --stacktrace
+      - name: Exercise samples
+        run: bash scripts/ci-samples-check.sh
+
+  # Catches version drift and packaging breakage at PR time instead of at tag time, when the
+  # release workflow is already running and half the artifacts are published.
+  release-readiness:
+    name: Release surface dry-run
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: "22"
+      - name: Version consistency across every hardcoded copy
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version = "\(.*\)"$/\1/p' build.gradle.kts | head -n1)"
+          echo "Declared version: $version"
+          bash scripts/check-release-version.sh "$version"
+      - name: npm launcher packs cleanly
+        working-directory: distribution/npm-launcher
+        run: npm pack --dry-run
