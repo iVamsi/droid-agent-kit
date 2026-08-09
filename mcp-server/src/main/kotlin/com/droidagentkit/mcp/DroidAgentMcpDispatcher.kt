@@ -31,6 +31,7 @@ import com.droidagentkit.core.ToolGroup
 import com.droidagentkit.core.ToolResult
 import com.droidagentkit.device.DeviceToolContext
 import com.droidagentkit.inspector.AndroidProjectInspector
+import com.droidagentkit.mcp.tools.ApkAnalyzer
 import com.droidagentkit.mcp.tools.BuildFailureParser
 import com.droidagentkit.mcp.tools.BuildProfileParser
 import com.droidagentkit.mcp.tools.CoreToolProvider
@@ -42,6 +43,7 @@ import com.droidagentkit.mcp.tools.LintResultParser
 import com.droidagentkit.mcp.tools.McpToolProvider
 import com.droidagentkit.mcp.tools.NetworkToolProvider
 import com.droidagentkit.mcp.tools.PerfettoToolProvider
+import com.droidagentkit.mcp.tools.RetraceEngine
 import com.droidagentkit.mcp.tools.StorageToolProvider
 import com.droidagentkit.mcp.tools.TestResultParser
 import com.droidagentkit.mcp.tools.ToolProviderRegistry
@@ -492,6 +494,25 @@ class DroidAgentMcpDispatcher(
                 outputSchema = toolResultSchema,
             ),
             McpTool(
+                name = "android_apk_analyze",
+                title = "Analyze APK size",
+                description =
+                    "Break an APK's size down by dex, native libraries, resources, and assets, list the largest entries " +
+                        "and native ABIs, and optionally diff against a baseline APK to attribute growth to a category.",
+                inputSchema =
+                    schema(
+                        "apkPath",
+                        props =
+                            mapOf(
+                                "rootPath" to rootPathProp,
+                                "apkPath" to str("APK path under the project root."),
+                                "baselineApkPath" to str("Optional second APK to diff against, under the project root."),
+                            ),
+                    ),
+                annotations = mapOf("readOnlyHint" to true),
+                outputSchema = toolResultSchema,
+            ),
+            McpTool(
                 name = "android_doctor",
                 title = "Check the DroidAgentKit environment",
                 description =
@@ -598,6 +619,7 @@ class DroidAgentMcpDispatcher(
                 "android_test_run" -> testRun(arguments)
                 "android_build_diagnose" -> buildDiagnose(arguments)
                 "android_doctor" -> doctor(arguments)
+                "android_apk_analyze" -> apkAnalyze(arguments)
                 else -> resultMap(ToolResult(status = ResultStatus.UNSUPPORTED, summary = "Unknown MCP tool: $name"))
             }
         } catch (error: ProjectRootViolation) {
@@ -1201,16 +1223,157 @@ class DroidAgentMcpDispatcher(
         val root = rootPath(arguments)
         val runResult = runAdbCommand(listOf("-s", serial, "logcat", "-d", "-t", maxLines.toString()), "adb-crash-triage", root)
         val logArtifact = runResult.artifacts.firstOrNull() ?: return resultMap(runResult)
-        val logText = Files.readString(Path.of(logArtifact.path))
+        val rawLogText = Files.readString(Path.of(logArtifact.path))
+        val (logText, retraceNote) = applyRetrace(rawLogText, arguments, root)
         val findings = CrashLogTriage.triage(logText)
         val summary =
             if (findings.isEmpty()) {
-                "No crashes or ANRs found in the captured logcat window."
+                "No crashes or ANRs found in the captured logcat window.$retraceNote"
             } else {
-                "Found ${findings.size} crash/ANR finding(s) in the captured logcat window."
+                "Found ${findings.size} crash/ANR finding(s) in the captured logcat window.$retraceNote"
             }
         return resultMapWithFindings(runResult.copy(summary = summary), findings)
     }
+
+    /**
+     * De-obfuscates the captured log when an R8 mapping is available.
+     *
+     * A release stack trace reads `a.b.c.a(Unknown Source)`, which tells an agent nothing, so crash
+     * triage on a release build was previously guesswork. The mapping path is confined through the
+     * operation policy like any other host path -- it is an argument the model supplies.
+     */
+    private fun applyRetrace(
+        logText: String,
+        arguments: Map<String, Any?>,
+        root: Path,
+    ): Pair<String, String> {
+        val explicit = arguments["mappingFile"]?.toString()?.takeIf { it.isNotBlank() }
+        val mappingPath =
+            if (explicit != null) {
+                val candidate = root.resolve(explicit).normalize()
+                val decision =
+                    operationPolicy.authorize(
+                        OperationRequest(
+                            operationId = "android_crash_triage",
+                            requiredCapabilities = emptySet(),
+                            destructive = false,
+                            hostPaths = listOf(candidate),
+                        ),
+                    )
+                if (decision is AuthorizationDecision.Denied) return logText to " Mapping ignored: ${decision.reason}"
+                candidate.takeIf { Files.exists(it) }
+            } else {
+                discoverMappingFile(root)
+            }
+        if (mappingPath == null) {
+            return logText to if (explicit != null) " Mapping file not found; frames left obfuscated." else ""
+        }
+        val mapping = RetraceEngine.parse(Files.readString(mappingPath))
+        if (mapping.size == 0) return logText to " Mapping file had no class entries; frames left obfuscated."
+        return RetraceEngine.retrace(logText, mapping) to " Frames de-obfuscated with ${mappingPath.fileName} (${mapping.size} classes)."
+    }
+
+    /** The conventional R8 output location; picked only when exactly one candidate exists. */
+    private fun discoverMappingFile(root: Path): Path? {
+        val outputs = root.resolve("build/outputs/mapping")
+        if (!Files.isDirectory(outputs)) return null
+        return Files
+            .walk(outputs)
+            .use { stream ->
+                stream.filter { it.fileName?.toString() == "mapping.txt" && Files.isRegularFile(it) }.toList()
+            }.singleOrNull()
+    }
+
+    private fun apkAnalyze(arguments: Map<String, Any?>): Map<String, Any> {
+        val root = rootPath(arguments)
+        val apkArg =
+            arguments["apkPath"]?.toString()?.takeIf { it.isNotBlank() }
+                ?: return resultMap(
+                    ToolResult(
+                        status = ResultStatus.BLOCKED,
+                        summary = "apkPath is required for android_apk_analyze.",
+                        warnings = listOf("missing-apk-path"),
+                    ),
+                )
+        val baselineArg = arguments["baselineApkPath"]?.toString()?.takeIf { it.isNotBlank() }
+        val paths = listOfNotNull(apkArg, baselineArg).map { root.resolve(it).normalize() }
+        val decision =
+            operationPolicy.authorize(
+                OperationRequest(
+                    operationId = "android_apk_analyze",
+                    requiredCapabilities = emptySet(),
+                    destructive = false,
+                    hostPaths = paths,
+                ),
+            )
+        if (decision is AuthorizationDecision.Denied) {
+            return resultMap(
+                ToolResult(status = ResultStatus.BLOCKED, summary = decision.reason, warnings = listOf(decision.code)),
+            )
+        }
+        val missing = paths.filterNot { Files.isRegularFile(it) }
+        if (missing.isNotEmpty()) {
+            return resultMap(
+                ToolResult(
+                    status = ResultStatus.BLOCKED,
+                    summary = "APK not found: ${missing.joinToString(", ")}",
+                    warnings = listOf("apk-not-found"),
+                ),
+            )
+        }
+
+        return if (baselineArg == null) {
+            val report = ApkAnalyzer.analyze(paths[0])
+            resultMap(
+                ToolResult(
+                    status = ResultStatus.SUCCESS,
+                    summary =
+                        "${paths[0].fileName}: ${report.totalCompressedBytes} bytes download, " +
+                            "${report.totalUncompressedBytes} bytes installed across ${report.fileCount} entries.",
+                ),
+            ) + mapOf("apk" to reportMap(report))
+        } else {
+            val diff = ApkAnalyzer.diff(paths[1], paths[0])
+            resultMap(
+                ToolResult(
+                    status = ResultStatus.SUCCESS,
+                    summary = "Download size changed by ${diff.totalCompressedDelta} bytes against the baseline.",
+                ),
+            ) +
+                mapOf(
+                    "apk" to reportMap(diff.candidate),
+                    "baseline" to reportMap(diff.base),
+                    "totalCompressedDelta" to diff.totalCompressedDelta,
+                    "categoryDeltas" to
+                        diff.categories.map {
+                            mapOf(
+                                "category" to it.category,
+                                "compressedDelta" to it.compressedDelta,
+                                "uncompressedDelta" to it.uncompressedDelta,
+                            )
+                        },
+                )
+        }
+    }
+
+    private fun reportMap(report: ApkAnalyzer.ApkReport): Map<String, Any> =
+        mapOf(
+            "path" to report.path,
+            "totalCompressedBytes" to report.totalCompressedBytes,
+            "totalUncompressedBytes" to report.totalUncompressedBytes,
+            "fileCount" to report.fileCount,
+            "abis" to report.abis,
+            "categories" to
+                report.categories.map {
+                    mapOf(
+                        "category" to it.category,
+                        "fileCount" to it.fileCount,
+                        "compressedBytes" to it.compressedBytes,
+                        "uncompressedBytes" to it.uncompressedBytes,
+                    )
+                },
+            "largestEntries" to report.largestEntries.map { mapOf("name" to it.first, "compressedBytes" to it.second) },
+        )
 
     private fun dependencyCheck(arguments: Map<String, Any?>): Map<String, Any> {
         val root = rootPath(arguments)
@@ -1303,7 +1466,7 @@ class DroidAgentMcpDispatcher(
         spec: CommandSpec,
     ): ToolResult {
         val context = CurrentToolCall.context()
-        context.progress.report(null, null, "running ${'$'}{spec.id}")
+        context.progress.report(null, null, "running ${spec.id}")
         return runner(root).run(spec, cancellation = context.cancellation)
     }
 
