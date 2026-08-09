@@ -11,6 +11,8 @@ Give your AI coding agent real Android tools — Gradle, adb, logcat, lint, cras
 
 DroidAgentKit helps you work on Android projects with AI agents. It runs on your machine, talks to your Gradle tree and (when you allow it) your emulator or device, and gives agents structured answers instead of raw shell output.
 
+**Android-first, deliberately.** Cross-platform automation servers cover iOS too but stop at tapping the screen. DroidAgentKit goes the other way: deep into the Android build system and toolchain — Gradle task allowlists, lint, R8 crash triage, Perfetto traces, app storage, Compose visual regression. There is no iOS support and none planned.
+
 Everything stays local. Commands go through allowlists. Output is redacted before it comes back to the agent. Artifacts land under `build/droidagentkit` by default.
 
 ## What you get
@@ -64,6 +66,11 @@ Point your agent's MCP config at it directly, e.g. for Claude Code:
 ```bash
 claude mcp add droidagentkit -- npx -y @droidagentkit/launcher
 ```
+
+Or install with one click:
+
+[![Install in Cursor](https://img.shields.io/badge/Cursor-Install_DroidAgentKit-0098FF?logo=cursor&logoColor=white)](cursor://anysphere.cursor-deeplink/mcp/install?name=droidagentkit&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIkBkcm9pZGFnZW50a2l0L2xhdW5jaGVyIl19)
+[![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_DroidAgentKit-007ACC?logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=droidagentkit&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40droidagentkit%2Flauncher%22%5D%7D)
 
 ### Building from source
 
