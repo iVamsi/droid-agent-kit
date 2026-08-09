@@ -1,0 +1,31 @@
+{
+  "_comment": "Pinned Eclipse Temurin 17 JREs. Regenerate with scripts/update-jre-manifest.sh. Every entry is verified by sha256 before use; a mismatch is fatal.",
+  "platforms": {
+    "darwin-arm64": {
+      "archive": "tar.gz",
+      "sha256": "3d1adc835e2e21fb7f3297c42a39bf07b8de58a83f8f05e01cf6c2890694c663",
+      "url": "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.20%2B8/OpenJDK17U-jre_aarch64_mac_hotspot_17.0.20_8.tar.gz"
+    },
+    "darwin-x64": {
+      "archive": "tar.gz",
+      "sha256": "1f504265987954508cd2731520dcf356120c53c8d8196aab39cb1a4a50040d59",
+      "url": "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.20%2B8/OpenJDK17U-jre_x64_mac_hotspot_17.0.20_8.tar.gz"
+    },
+    "linux-arm64": {
+      "archive": "tar.gz",
+      "sha256": "9d14a95e07c44bc48666625162baf40db9da4dcb192bfc3e43047790693061a2",
+      "url": "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.20%2B8/OpenJDK17U-jre_aarch64_linux_hotspot_17.0.20_8.tar.gz"
+    },
+    "linux-x64": {
+      "archive": "tar.gz",
+      "sha256": "ef491a51a46ef90cc47fbc4abb219fde32483ff91be5ec66ddc896df43524b27",
+      "url": "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.20%2B8/OpenJDK17U-jre_x64_linux_hotspot_17.0.20_8.tar.gz"
+    },
+    "win32-x64": {
+      "archive": "zip",
+      "sha256": "7fe2324cc5901a89aaa0e8dc232075c59f2aca5270c533bdb1b861a5274af834",
+      "url": "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.20%2B8/OpenJDK17U-jre_x64_windows_hotspot_17.0.20_8.zip"
+    }
+  },
+  "release": "jdk-17.0.20+8"
+}

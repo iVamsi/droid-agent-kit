@@ -126,8 +126,23 @@ fi
 echo "smoke: launcher spawns droidagent serve-mcp via DROIDAGENT_BIN"
 DROIDAGENT_BIN="$CLI" node "$LAUNCHER" --version >/dev/null
 
-echo "smoke: launcher arg resolution unit tests"
+echo "smoke: launcher unit tests (arg resolution + JRE resolution)"
 (cd "$ROOT/distribution/npm-launcher" && node --test test/*.test.js >/dev/null)
+
+echo "smoke: JRE resolution prefers an existing JVM over downloading one"
+# Guards the expensive-and-surprising failure mode: a machine that already has a usable JDK must
+# never pull 130 MB of Temurin behind the user's back.
+node -e '
+const { resolveJava } = require("'"$ROOT"'/distribution/npm-launcher/jre.js");
+resolveJava({
+  env: {},
+  probe: () => ({ status: 0, stderr: "openjdk version \"17.0.9\"", stdout: "" }),
+  download: () => { throw new Error("downloaded despite a usable JVM being present"); },
+}).then((bin) => {
+  if (bin !== "java") throw new Error("expected the PATH java, got " + bin);
+}).catch((error) => { console.error(error.message); process.exit(1); });
+'
+
 
 echo "smoke: launcher forwards subcommands to the CLI"
 # The launcher used to run serve-mcp and nothing else, so `init`/`audit`/`doctor` needed a
