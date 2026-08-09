@@ -6,6 +6,17 @@ pre-release convention `0.y.z-alpha` until a stable 1.0 release.
 
 ## Unreleased
 
+### Fixed
+
+- The 0.3.0-alpha release published to npm but left `latest` pointing at 0.2.7-alpha. The dist-tag
+  logic published prereleases to `next` and then ran `npm dist-tag add ... latest`, which cannot
+  work under OIDC trusted publishing: OIDC mints a credential scoped to `npm publish` alone, so the
+  second call fails with E401 — *after* the package is already published, leaving the release
+  half-done and skipping the MCP registry publish that depends on it. The tag is now chosen up
+  front and applied by the single `npm publish`, with no follow-up call. The release workflow also
+  gains a dispatch entry point to publish the registry for an already-released tag, since
+  re-tagging a published version is not possible.
+
 ## [0.3.0-alpha] - 2026-08-09
 
 ### Security

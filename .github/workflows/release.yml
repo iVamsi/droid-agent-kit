@@ -3,6 +3,14 @@ name: Release
 on:
   push:
     tags: ["v[0-9]+.[0-9]+.[0-9]+*"]
+  # Recovery path: when one job fails the others are skipped, and re-tagging an already-published
+  # version is not possible. This allows re-running the registry publish for an existing tag.
+  workflow_dispatch:
+    inputs:
+      registry_only:
+        description: "Only publish to the MCP registry (for an already-released tag)"
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -10,6 +18,9 @@ permissions:
 jobs:
   verify-version:
     name: Verify version consistency
+    # Push-only: it derives the expected version from the tag name, which does not exist on a
+    # dispatch. The dispatch path publishes distribution/server.json exactly as committed.
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -17,6 +28,7 @@ jobs:
         run: bash scripts/check-release-version.sh "${GITHUB_REF_NAME#v}"
 
   build-and-release:
+    if: github.event_name == 'push'
     name: Build fat jar and publish GitHub Release
     needs: verify-version
     runs-on: ubuntu-latest
@@ -68,6 +80,7 @@ jobs:
             --generate-notes
 
   publish-npm:
+    if: github.event_name == 'push'
     name: Publish npm launcher (OIDC trusted publishing)
     needs: verify-version
     runs-on: ubuntu-latest
@@ -92,19 +105,16 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: bash scripts/npm-dist-tag.sh "${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
       - name: Publish
-        # The tag is computed rather than hardcoded. Prereleases go to `next`, stable to `latest`
-        # -- but while no stable has ever shipped, a prerelease also claims `latest`, because
-        # `npx` resolves `latest` and the documented install command would otherwise break.
+        # One command, one tag. A follow-up `npm dist-tag add` cannot work here: OIDC trusted
+        # publishing mints a credential scoped to `npm publish` alone, so any second registry call
+        # fails with E401 -- and it fails *after* the package is already published, leaving the
+        # release half-done.
         run: npm publish --access public --tag "${{ steps.disttag.outputs.tag }}"
-      - name: Point latest at this prerelease
-        # Only while nothing stable exists. Once 1.0 ships this stops running, which is precisely
-        # what stops a later prerelease from hiding the stable release from `npm install`.
-        if: steps.disttag.outputs.also_latest == 'true'
-        run: npm dist-tag add "@droidagentkit/launcher@${GITHUB_REF_NAME#v}" latest
 
   publish-mcp-registry:
     name: Publish to MCP registry (OIDC)
     needs: publish-npm
+    if: always() && (needs.publish-npm.result == 'success' || inputs.registry_only == true)
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -144,6 +154,7 @@ jobs:
 
   # Delegates to the reusable workflow so the release path and the on-demand path cannot drift.
   homebrew-formula:
+    if: github.event_name == 'push'
     name: Update Homebrew tap
     needs: build-and-release
     uses: ./.github/workflows/homebrew-tap-sync.yml
