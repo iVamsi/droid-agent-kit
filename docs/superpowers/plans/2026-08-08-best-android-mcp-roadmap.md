@@ -8,6 +8,28 @@
 
 **Tech Stack:** Kotlin/JVM 17, kotlinx-serialization-json, sqlite-jdbc (no new runtime deps unless a task says so), GitHub Actions, npm launcher (Node install-time only).
 
+## Execution status (updated 2026-08-08)
+
+Branch `chore/discoverability-and-install-ux` — 4 commits, all gates green (454 tests, ktlint,
+detekt, koverVerify, samples check, hygiene, full E2E smoke).
+
+| Task | Status |
+| --- | --- |
+| WS0-T1 npm keywords / Android-first description | **Done** |
+| WS0-T1 registry rename | **Blocked on a decision** — see the task; one-way door, deliberately not actioned |
+| WS0-T2 one-click install links + positioning | **Done** |
+| WS5-T1 3-OS matrix + smoke/E2E in CI | **Done** (windows/macos advisory pending WS3-T1) |
+| WS5-T2 samples integration job | **Done** — `scripts/ci-samples-check.sh` |
+| WS5-T4 release-surface dry-run | **Done**; per-module coverage widening still open |
+| WS1-T2 launcher subcommand passthrough | **Done** |
+| WS1-T3 `droidagent doctor` | **Done** — `DoctorChecks` in toolbox-core, shared with WS6-T0b |
+| Everything else | Not started |
+
+Found and fixed while implementing, not in the original plan: the E2E smoke test's stdio
+`initialize` round-trip — the only assertion proving the shipped launcher speaks MCP — was
+guarded behind `command -v timeout`, which does not exist on macOS, so it had been silently
+skipping itself on that platform. The hang guard now lives in Node.
+
 ## Global Constraints
 
 - `./gradlew test` must pass after every task (Definition of Done, CLAUDE.md).
