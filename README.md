@@ -164,6 +164,7 @@ Alpha. MCP tool names and schemas are treated as stable, but behavior will tight
 
 ## More docs
 
-- [Security and permissions](docs/security-and-permissions.md) — capabilities, tool groups, destructive ops
+- [Security and permissions](docs/security-and-permissions.md) — capabilities, tool groups, destructive ops, worked prompt-injection scenarios
+- [Compatibility](docs/compatibility.md) — what is stable, what may change, 1.0 exit criteria
 - [Easy MCP installation](docs/easy-mcp-installation.md) — per-host setup
 - [CLAUDE.md](CLAUDE.md) — build commands and architecture notes for contributors

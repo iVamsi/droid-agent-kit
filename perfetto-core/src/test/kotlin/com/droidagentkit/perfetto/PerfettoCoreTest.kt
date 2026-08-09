@@ -144,4 +144,34 @@ class PerfettoCoreTest {
             assertTrue("SQL for $type should be non-empty", sql.isNotBlank())
         }
     }
+
+    @Test
+    fun `unparseable json-lines are counted rather than dropped in silence`() {
+        // A query whose output is mostly garbage used to return a short row list that looked like a
+        // real answer. The count is what lets a caller tell "two matching slices" apart from
+        // "we could only read two".
+        val text =
+            """
+            {"name":"good","dur":1}
+            not json at all
+            {"name":"also good","dur":2}
+            {broken
+            """.trimIndent()
+
+        val result = TraceProcessorOutputParser.parseRowsForTest(text)
+
+        val rows = result as TraceProcessorQueryResult.Rows
+        assertEquals(2, rows.rows.size)
+        assertEquals(2, rows.skippedLines)
+    }
+
+    @Test
+    fun `clean json-lines report nothing skipped`() {
+        val text = """{"name":"a","dur":1}""" + "\n" + """{"name":"b","dur":2}"""
+
+        val rows = TraceProcessorOutputParser.parseRowsForTest(text) as TraceProcessorQueryResult.Rows
+
+        assertEquals(2, rows.rows.size)
+        assertEquals(0, rows.skippedLines)
+    }
 }

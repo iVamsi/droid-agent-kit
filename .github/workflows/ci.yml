@@ -49,10 +49,13 @@ jobs:
           ./gradlew ktlintCheck --no-configuration-cache --stacktrace
       - name: Static analysis
         run: ./gradlew detekt --no-configuration-cache --stacktrace
-      # Gated on the classes that decide authority rather than a project-wide average, which can
-      # stay healthy while exactly the security-critical code loses coverage.
-      - name: Coverage (policy classes)
-        run: ./gradlew :toolbox-core:koverVerify --no-configuration-cache --stacktrace
+      # Per-module rather than one project-wide average, which can stay healthy while a single
+      # module rots. toolbox-core's rule is the strictest: it is filtered to the classes that
+      # decide authority, so security-critical code cannot lose coverage behind a healthy mean.
+      - name: Coverage
+        run: |
+          ./gradlew :toolbox-core:koverVerify :mcp-server:koverVerify :android-device-core:koverVerify \
+            :android-inspector:koverVerify :auditor-cli:koverVerify --no-configuration-cache --stacktrace
 
   test:
     name: Test (${{ matrix.os }}, JDK ${{ matrix.java }})
