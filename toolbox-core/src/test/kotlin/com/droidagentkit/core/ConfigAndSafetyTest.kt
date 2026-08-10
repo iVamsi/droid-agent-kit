@@ -198,13 +198,35 @@ class ConfigAndSafetyTest {
 
     @Test
     fun `built-in rules still apply when an extra pattern is abandoned`() {
-        val redactor =
-            Redactor(RedactionConfig(enabled = true, extraPatterns = listOf(".*.*.*=.*")))
+        // 2KB, not the 200KB this used to use. The budget is per pattern, so the input has to be
+        // small enough that the built-in rules finish far inside it while the catastrophic extra
+        // pattern still blows it. At 200KB the built-ins themselves could exceed 500ms on a loaded
+        // runner, which is why this failed on Windows while passing locally under full CPU load.
+        // At 2KB the built-ins need microseconds and the exponential pattern still never finishes.
+        val redactor = Redactor(RedactionConfig(enabled = true, extraPatterns = listOf(".*.*.*=.*")))
 
-        val result = redactor.redact("x".repeat(200_000) + "\nAuthorization: Bearer abc.def.ghi")
+        val result = redactor.redact("x".repeat(2_000) + "\nAuthorization: Bearer abc.def.ghi")
 
-        assertTrue(result.text.contains("Authorization: Bearer [REDACTED]"))
+        // The point of the test: a user-supplied pattern that misbehaves must never cost us the
+        // built-in secret rules, because that would silently leak the very thing redaction exists
+        // to catch. The budget is per pattern, which is what makes this hold.
+        assertTrue(
+            "bearer token must still be redacted: ${result.text.takeLast(80)}",
+            result.text.contains("Authorization: Bearer [REDACTED]"),
+        )
         assertTrue(result.applied.contains("authorization-bearer"))
+    }
+
+    @Test
+    fun `an abandoned extra pattern is reported rather than hidden`() {
+        val redactor = Redactor(RedactionConfig(enabled = true, extraPatterns = listOf(".*.*.*=.*")))
+
+        val result = redactor.redact("x".repeat(2_000) + "\nAuthorization: Bearer abc.def.ghi")
+
+        assertTrue(
+            "a skipped pattern must surface as a warning: ${result.warnings}",
+            result.warnings.any { it.startsWith("redaction-pattern-") },
+        )
     }
 
     @Test

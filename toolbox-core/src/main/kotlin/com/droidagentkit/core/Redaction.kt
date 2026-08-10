@@ -170,6 +170,11 @@ class Redactor(
     }
 
     private companion object {
+        /**
+         * Generous enough that a legitimate pattern over a large capture never trips it, bounded
+         * enough that a catastrophic one cannot hang the tool call. Applied per pattern, so one
+         * misbehaving rule can never consume the budget of the built-in secret rules.
+         */
         val PATTERN_BUDGET_NANOS =
             java.util.concurrent.TimeUnit.MILLISECONDS
                 .toNanos(500)
