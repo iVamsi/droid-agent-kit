@@ -356,6 +356,80 @@ class McpDispatcherTest {
     }
 
     @Test
+    fun `test run surfaces macrobenchmark metrics when a benchmark run produced them`() {
+        val root = Files.createTempDirectory("dak-test-run-macro")
+        val config =
+            DroidAgentConfig.default().copy(
+                safety = DroidAgentConfig.default().safety.copy(allowGradleTasks = listOf(":macrobenchmark:connectedCheck")),
+            )
+        writeFakeGradlew(root)
+        val outputs = root.resolve("macrobenchmark/build/outputs/connected_android_test_additional_output")
+        Files.createDirectories(outputs)
+        Files.writeString(
+            outputs.resolve("com.example.app-benchmarkData.json"),
+            """
+            {
+              "benchmarks": [
+                {
+                  "name": "startupCompilationNone",
+                  "className": "com.example.StartupBenchmark",
+                  "metrics": { "timeToInitialDisplayMs": { "minimum": 250.5, "maximum": 310.25, "median": 275.0 } },
+                  "sampledMetrics": {}
+                }
+              ]
+            }
+            """.trimIndent(),
+        )
+        val dispatcher = DroidAgentMcpDispatcher(config, root)
+
+        val result =
+            dispatcher.call(
+                "android_test_run",
+                mapOf("rootPath" to root.toString(), "task" to ":macrobenchmark:connectedCheck", "mode" to "device"),
+            )
+
+        @Suppress("UNCHECKED_CAST")
+        val macro = result["macrobenchmark"] as Map<String, Any>
+
+        @Suppress("UNCHECKED_CAST")
+        val benchmarks = macro["benchmarks"] as List<Map<String, Any>>
+        assertEquals(1, benchmarks.size)
+        assertEquals("startupCompilationNone", benchmarks[0]["name"])
+        assertTrue(macro["summary"].toString().contains("timeToInitialDisplayMs"))
+    }
+
+    @Test
+    fun `test run omits the macrobenchmark key entirely for an ordinary unit test run`() {
+        // An empty macrobenchmark block on every unit-test run would be pure token cost for the
+        // agent reading it, so absence has to mean absence.
+        val root = Files.createTempDirectory("dak-test-run-no-macro")
+        val config =
+            DroidAgentConfig.default().copy(
+                safety = DroidAgentConfig.default().safety.copy(allowGradleTasks = listOf(":app:testDebugUnitTest")),
+            )
+        writeFakeGradlew(root)
+        val results = root.resolve("app/build/test-results/testDebugUnitTest")
+        Files.createDirectories(results)
+        Files.writeString(
+            results.resolve("TEST-example.xml"),
+            """
+            <testsuite tests="1" failures="0" errors="0" skipped="0" time="0.1">
+              <testcase classname="example.Test" name="passes"/>
+            </testsuite>
+            """.trimIndent(),
+        )
+        val dispatcher = DroidAgentMcpDispatcher(config, root)
+
+        val result =
+            dispatcher.call(
+                "android_test_run",
+                mapOf("rootPath" to root.toString(), "task" to ":app:testDebugUnitTest", "mode" to "unit"),
+            )
+
+        assertTrue("no macrobenchmark ran, so the key should be absent", !result.containsKey("macrobenchmark"))
+    }
+
+    @Test
     fun `build diagnose preserves unknown failures and classifies known compiler output`() {
         val root = Files.createTempDirectory("dak-build-diagnose")
         val config =

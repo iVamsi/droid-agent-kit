@@ -43,6 +43,7 @@ import com.droidagentkit.mcp.tools.DependencyVersionChecker
 import com.droidagentkit.mcp.tools.DeviceControlToolProvider
 import com.droidagentkit.mcp.tools.DeviceReadToolProvider
 import com.droidagentkit.mcp.tools.LintResultParser
+import com.droidagentkit.mcp.tools.MacrobenchmarkResultParser
 import com.droidagentkit.mcp.tools.McpToolProvider
 import com.droidagentkit.mcp.tools.NetworkToolProvider
 import com.droidagentkit.mcp.tools.PerfettoToolProvider
@@ -855,7 +856,44 @@ class DroidAgentMcpDispatcher(
             } else {
                 runResult
             }
-        return resultMapWithFindings(result, parsed.findings) + mapOf("testSummary" to testSummaryMap(parsed.summary))
+        return resultMapWithFindings(result, parsed.findings) +
+            mapOf("testSummary" to testSummaryMap(parsed.summary)) +
+            macrobenchmarkBlock(root)
+    }
+
+    /**
+     * Macrobenchmark runs are instrumentation tests, so their results land during a normal
+     * android_test_run rather than through a tool of their own. The key is omitted entirely when no
+     * benchmark output exists -- an empty block on every unit-test run would be pure token cost.
+     */
+    private fun macrobenchmarkBlock(root: Path): Map<String, Any> {
+        val parsed = runCatching { MacrobenchmarkResultParser.parse(root) }.getOrNull() ?: return emptyMap()
+        if (parsed.resultFiles.isEmpty()) return emptyMap()
+        return mapOf(
+            "macrobenchmark" to
+                mapOf(
+                    "summary" to parsed.summary,
+                    "resultFiles" to parsed.resultFiles,
+                    "warnings" to parsed.warnings,
+                    "benchmarks" to
+                        parsed.benchmarks.map { run ->
+                            mapOf(
+                                "name" to run.name,
+                                "className" to run.className,
+                                "metrics" to
+                                    run.metrics.map { metric ->
+                                        buildMap {
+                                            put("name", metric.name)
+                                            metric.minimum?.let { put("minimum", it) }
+                                            metric.median?.let { put("median", it) }
+                                            metric.maximum?.let { put("maximum", it) }
+                                            if (metric.percentiles.isNotEmpty()) put("percentiles", metric.percentiles)
+                                        }
+                                    },
+                            )
+                        },
+                ),
+        )
     }
 
     private fun buildDiagnose(arguments: Map<String, Any?>): Map<String, Any> {
