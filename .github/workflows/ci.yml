@@ -28,7 +28,7 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ github.ref }}
-      - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v4
         with:
           distribution: temurin
           java-version: "17"
@@ -80,7 +80,7 @@ jobs:
       # runner image has no preinstalled JDK 17 for Gradle to auto-detect, so the JDK 21 leg failed
       # to resolve a toolchain at all. Linux and macOS images happen to ship 17, which is why this
       # only showed up on Windows.
-      - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v4
         with:
           distribution: temurin
           java-version: |
@@ -110,7 +110,7 @@ jobs:
       DROIDAGENT_E2E: "1"
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v4
         with:
           distribution: temurin
           java-version: "17"
@@ -131,7 +131,7 @@ jobs:
       JAVA_TOOL_OPTIONS: -Djava.awt.headless=true
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v4
         with:
           distribution: temurin
           java-version: "17"
@@ -151,7 +151,7 @@ jobs:
       JAVA_TOOL_OPTIONS: -Djava.awt.headless=true
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v4
         with:
           distribution: temurin
           java-version: "17"
