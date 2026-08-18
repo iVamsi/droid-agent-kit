@@ -46,6 +46,28 @@ redaction:
   extraPatterns: []
 ```
 
+### Running macrobenchmarks and baseline profile generation
+
+`android_test_run` parses androidx Benchmark `*-benchmarkData.json` out of the module's build
+outputs whenever a run produced any, reporting per-benchmark startup metrics
+(`minimum`/`median`/`maximum`) and sampled frame percentiles (`P50`/`P90`/`P95`/`P99`). Nothing
+needs enabling for the parsing itself — but the task that produces the data does have to be
+allowlisted, and the two relevant tasks are not equivalent:
+
+```yaml
+safety:
+  allowGradleTasks:
+    # Benchmarks only measure. Safe to allow by glob.
+    - ":macrobenchmark:connected*AndroidTest"
+    # generateBaselineProfile WRITES INTO src/. Allow it by exact name or not at all --
+    # never by a glob, which would hand the agent a way to rewrite checked-in sources
+    # through a pattern that looks like it only matches a build task.
+    - ":app:generateBaselineProfile"
+```
+
+The toolkit reports measurements and no verdict: it will tell you a startup median moved to 275 ms,
+never that this is a regression. Calling that needs a baseline history the toolkit does not keep.
+
 Example user policy `~/.droidagentkit/policy.yaml` that grants storage inspection:
 
 ```yaml
@@ -226,7 +248,7 @@ a profile currently expands to.
 | `android_crash_triage` | Capture logcat from a device and extract structured crash/ANR findings. |
 | `android_dependency_check` | Check declared dependency versions for drift and orphaned version-catalog entries. Local-only, no network calls, no "latest version" data. |
 | `android_build_performance` | Run an allowlisted Gradle task with `--profile` and surface the slowest tasks from the profile report. |
-| `android_test_run` | Run an allowlisted unit, device, managed-device, or screenshot task and parse bounded JUnit XML results. |
+| `android_test_run` | Run an allowlisted unit, device, managed-device, or screenshot task and parse bounded JUnit XML results. Also surfaces androidx macrobenchmark metrics when the run produced `*-benchmarkData.json`. |
 | `android_build_diagnose` | Run an allowlisted Gradle task and classify recognized compiler, resource, manifest, and configuration-cache failures. |
 
 ### Opt-in `device_read` group
