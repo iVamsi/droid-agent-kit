@@ -5,7 +5,7 @@ package com.droidagentkit.mcp.tools
  * `mapping.txt`.
  *
  * Release crashes are the ones that matter and the ones nobody can read: `a.b.c.a(Unknown Source)`
- * tells an agent nothing, so crash triage on a release build was previously guesswork. This is a
+ * tells an agent nothing, which leaves crash triage on a release build as guesswork. This is a
  * focused reimplementation rather than a call out to R8's `retrace`, because that would add a
  * multi-megabyte dependency for one text transformation, and the mapping format is stable and
  * small enough to parse directly.

@@ -864,7 +864,7 @@ class DroidAgentMcpDispatcher(
     /**
      * Macrobenchmark runs are instrumentation tests, so their results land during a normal
      * android_test_run rather than through a tool of their own. The key is omitted entirely when no
-     * benchmark output exists -- an empty block on every unit-test run would be pure token cost.
+     * benchmark output exists, so an ordinary unit-test run carries nothing extra.
      */
     private fun macrobenchmarkBlock(root: Path): Map<String, Any> {
         val parsed = runCatching { MacrobenchmarkResultParser.parse(root) }.getOrNull() ?: return emptyMap()
@@ -1404,9 +1404,9 @@ class DroidAgentMcpDispatcher(
     /**
      * De-obfuscates the captured log when an R8 mapping is available.
      *
-     * A release stack trace reads `a.b.c.a(Unknown Source)`, which tells an agent nothing, so crash
-     * triage on a release build was previously guesswork. The mapping path is confined through the
-     * operation policy like any other host path -- it is an argument the model supplies.
+     * A release stack trace reads `a.b.c.a(Unknown Source)`, which tells an agent nothing. The
+     * mapping path is confined through the operation policy like any other host path -- it is an
+     * argument the model supplies.
      */
     private fun applyRetrace(
         logText: String,

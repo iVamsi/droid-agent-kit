@@ -23,18 +23,29 @@ mkdir -p "$WORK"
 
 # Device tools need capabilities, and grants are only honored from the user policy -- the same
 # trust split the docs describe, exercised here rather than bypassed.
-cat > "$POLICY" <<'YAML'
+{
+  cat <<'YAML'
 schemaVersion: 1
 safety:
   allowCapabilities:
     - app_install
     - app_control
     - device_input
+    - sensitive_diagnostics
+YAML
+  # Only set traceProcessorPath when the workflow actually provisioned the binary; an empty value
+  # would make the perfetto analysis report a missing tool rather than skip.
+  if [ -n "${DAK_TRACE_PROCESSOR:-}" ]; then
+    echo "  traceProcessorPath: $DAK_TRACE_PROCESSOR"
+  fi
+  cat <<'YAML'
 mcp:
   exposedGroups:
     - device_read
     - device_control
+    - perfetto
 YAML
+} > "$POLICY"
 
 echo "e2e: waiting for a device"
 adb wait-for-device
@@ -78,7 +89,7 @@ printf '%s' "$resp" | grep -q "$SERIAL" || { echo "  FAIL the booted device is n
 echo "e2e: android_screen_snapshot"
 resp="$(call_tool android_screen_snapshot "{\"deviceSerial\":\"$SERIAL\"}")"
 assert_status "screenshot" "$resp" "success" || fail=1
-# A screenshot that reports success but writes nothing is the failure worth catching here.
+# A screenshot that reports success but writes nothing is the case worth catching.
 png="$(find "$ROOT/build/droidagentkit" -name '*.png' -size +1k 2>/dev/null | head -n1)"
 [ -n "$png" ] || { echo "  FAIL no non-empty PNG was written" >&2; fail=1; }
 
@@ -92,15 +103,74 @@ assert_status "logcat" "$resp" "success" || fail=1
 
 echo "e2e: android_dumpsys (device_read group)"
 # `preset`, not `service`: the tool exposes a fixed set (meminfo, gfxinfo, cpuinfo, batterystats,
-# package) rather than arbitrary service names, precisely so an agent cannot dumpsys anything it
-# likes. The first nightly caught this script guessing the wrong argument name.
+# package) rather than arbitrary service names, so an agent cannot dumpsys whatever it likes.
 resp="$(call_tool android_dumpsys "{\"deviceSerial\":\"$SERIAL\",\"preset\":\"meminfo\"}")"
 assert_status "dumpsys meminfo" "$resp" "success" || fail=1
 
 echo "e2e: android_dumpsys rejects an unknown preset"
-# The allowlist is the point of the tool; a passing meminfo says nothing about whether it holds.
+# A passing meminfo does not show that the preset allowlist is enforced; this does.
 resp="$(call_tool android_dumpsys "{\"deviceSerial\":\"$SERIAL\",\"preset\":\"anything-goes\"}")"
 assert_status "unknown preset is refused" "$resp" "blocked" || fail=1
+
+echo "e2e: android_screen_record round trip"
+# The one check that needs real hardware: screenrecord, the pull, and the device-side delete are
+# all adb invocations that the mocked unit tests cannot get wrong.
+resp="$(call_tool android_screen_record_start "{\"deviceSerial\":\"$SERIAL\",\"durationSeconds\":5}")"
+assert_status "screen record start" "$resp" "success" || fail=1
+device_path="$(printf '%s' "$resp" | sed -n 's/.*"devicePath":"\([^"]*\)".*/\1/p')"
+job_id="$(printf '%s' "$resp" | sed -n 's/.*"jobId":"\([^"]*\)".*/\1/p')"
+if [ -z "$device_path" ] || [ -z "$job_id" ]; then
+  echo "  FAIL start did not return devicePath and jobId: ${resp:0:400}" >&2
+  fail=1
+else
+  # Give screenrecord time to open the file and write a frame; stopping instantly can yield a
+  # zero-byte container that says nothing about whether the pull works.
+  sleep 3
+  resp="$(call_tool android_screen_record_stop "{\"deviceSerial\":\"$SERIAL\",\"jobId\":\"$job_id\"}")"
+  assert_status "screen record stop" "$resp" "success" || fail=1
+  printf '%s' "$resp" | grep -q '"type":"screen_recording"' \
+    || { echo "  FAIL stop returned no screen_recording artifact" >&2; fail=1; }
+  mp4="$(find "$ROOT/build/droidagentkit" -name "$job_id.mp4" -size +1k 2>/dev/null | head -n1)"
+  [ -n "$mp4" ] || { echo "  FAIL no non-empty mp4 was pulled off the device" >&2; fail=1; }
+  # Leaving a recording of the screen on shared storage is the failure mode that matters most here.
+  if adb -s "$SERIAL" shell "ls $device_path" >/dev/null 2>&1; then
+    echo "  FAIL $device_path still exists on the device after stop" >&2
+    fail=1
+  else
+    echo "  ok   device recording removed"
+  fi
+fi
+
+echo "e2e: android_screen_record_stop rejects a foreign job id"
+# jobId becomes part of an on-device path, so the shape check has to hold on a real device too.
+resp="$(call_tool android_screen_record_stop "{\"deviceSerial\":\"$SERIAL\",\"jobId\":\"../../etc/passwd\"}")"
+assert_status "foreign job id is refused" "$resp" "blocked" || fail=1
+
+if [ -n "${DAK_TRACE_PROCESSOR:-}" ]; then
+  echo "e2e: android_perfetto_capture + analyze"
+  resp="$(call_tool android_perfetto_capture "{\"deviceSerial\":\"$SERIAL\",\"durationSeconds\":5}")"
+  assert_status "perfetto capture" "$resp" "success" || fail=1
+  trace="$(find "$ROOT/build/droidagentkit/perfetto" -name '*.perfetto-trace' -size +1k 2>/dev/null | head -n1)"
+  if [ -z "$trace" ]; then
+    echo "  FAIL no non-empty trace was captured" >&2
+    fail=1
+  else
+    # Runs the shipped SQL through a real Trace Processor. A malformed query reports
+    # data-unavailable; an empty result reports no-rows. Only the first is a defect, and the
+    # samples carry no runtime-tracing, so no-rows is the expected outcome here.
+    resp="$(call_tool android_perfetto_analyze \
+      "{\"rootPath\":\"$ROOT\",\"tracePath\":\"$trace\",\"analyses\":\"compose_recomposition\"}")"
+    assert_status "perfetto analyze" "$resp" "success" || fail=1
+    if printf '%s' "$resp" | grep -q '"data-unavailable"'; then
+      echo "  FAIL compose_recomposition SQL did not run against Trace Processor: ${resp:0:400}" >&2
+      fail=1
+    else
+      echo "  ok   compose_recomposition SQL ran against a real trace"
+    fi
+  fi
+else
+  echo "e2e: skipping perfetto analysis (DAK_TRACE_PROCESSOR is unset)"
+fi
 
 echo "e2e: a capability that was NOT granted is refused"
 # Proves the policy is actually in force on a real device, not just in unit tests.

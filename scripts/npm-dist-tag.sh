@@ -28,10 +28,9 @@
 # set -- including when it is set but empty, which means "nothing published yet". Otherwise they
 # are queried from the npm registry.
 #
-# Deliberately no stdin fallback: an earlier version read stdin whenever no arguments were given,
-# which blocked forever the moment it ran with a pipe attached and no data -- exactly what a
-# release runner looks like. A hang in release plumbing is worse than a wrong answer, because
-# nothing times out and nothing reports.
+# Deliberately no stdin fallback. Reading stdin when no arguments are given blocks forever with a
+# pipe attached and no data, which is exactly what a release runner looks like, and a hang in
+# release plumbing neither times out nor reports.
 #
 # Prints two shell-assignable lines:
 #   tag=<dist-tag to publish under>

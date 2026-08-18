@@ -373,7 +373,7 @@ class AndroidProjectInspector {
      * a per-module plugin-id scan. This resolves, for each such custom plugin ID, the set of real plugin
      * IDs it applies internally (via `apply(plugin = "...")`), by statically matching `gradlePlugin { ... }`
      * registrations to their `implementationClass` source file. Best-effort only; an unresolved custom
-     * plugin ID simply leaves the module's type as UNKNOWN, same as before this existed.
+     * plugin ID simply leaves the module's type as UNKNOWN.
      */
     private fun resolveConventionPluginIds(
         root: Path,

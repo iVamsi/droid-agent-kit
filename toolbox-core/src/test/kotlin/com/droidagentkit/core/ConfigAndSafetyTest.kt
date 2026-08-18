@@ -163,9 +163,9 @@ class ConfigAndSafetyTest {
 
     @Test
     fun `built-in rules stay fast on a long unbroken token`() {
-        // The assignment rules previously used unbounded `[A-Z0-9_]*` either side of a keyword,
-        // which is ambiguous and went quadratic: 50k identifier characters stalled redaction for
-        // over five seconds, and ProcessRunner feeds it up to 10MB of attacker-influenced output.
+        // Unbounded `[A-Z0-9_]*` either side of a keyword is ambiguous and goes quadratic: 50k
+        // identifier characters stall redaction for over five seconds, and ProcessRunner feeds this
+        // up to 10MB of attacker-influenced output.
         val redactor = Redactor(DroidAgentConfig.default().redaction)
         val hostile = "A".repeat(200_000) + "!"
 
@@ -198,11 +198,10 @@ class ConfigAndSafetyTest {
 
     @Test
     fun `built-in rules still apply when an extra pattern is abandoned`() {
-        // 2KB, not the 200KB this used to use. The budget is per pattern, so the input has to be
-        // small enough that the built-in rules finish far inside it while the catastrophic extra
-        // pattern still blows it. At 200KB the built-ins themselves could exceed 500ms on a loaded
-        // runner, which is why this failed on Windows while passing locally under full CPU load.
-        // At 2KB the built-ins need microseconds and the exponential pattern still never finishes.
+        // The budget is per pattern, so the input has to be small enough that the built-in rules
+        // finish far inside it while the catastrophic extra pattern still blows it. At 200KB the
+        // built-ins alone can exceed 500ms on a loaded runner; at 2KB they need microseconds and the
+        // exponential pattern still never finishes.
         val redactor = Redactor(RedactionConfig(enabled = true, extraPatterns = listOf(".*.*.*=.*")))
 
         val result = redactor.redact("x".repeat(2_000) + "\nAuthorization: Bearer abc.def.ghi")

@@ -46,6 +46,23 @@ jobs:
           chmod +x gradlew
           ./gradlew :cli:installDist --no-configuration-cache --stacktrace
 
+      # Pinned by version and checksum like every other artifact this repo fetches. Without it the
+      # e2e skips the Perfetto analysis rather than failing, so a dead URL degrades coverage instead
+      # of breaking the nightly.
+      - name: Provision Trace Processor
+        id: trace-processor
+        continue-on-error: true
+        env:
+          TP_VERSION: v57.2
+          TP_SHA256: 55ba613fc6d4f71df81eee2dbfc293020063655c241b3e314bff75345b802684
+        run: |
+          set -euo pipefail
+          url="https://commondatastorage.googleapis.com/perfetto-luci-artifacts/${TP_VERSION}/linux-amd64/trace_processor_shell"
+          curl -sfL --retry 3 -o /tmp/trace_processor_shell "$url"
+          echo "${TP_SHA256}  /tmp/trace_processor_shell" | sha256sum -c -
+          chmod +x /tmp/trace_processor_shell
+          echo "DAK_TRACE_PROCESSOR=/tmp/trace_processor_shell" >> "$GITHUB_ENV"
+
       - name: Run E2E on emulator
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
         with:
@@ -54,7 +71,7 @@ jobs:
           profile: pixel_6
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: bash scripts/e2e-emulator.sh
+          script: DAK_TRACE_PROCESSOR="${DAK_TRACE_PROCESSOR:-}" bash scripts/e2e-emulator.sh
 
       - name: Upload artifacts on failure
         if: failure()

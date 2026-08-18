@@ -65,7 +65,8 @@ class PerfettoToolProvider(
                 name = "android_perfetto_analyze",
                 title = "Analyze a Perfetto trace",
                 description =
-                    "Run versioned Trace Processor SQL analyses (CPU, main thread, frame jank, binder, contention) " +
+                    "Run versioned Trace Processor SQL analyses (CPU, main thread, frame jank, binder, contention, " +
+                        "Compose recomposition) " +
                         "over a local Perfetto trace and return a correlated evidence report. " +
                         "Requires the sensitive-diagnostics capability and a configured trace_processor_shell.",
                 inputSchema = analyzeSchema(),

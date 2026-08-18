@@ -15,9 +15,9 @@ import kotlin.io.path.name
  *
  * androidx Benchmark writes two shapes into `benchmarkData.json`, and they are not
  * interchangeable. `metrics` entries carry `minimum`/`median`/`maximum` over iterations;
- * `sampledMetrics` entries carry `P50`/`P90`/`P95`/`P99` over samples. Both are modelled here with
- * the other side left empty rather than back-filled, because a synthesized median for a sampled
- * metric would be a number the run never produced.
+ * `sampledMetrics` entries carry `P50`/`P90`/`P95`/`P99` over samples. Whichever side is absent
+ * stays empty rather than being back-filled: a synthesized median for a sampled metric would be a
+ * number the run never produced.
  */
 data class MacrobenchmarkMetric(
     val name: String,
@@ -43,9 +43,8 @@ data class ParsedMacrobenchmarkResults(
 /**
  * Reads androidx Benchmark `*-benchmarkData.json` files out of a project's build outputs.
  *
- * This reports what the run measured and nothing more: no pass/fail verdict, no regression call,
- * no comparison against a baseline that is not present. Deciding whether 275 ms of startup is
- * acceptable needs a history this parser does not have.
+ * Reports measurements only. Calling a number a regression needs a baseline history that is not
+ * available here.
  */
 object MacrobenchmarkResultParser {
     private const val MAX_FILES = 100

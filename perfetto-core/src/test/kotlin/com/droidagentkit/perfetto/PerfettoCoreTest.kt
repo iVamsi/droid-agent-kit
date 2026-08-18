@@ -173,9 +173,8 @@ class PerfettoCoreTest {
 
     @Test
     fun `unparseable json-lines are counted rather than dropped in silence`() {
-        // A query whose output is mostly garbage used to return a short row list that looked like a
-        // real answer. The count is what lets a caller tell "two matching slices" apart from
-        // "we could only read two".
+        // The count is what separates "two matching slices" from "we could only read two". Without
+        // it, a mostly-garbage result is indistinguishable from a short real one.
         val text =
             """
             {"name":"good","dur":1}

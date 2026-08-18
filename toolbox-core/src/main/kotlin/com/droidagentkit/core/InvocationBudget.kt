@@ -13,8 +13,8 @@ import java.time.Instant
  * loop, or fill the disk with bugreports, and every one of those calls is individually allowed. The
  * budget bounds the blast radius without needing to predict the abuse.
  *
- * The clock is injected because rate limits are otherwise untestable without sleeping, and sleeping
- * in tests is how flakes get written.
+ * The clock is injected because rate limits are otherwise untestable without sleeping, and tests
+ * that sleep are flaky.
  */
 class InvocationBudget(
     private val limits: BudgetLimits = BudgetLimits(),
