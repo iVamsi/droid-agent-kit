@@ -48,25 +48,24 @@ redaction:
 
 ### Running macrobenchmarks and baseline profile generation
 
-`android_test_run` parses androidx Benchmark `*-benchmarkData.json` out of the module's build
-outputs whenever a run produced any, reporting per-benchmark startup metrics
-(`minimum`/`median`/`maximum`) and sampled frame percentiles (`P50`/`P90`/`P95`/`P99`). Nothing
-needs enabling for the parsing itself — but the task that produces the data does have to be
-allowlisted, and the two relevant tasks are not equivalent:
+`android_test_run` reads androidx Benchmark `*-benchmarkData.json` from the module's build outputs
+when a run produced any. It reports startup metrics (`minimum`/`median`/`maximum`) and sampled frame
+percentiles (`P50`/`P90`/`P95`/`P99`). Parsing needs nothing enabled, but the task that produces the
+data has to be allowlisted, and the two relevant tasks are not equivalent:
 
 ```yaml
 safety:
   allowGradleTasks:
-    # Benchmarks only measure. Safe to allow by glob.
+    # Benchmarks only measure, so a glob is fine.
     - ":macrobenchmark:connected*AndroidTest"
-    # generateBaselineProfile WRITES INTO src/. Allow it by exact name or not at all --
-    # never by a glob, which would hand the agent a way to rewrite checked-in sources
-    # through a pattern that looks like it only matches a build task.
+    # generateBaselineProfile writes into src/. Allow it by exact name or not at all.
+    # A glob here would let the agent rewrite checked-in sources through a pattern
+    # that looks like it only matches a build task.
     - ":app:generateBaselineProfile"
 ```
 
-The toolkit reports measurements and no verdict: it will tell you a startup median moved to 275 ms,
-never that this is a regression. Calling that needs a baseline history the toolkit does not keep.
+You get measurements, not a verdict. The tool will say a startup median is 275 ms; it will not say
+that is a regression, because it keeps no baseline history to compare against.
 
 Example user policy `~/.droidagentkit/policy.yaml` that grants storage inspection:
 
@@ -263,7 +262,7 @@ These tools are not listed unless the `device_read` tool group is exposed at ser
 | `android_battery_summary` | Run `dumpsys battery` and return level, status, health, temperature, and voltage as evidence. Read-only. |
 | `android_bugreport` | Run `adb bugreport` and stream the ZIP to sensitive artifact storage. Requires `sensitive_diagnostics`. |
 | `android_logcat_start` | Start a bounded managed logcat job and return a job id plus a concrete log resource URI. Clients poll `android_job_status`. |
-| `android_screen_record_start` | Start a bounded managed `screenrecord` job (default 60s, hard max 180s) and return a job id plus the on-device path. Recording runs in the background so the agent can drive the UI meanwhile. Requires `sensitive_diagnostics`. |
+| `android_screen_record_start` | Start a bounded `screenrecord` job (default 60s, max 180s) and return a job id plus the on-device path. Recording runs in the background so the agent can drive the UI while it records. Requires `sensitive_diagnostics`. |
 | `android_screen_record_stop` | Stop the recording, pull the MP4 into sensitive artifact storage, and delete it from the device. The device-side delete runs even when the pull retrieves nothing. Requires `sensitive_diagnostics`. |
 | `android_job_status` | Return the current state and artifact (if any) of a managed job. |
 | `android_job_cancel` | Cancel a running managed job and release its device lock. |

@@ -6,7 +6,7 @@ import com.droidagentkit.core.ToolGroup
 
 /**
  * Builds a [CapabilitySummary] from the running server's configuration. The summary is a factual
- * report of what the server exposes and enables — it is never used to inflate readiness scoring.
+ * report of what the server exposes and enables; it is never used to inflate readiness scoring.
  */
 object CapabilitySummaryBuilder {
     private val DANGEROUS_CAPABILITIES =

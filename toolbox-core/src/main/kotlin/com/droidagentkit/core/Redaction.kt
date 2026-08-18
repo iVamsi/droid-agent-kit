@@ -139,7 +139,7 @@ class Redactor(
 
     /**
      * Runs one pattern under a matching budget. A pattern that blows the budget is skipped and
-     * reported rather than allowed to hang the caller — the remaining rules still run, so built-in
+     * reported rather than allowed to hang the caller; the remaining rules still run, so built-in
      * redaction is never lost because a user-supplied pattern misbehaved.
      */
     private fun apply(

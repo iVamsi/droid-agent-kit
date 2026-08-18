@@ -72,7 +72,7 @@ class ToolProviderRegistry(
                     "warnings" to listOf("unknown-tool"),
                 )
         // listTools() filters by exposedGroups, but MCP's tools/call is a free-form JSON-RPC
-        // method — a client isn't required to have seen a tool via tools/list before calling it
+        // method: a client isn't required to have seen a tool via tools/list before calling it
         // by name. Without this check, opt-in groups would only be a listing-time convenience,
         // not an actual access-control boundary.
         if (provider.group !in exposedGroups) {

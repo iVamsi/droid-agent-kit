@@ -6,7 +6,36 @@ pre-release convention `0.y.z-alpha` until a stable 1.0 release.
 
 ## Unreleased
 
+### Added
+
+- `android_screen_record_start` and `android_screen_record_stop` in the `device_read` group, gated
+  on `sensitive_diagnostics`. Recording runs as a bounded managed job so the agent can drive the UI
+  while it records. Stop pulls the MP4 into sensitive artifact storage and deletes it from the
+  device; that delete runs even when the pull retrieves nothing.
+- A `compose_recomposition` analysis for `android_perfetto_analyze`, reporting the most-recomposed
+  composables. It returns no rows unless the app was built with
+  `androidx.compose.runtime:runtime-tracing`, and reports that as "not measured" rather than as
+  zero recompositions.
+- `android_test_run` now reports androidx macrobenchmark metrics when a run produced
+  `*-benchmarkData.json`. Startup metrics and sampled frame percentiles are kept separate rather
+  than merged, since the two are not interchangeable. The key is absent when no benchmark ran.
+- The nightly emulator job covers screen recording end to end and runs the Perfetto SQL through a
+  real Trace Processor, pinned by version and checksum.
+
+### Changed
+
+- Gradle 9.7.0, shadow 9.6.1, logback 1.6.2, and the GitHub Actions bumped to current majors.
+- Regenerating `gradle/verification-metadata.xml` no longer pins Kotlin release-candidate
+  checksums. KGP's ABI-validation classpath asked for the newest build tools, and
+  `--write-verification-metadata` resolves every resolvable configuration; it is now pinned to the
+  catalog version.
+
 ### Fixed
+
+- CodeQL failed on every pull request. `codeql-action/init` had been bumped to v4.37.6 while
+  `analyze` and `upload-sarif` stayed on v4.37.3, and the mismatch surfaces as a configuration
+  error rather than a version complaint. All three are pinned together, and a hygiene check now
+  fails when they drift apart.
 
 - The 0.3.0-alpha release published to npm but left `latest` pointing at 0.2.7-alpha. The dist-tag
   logic published prereleases to `next` and then ran `npm dist-tag add ... latest`, which cannot

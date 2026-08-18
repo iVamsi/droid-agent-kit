@@ -573,7 +573,7 @@ class DeviceControlToolProviderTest {
     @Test
     fun `a denied interaction is not recorded`() {
         // Recording after the fact and only on success keeps a flow from replaying a step that
-        // never actually worked -- the capability here is deliberately absent.
+        // never worked. The capability here is deliberately absent.
         val root = Files.createTempDirectory("dak-flow-denied")
         val dispatcher = dispatcher(root, controlConfig(root, emptySet()))
         dispatcher.call("android_flow_record_start", mapOf("name" to "denied"))
@@ -649,9 +649,8 @@ class DeviceControlToolProviderTest {
     @Test
     fun `a recorded flow is marked sensitive and passes its text through redaction`() {
         // android_input_type captures whatever was typed, so a recorded login flow contains the
-        // password. The first version of this feature wrote those files as PUBLIC, which is the
-        // exact flag report bundles and `audit --redact-public` use to decide what is safe to
-        // share -- so it actively defeated both controls.
+        // password. PUBLIC is the flag report bundles and `audit --redact-public` use to decide
+        // what is safe to share, so these files have to be SENSITIVE.
         val root = Files.createTempDirectory("dak-flow-secrets")
         val dispatcher = dispatcher(root, controlConfig(root, setOf(Capability.DEVICE_INPUT, Capability.APP_CONTROL)))
 

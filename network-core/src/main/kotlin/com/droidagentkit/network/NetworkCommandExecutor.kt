@@ -4,7 +4,7 @@ package com.droidagentkit.network
  * Hermetic seam for the network-interception tranche. The MCP provider supplies an implementation
  * that delegates to [com.droidagentkit.device.DeviceToolContext] (and ultimately ProcessRunner);
  * tests supply a fake that returns canned adb output. All commands are fully-formed adb argument
- * lists — no shell string escaping, no arbitrary host execution.
+ * lists: no shell string escaping, no arbitrary host execution.
  */
 interface NetworkCommandExecutor {
     /**

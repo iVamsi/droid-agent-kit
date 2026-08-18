@@ -105,7 +105,7 @@ data class ToolCallContext(
     val progress: ProgressReporter = ProgressReporter.NONE,
     /**
      * Reaches the human behind the client. Defaults to unavailable, which the policy turns into a
-     * denial rather than a pass -- a transport with no way to ask must not be able to satisfy a
+     * denial rather than a pass: a transport with no way to ask must not be able to satisfy a
      * requirement that a human approved something.
      */
     val confirmer: InteractiveConfirmer = InteractiveConfirmer.UNAVAILABLE,
@@ -1157,7 +1157,7 @@ class DroidAgentMcpDispatcher(
                 description = "Raw UIAutomator accessibility XML (accessibility hierarchy, not Layout Inspector)",
                 sensitivity = com.droidagentkit.core.ArtifactSensitivity.SENSITIVE,
             )
-        // The full tree is the single largest payload any tool returns -- a busy screen runs to
+        // The full tree is the largest payload any tool returns: a busy screen runs to
         // tens of thousands of tokens. In compact mode only the interactive nodes come back
         // inline; the complete hierarchy is still on disk as an artifact either way, so nothing is
         // lost, only deferred.
@@ -1405,7 +1405,7 @@ class DroidAgentMcpDispatcher(
      * De-obfuscates the captured log when an R8 mapping is available.
      *
      * A release stack trace reads `a.b.c.a(Unknown Source)`, which tells an agent nothing. The
-     * mapping path is confined through the operation policy like any other host path -- it is an
+     * mapping path is confined through the operation policy like any other host path; it is an
      * argument the model supplies.
      */
     private fun applyRetrace(

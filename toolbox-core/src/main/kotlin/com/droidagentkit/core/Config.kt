@@ -56,7 +56,7 @@ data class SafetyConfig(
     val budgets: BudgetLimits = BudgetLimits(),
 ) {
     /**
-     * A wildcard pattern must never sweep in a task that rewrites the working tree — `:*:lint*`
+     * A wildcard pattern must never sweep in a task that rewrites the working tree: `:*:lint*`
      * would otherwise admit `lintFix`, and globs cannot express "lint but not lintFix". Naming
      * such a task exactly (or setting [allowAnyGradleTask]) is explicit consent and still works.
      */
@@ -253,7 +253,7 @@ object DroidAgentConfigLoader {
 
     /**
      * Applies the trust split. Privileged fields are taken from the policy outright. The two
-     * fields a project may legitimately set — the Gradle task allowlist and the command timeout —
+     * fields a project may legitimately set: the Gradle task allowlist and the command timeout —
      * are *narrowed* against the policy rather than replaced, so a project file can never end up
      * with more authority than the policy grants.
      */
@@ -316,7 +316,7 @@ object DroidAgentConfigLoader {
      * Keeps only the project patterns that are at least as specific as something the policy
      * already allows. A pattern that would admit tasks the policy does not is dropped with a
      * warning rather than failing the load, matching how privileged keys are handled elsewhere.
-     * If nothing survives, the policy's own list applies — never an empty (or wider) allowlist.
+     * If nothing survives, the policy's own list applies, never an empty (or wider) allowlist.
      */
     private fun narrowGradleTasks(
         projectPatterns: List<String>,
@@ -345,7 +345,7 @@ object DroidAgentConfigLoader {
      * A `*` in [outer] absorbs any part of [inner], including [inner]'s own `*`. A literal in
      * [outer] must be met by the identical literal in [inner]; if [inner] has a `*` there it can
      * generate a character [outer] would reject, so the pair fails. That asymmetry is what makes
-     * the check sound — it can reject a legitimate narrowing, but never accepts a widening.
+     * the check sound: it can reject a legitimate narrowing, but never accepts a widening.
      */
     internal fun globSubsumes(
         outer: String,
@@ -471,15 +471,15 @@ object DroidAgentConfigLoader {
             val fullKey = "$section.$key"
             // In project files, privileged keys are ignored with a warning. Assignments equal to the
             // built-in default (allowAdbInput: false, redaction.enabled: true, …) are silent no-ops so
-            // previously generated configs don't spam warnings. The reverse direction — granting a
-            // capability or disabling redaction — is always blocked here.
+            // previously generated configs don't spam warnings. The reverse direction, granting a
+            // capability or disabling redaction, is always blocked here.
             if (source == ConfigSource.PROJECT && fullKey in privilegedKeys) {
                 val isDefaultNoop =
                     when (fullKey) {
                         // requireInteractiveConfirm is deliberately absent: for every other key
                         // here the dangerous direction is `true`, so "equals the default" is a
                         // harmless no-op worth staying quiet about. For this one the dangerous
-                        // direction is `false` -- a project trying to switch a protection *off* --
+                        // direction is `false` (a project trying to switch a protection *off*)
                         // and that must never be swallowed silently.
                         "safety.allowAdbInput", "safety.allowEmulatorStart", "safety.allowAnyGradleTask" -> value == "false"
                         "redaction.enabled" -> value == "true"

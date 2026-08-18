@@ -7,7 +7,7 @@ dependencies {
 }
 
 /**
- * Coverage is gated on the classes that decide authority, not on a project-wide average — an
+ * Coverage is gated on the classes that decide authority, not on a project-wide average. An
  * average can stay healthy while exactly the security-critical code rots. The floor sits below
  * current values so this is a regression alarm rather than a tripwire to be tuned constantly.
  *

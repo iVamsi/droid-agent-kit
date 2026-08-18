@@ -92,7 +92,7 @@ subprojects {
  * added (mcp-server 84%, android-device-core 91%, android-inspector 94%, auditor-cli 96%): the
  * point is to catch a real regression, not to force a retune on every commit.
  *
- * toolbox-core is deliberately absent -- it configures a stricter, class-filtered rule of its own.
+ * toolbox-core is deliberately absent; it configures a stricter, class-filtered rule of its own.
  */
 val coverageFloors =
     mapOf(

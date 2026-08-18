@@ -66,7 +66,7 @@ class JsonAndCommandTest {
                 redactor = Redactor(DroidAgentConfig.default().redaction),
                 artifactWriter = ArtifactWriter(outputDir),
             )
-        // PNG magic bytes — would be corrupted if decoded as UTF-8
+        // PNG magic bytes, which would be corrupted if decoded as UTF-8
         val tmpFile = outputDir.resolve("test.bin")
         val expectedBytes = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
         java.nio.file.Files

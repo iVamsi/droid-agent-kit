@@ -48,7 +48,7 @@ sealed interface ResourceReadResult {
 
 /**
  * Registry of concrete resources and URI templates. Providers register resources at construction;
- * the registry never resolves paths itself — it delegates to the registered readers, keeping
+ * the registry never resolves paths itself; it delegates to the registered readers, keeping
  * path-confinement logic in the dispatcher/providers that already enforce it.
  */
 class McpResourceRegistry {

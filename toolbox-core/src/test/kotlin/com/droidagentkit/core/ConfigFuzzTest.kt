@@ -7,7 +7,7 @@ import java.nio.file.Files
 import kotlin.random.Random
 
 /**
- * Property-ish fuzz: malformed YAML must never hang or throw out of the loader — Invalid or Loaded only.
+ * Property-ish fuzz: malformed YAML must never hang or throw out of the loader. Invalid or Loaded only.
  */
 class ConfigFuzzTest {
     @Test

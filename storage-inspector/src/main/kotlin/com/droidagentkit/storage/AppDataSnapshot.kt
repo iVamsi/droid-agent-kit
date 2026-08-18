@@ -266,7 +266,7 @@ object FileTreeParser {
 
     /**
      * `find <rel>` already prefixes each line with the path it was given, so [basePath] is not
-     * needed to build the result — it is used to confirm the device stayed inside the subtree that
+     * needed to build the result; it is used to confirm the device stayed inside the subtree that
      * was asked for. Output arriving from a device the toolkit does not trust should not be able to
      * introduce entries outside the requested root.
      */
