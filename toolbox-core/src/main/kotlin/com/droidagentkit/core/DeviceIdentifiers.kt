@@ -4,11 +4,10 @@ package com.droidagentkit.core
  * Format checks for the two agent-supplied identifiers that reach a command line.
  *
  * Shell injection is already handled: every post-`shell` argument is single-quoted by [ShellQuote]
- * and commands are built as argv lists, never as strings. What that does not cover is *argument*
- * injection — a serial or package beginning with `-` lands in flag position for `adb -s <serial>`
- * or `run-as <pkg>` and is read as an option rather than a value. Constraining both to their real
- * grammars removes that, and rejects the malformed input that would otherwise produce a confusing
- * failure deeper in the stack.
+ * and commands are built as argv lists. That does not cover argument injection. A serial or package
+ * beginning with `-` lands in flag position for `adb -s <serial>` or `run-as <pkg>` and is read as
+ * an option. Constraining both to their real grammars removes that, and rejects malformed input
+ * that would otherwise fail confusingly deeper in the stack.
  */
 object DeviceIdentifiers {
     private val PACKAGE = Regex("^[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z0-9_]+)+$")

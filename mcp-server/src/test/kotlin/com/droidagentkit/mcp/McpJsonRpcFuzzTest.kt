@@ -6,7 +6,7 @@ import org.junit.Test
 import kotlin.random.Random
 
 /**
- * Malformed JSON-RPC input must never throw — handler returns an error envelope or null.
+ * Malformed JSON-RPC input must never throw. The handler returns an error envelope or null.
  */
 class McpJsonRpcFuzzTest {
     @Test

@@ -31,14 +31,14 @@ fun interface BinaryProbe {
 /**
  * Answers "why isn't this working?" in one place, before a tool call fails halfway through.
  *
- * The split between FAIL and WARN is the important design decision. Most installs never enable
- * device control, Perfetto, or network capture, so a missing `mitmproxy` is not a problem — it is
- * only reported when the group that needs it is actually turned on. Conversely a policy file that
- * does not parse is always a failure: the loader falls back to defaults, so the server keeps
- * running with *less* authority than the user configured, and nothing else would ever say so.
+ * A missing optional binary is a WARN, and only when the group that needs it is enabled. Most
+ * installs never turn on device control, Perfetto, or network capture, so a missing `mitmproxy`
+ * says nothing.
  *
- * Everything the environment supplies is injected so the checks can be tested without spawning
- * processes or depending on what happens to be installed on the machine running the tests.
+ * A policy file that does not parse is always a FAIL. The loader falls back to defaults, so the
+ * server runs with less authority than the user configured and nothing else would report it.
+ *
+ * Environment lookups are injected so the checks can be tested without spawning processes.
  */
 class DoctorChecks(
     private val probe: BinaryProbe,

@@ -128,7 +128,7 @@ class ArtifactWriter(
         sensitivity: ArtifactSensitivity = ArtifactSensitivity.PUBLIC,
     ): ArtifactRef {
         // Resolved through links: a lexical check would let a symlink inside the output directory
-        // register — and hash — a file anywhere on disk.
+        // register (and hash) a file anywhere on disk.
         val resolved = runCatching { file.toRealPath() }.getOrDefault(file.toAbsolutePath().normalize())
         val outputRoot = runCatching { outputDir.toRealPath() }.getOrDefault(outputDir.toAbsolutePath().normalize())
         require(resolved.startsWith(outputRoot)) { "Artifact path '$resolved' is outside the configured output directory." }
@@ -182,7 +182,7 @@ class ArtifactWriter(
      * [sanitize] stops traversal in the name, but the output directory lives under the target
      * project (`build/droidagentkit/` by default), so a repository can commit a link there whose
      * name matches an artifact this writer produces. Writing would then follow it out of the
-     * project — a write primitive controlled by the repository being inspected.
+     * project, a write primitive controlled by the repository being inspected.
      */
     private fun rejectSymlink(path: Path) {
         require(!Files.isSymbolicLink(path)) {

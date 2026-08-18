@@ -56,7 +56,7 @@ class DoctorChecksTest {
 
     @Test
     fun `a missing adb warns rather than fails`() {
-        // Plenty of real use is project-only -- inspect, audit, lint, crash triage. Failing the
+        // Plenty of real use is project-only: inspect, audit, lint, crash triage. Failing the
         // whole doctor because no device tooling is installed would train people to ignore it.
         val report = checks().run(project(), policy())
 
@@ -79,7 +79,7 @@ class DoctorChecksTest {
     @Test
     fun `an unparseable user policy fails and names the line`() {
         // The policy is the only place grants come from. If it does not parse, the server falls
-        // back to defaults -- quietly running with less authority than the user believes.
+        // back to defaults, quietly running with less authority than the user believes.
         val report =
             checks().run(
                 project(),

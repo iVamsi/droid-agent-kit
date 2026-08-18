@@ -10,8 +10,8 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Cancellation only matters if the *process* dies. Asserting that `run` returned promptly would
- * pass even while a Gradle daemon kept building in the background, holding the build lock — which
- * is the exact failure this is meant to prevent.
+ * pass even while a Gradle daemon keeps building in the background, holding the build lock. That
+ * is the failure this is meant to prevent.
  */
 class ProcessRunnerCancellationTest {
     /**

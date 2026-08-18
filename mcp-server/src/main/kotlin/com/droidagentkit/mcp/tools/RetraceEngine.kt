@@ -4,15 +4,11 @@ package com.droidagentkit.mcp.tools
  * Turns an obfuscated release stack trace back into original symbols using an R8/ProGuard
  * `mapping.txt`.
  *
- * Release crashes are the ones that matter and the ones nobody can read: `a.b.c.a(Unknown Source)`
- * tells an agent nothing, which leaves crash triage on a release build as guesswork. This is a
- * focused reimplementation rather than a call out to R8's `retrace`, because that would add a
- * multi-megabyte dependency for one text transformation, and the mapping format is stable and
- * small enough to parse directly.
+ * Written here rather than shelling out to R8's `retrace`, which would add a multi-megabyte
+ * dependency for one text transformation. The mapping format is small and stable enough to parse.
  *
- * Deliberately conservative: a frame that cannot be mapped with confidence is left exactly as it
- * was. A wrong symbol in a stack trace is worse than an obfuscated one, because it sends the
- * reader somewhere real that had nothing to do with the crash.
+ * A frame that cannot be mapped with confidence is left alone. A wrong symbol is worse than an
+ * obfuscated one, because it points the reader at real code unrelated to the crash.
  */
 object RetraceEngine {
     internal data class MethodMapping(

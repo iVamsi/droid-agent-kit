@@ -39,9 +39,9 @@ data class OperationRequest(
     val devicePaths: List<String> = emptyList(),
     /**
      * Guards against a model invoking a destructive tool *by accident*. This flag arrives in the
-     * MCP tool arguments, so it is supplied by the agent rather than by a human — a compromised
-     * or prompt-injected agent can simply pass `true`. The control that actually bounds a hostile
-     * agent is the capability set in the user policy, which the agent cannot influence.
+     * MCP tool arguments, so it is supplied by the agent rather than by a human. A compromised or
+     * prompt-injected agent can simply pass `true`. What actually bounds a hostile agent is the
+     * capability set in the user policy, which the agent cannot influence.
      */
     val confirmDestructive: Boolean = false,
     val mutating: Boolean = false,
@@ -71,7 +71,7 @@ enum class InteractiveConfirmation {
     APPROVED,
     DECLINED,
 
-    /** No channel exists to ask on -- the host does not support it, or none is connected. */
+    /** No channel exists to ask on: the host does not support it, or none is connected. */
     UNAVAILABLE,
 }
 
@@ -95,7 +95,7 @@ class DefaultOperationPolicy(
     private val config: SafetyConfig,
     private val allowedRoots: List<Path>,
     // `budget` precedes `confirmer` so the trailing-lambda form at call sites keeps binding to the
-    // confirmer rather than silently changing meaning -- the same trap ProcessRunner.run has.
+    // confirmer rather than silently changing meaning, the same trap ProcessRunner.run has.
     private val budget: InvocationBudget = InvocationBudget(config.budgets),
     private val confirmer: InteractiveConfirmer = InteractiveConfirmer.UNAVAILABLE,
 ) : OperationPolicy {
@@ -201,7 +201,7 @@ class DefaultOperationPolicy(
          *
          * `normalize()` alone is lexical, so a link inside an allowed root pointed anywhere and the
          * containment check still passed. A pull destination legitimately may not exist, so this
-         * resolves the deepest ancestor that does and re-appends the rest — enough to catch a link
+         * resolves the deepest ancestor that does and re-appends the rest, which catches a link
          * anywhere along the existing part of the path.
          */
         fun resolveThroughLinks(path: Path): Path {

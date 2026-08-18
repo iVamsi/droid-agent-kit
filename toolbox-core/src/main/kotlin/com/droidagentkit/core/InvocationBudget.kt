@@ -8,13 +8,11 @@ import java.time.Instant
  * Caps how much a single server session can spend, independent of whether each individual call was
  * authorized.
  *
- * The capability system answers "may this agent do this at all?" but says nothing about volume. A
- * prompt-injected agent holding a legitimately granted capability can still clear app data in a
- * loop, or fill the disk with bugreports, and every one of those calls is individually allowed. The
- * budget bounds the blast radius without needing to predict the abuse.
+ * Capabilities answer "may this agent do this at all?" and say nothing about volume. An agent
+ * holding a granted capability can still clear app data in a loop or fill the disk with bugreports,
+ * and every one of those calls is individually allowed.
  *
- * The clock is injected because rate limits are otherwise untestable without sleeping, and tests
- * that sleep are flaky.
+ * The clock is injected so rate limits can be tested without sleeping.
  */
 class InvocationBudget(
     private val limits: BudgetLimits = BudgetLimits(),

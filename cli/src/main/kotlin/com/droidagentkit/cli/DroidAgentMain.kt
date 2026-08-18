@@ -411,7 +411,7 @@ class DroidAgentCli(
             expansion = wizardResult
         }
 
-        // Grants (capabilities, tool groups) go to the user policy — the only config the server
+        // Grants (capabilities, tool groups) go to the user policy, the only config the server
         // honors them from. The project config is seeded separately, without grants.
         Files.createDirectories(policyPath.parent)
         Files.writeString(policyPath, ConfigYaml.renderUserPolicy(expansion.groups, expansion.capabilities))

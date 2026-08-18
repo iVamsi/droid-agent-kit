@@ -47,7 +47,7 @@ class DeviceControlToolProvider(
 
     /**
      * Records only what already happened. It grants nothing and gates nothing, so it needs no
-     * capability of its own -- every step it captures was authorized on its own terms first.
+     * capability of its own: every step it captures was authorized on its own terms first.
      */
     private val recorder = FlowRecorder()
 
@@ -1034,17 +1034,16 @@ class DeviceControlToolProvider(
         val flow = recorder.stop()
         val safeName = flow.name.replace(Regex("[^A-Za-z0-9._-]"), "-")
         val flowDir = context.artifactOutputDir(root).resolve("flows").also { Files.createDirectories(it) }
-        // A recording captures android_input_type verbatim, which means it captures whatever was
-        // typed -- including a password entered during a login flow. Two consequences follow, and
-        // both were wrong in the first version of this feature.
+        // A recording captures android_input_type verbatim, so it captures whatever was typed,
+        // including a password entered during a login flow.
         //
-        // Redaction runs over the emitted text, so token- and key-shaped values are masked the same
-        // way they are in command output. And the artifacts are SENSITIVE, not PUBLIC: the
-        // sensitivity flag is what report bundles and `audit --redact-public` key off, so marking a
-        // file containing typed credentials PUBLIC actively defeats those controls.
+        // Redaction runs over the emitted text, masking token- and key-shaped values the same way
+        // command output is masked. The artifacts are SENSITIVE rather than PUBLIC, because report
+        // bundles and `audit --redact-public` key off that flag; marking a file of typed
+        // credentials PUBLIC would defeat both.
         //
-        // Redaction is still best-effort pattern matching -- it will not recognise "hunter2" as a
-        // password -- so the result also says plainly that the flow may contain secrets.
+        // Redaction is best-effort pattern matching and will not recognise "hunter2" as a password,
+        // so the result also states plainly that the flow may contain secrets.
         val redactor = Redactor(context.config.redaction)
         val redactions = mutableListOf<String>()
         val typedText = flow.steps.any { it.tool == "android_input_type" }

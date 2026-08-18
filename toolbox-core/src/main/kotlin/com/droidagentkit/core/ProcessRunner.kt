@@ -59,7 +59,7 @@ class ProcessRunner(
             if (!completed) terminate(process)
             // Bounded rather than an open-ended get(). The reader blocks until the stdout pipe
             // closes, and a grandchild that inherited the pipe can hold it open after the process
-            // we spawned is dead -- `sh -c "sleep 120"` forking `sleep` is the simple case. Waiting
+            // we spawned is dead: `sh -c "sleep 120"` forking `sleep` is the simple case. Waiting
             // forever there would hang the whole tool call on a process nobody is waiting for.
             capturedOutput =
                 try {
@@ -191,7 +191,7 @@ class ProcessRunner(
         } catch (_: java.io.IOException) {
             // Destroying a process closes its stdout under this reader, which surfaces as
             // "Stream closed" rather than a clean EOF. On the timeout and cancellation paths that
-            // is the expected end of the stream, not a failure -- the bytes already read are still
+            // is the expected end of the stream, not a failure; the bytes already read are still
             // the best account of what the command produced, and throwing here would replace a
             // useful partial result with an opaque ExecutionException.
         }

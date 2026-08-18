@@ -24,13 +24,12 @@ data class RecordedFlow(
 /**
  * Captures the device interactions an agent performs so they can be replayed later.
  *
- * The competitive gap this closes: `android_run_flow` could already *execute* a flow, but nothing
- * could produce one. An exploratory agent session was therefore disposable — the value evaporated
- * when the conversation ended. Recording turns it into a regression test.
+ * `android_run_flow` can execute a flow but cannot produce one, so an exploratory agent session
+ * leaves nothing behind. Recording turns it into a regression test.
  *
- * Recording observes calls that were already authorized; it grants nothing. The device serial is
- * dropped from every step because it identifies the machine that recorded the flow, not the flow
- * itself, and a replay supplies its own.
+ * Recording observes calls that were already authorized and grants nothing. The device serial is
+ * dropped from every step: it identifies the machine that recorded the flow, not the flow, and a
+ * replay supplies its own.
  */
 class FlowRecorder(
     private val clock: Clock = Clock.systemUTC(),
