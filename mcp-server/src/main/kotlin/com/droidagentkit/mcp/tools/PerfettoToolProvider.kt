@@ -100,7 +100,9 @@ class PerfettoToolProvider(
                     "traceProcessorShell" to str("Optional path to trace_processor_shell. Defaults to safety.traceProcessorPath."),
                     "analyses" to
                         str(
-                            "Comma-separated analysis names (cpu_utilization, main_thread_slices, frame_jank, binder_latency, contention). Defaults to all.",
+                            "Comma-separated analysis names (cpu_utilization, main_thread_slices, frame_jank, binder_latency, " +
+                                "contention, compose_recomposition). Defaults to all. compose_recomposition reports no rows " +
+                                "unless the app was built with androidx.compose.runtime:runtime-tracing.",
                         ),
                 ),
         )

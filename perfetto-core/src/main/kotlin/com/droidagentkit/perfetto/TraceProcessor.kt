@@ -14,6 +14,7 @@ enum class PerfettoAnalysisType(
     FRAME_JANK("frame_jank.sql"),
     BINDER_LATENCY("binder_latency.sql"),
     CONTENTION("contention.sql"),
+    COMPOSE_RECOMPOSITION("compose_recomposition.sql"),
 }
 
 /** Loads versioned SQL from the module resources. */
@@ -250,6 +251,13 @@ object PerfettoAnalysis {
                 "$label: ${rows.size} binder call site(s); slowest = $topBinder."
             }
             PerfettoAnalysisType.CONTENTION -> "$label: ${rows.size} contention wait(s) recorded."
+            PerfettoAnalysisType.COMPOSE_RECOMPOSITION -> {
+                val hottest = top.firstOrNull()
+                val name = hottest?.get("composable_name")?.toString() ?: "unknown"
+                val count = hottest?.get("recomposition_count")?.toString()?.toLongOrNull() ?: 0L
+                "$label: ${rows.size} composable(s) traced; most recomposed = $name ($count recompositions). " +
+                    "Counts come from Compose composition tracing, not from inferred UI state."
+            }
         }
     }
 
