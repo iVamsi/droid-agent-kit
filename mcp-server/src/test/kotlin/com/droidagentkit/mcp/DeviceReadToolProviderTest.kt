@@ -376,6 +376,23 @@ class DeviceReadToolProviderTest {
     }
 
     @Test
+    fun `screen record stop refuses a job id it did not mint`() {
+        // jobId arrives from the client and becomes part of an on-device path, so it is matched
+        // against the shape start produces rather than escaped.
+        val root = Files.createTempDirectory("dak-screenrecord-foreign-job")
+        val dispatcher = sensitiveDiagnosticsDispatcher(root)
+
+        val result =
+            dispatcher.call(
+                "android_screen_record_stop",
+                mapOf("rootPath" to root.toString(), "deviceSerial" to "emulator-5554", "jobId" to "../../etc/passwd"),
+            )
+
+        assertEquals("blocked", result["status"])
+        assertTrue((result["warnings"] as List<*>).contains("invalid-job-id"))
+    }
+
+    @Test
     fun `screen record stop pulls the mp4 as a sensitive artifact and clears the device file`() {
         val root = Files.createTempDirectory("dak-screenrecord-roundtrip")
         val dispatcher = sensitiveDiagnosticsDispatcher(root)
@@ -400,8 +417,8 @@ class DeviceReadToolProviderTest {
         assertTrue("expected a screen-recording artifact in $artifacts", artifacts.any { (it as Map<*, *>)["type"] == "screen_recording" })
         assertTrue(artifacts.any { (it as Map<*, *>)["sensitivity"] == "sensitive" })
 
-        // The recording is pulled off the device and then deleted: leaving an mp4 of the user's
-        // screen sitting on shared storage is the whole hazard this tool has to avoid.
+        // The recording is pulled off the device and then deleted; an mp4 of the user's screen must
+        // not be left behind on shared storage.
         assertTrue(awaitFile(root.resolve("pull-calls.log")).contains(devicePath))
         assertTrue(awaitFile(root.resolve("rm-calls.log")).contains(devicePath))
     }
@@ -433,14 +450,6 @@ class DeviceReadToolProviderTest {
     }
 
     private fun fakeAdb(root: java.nio.file.Path): String {
-        // These fakes are POSIX shell scripts, and that is load-bearing rather than incidental:
-        // the `shell` branch re-evaluates joined argv the way a real device's /system/bin/sh does,
-        // which is what lets them exercise shell-injection regressions at all. Reimplementing that
-        // in batch would weaken the coverage it exists to provide, so on Windows these skip.
-        org.junit.Assume.assumeTrue(
-            "requires a POSIX shell for the fake adb/emulator scripts",
-            !System.getProperty("os.name").startsWith("Windows"),
-        )
         val script = root.resolve("fake-adb.sh")
         Files.writeString(
             script,

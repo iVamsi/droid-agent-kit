@@ -627,8 +627,8 @@ class DeviceReadToolProvider(
         val devicePath = devicePathFor(jobId)
         val warnings = mutableListOf<String>()
 
-        // Cancelling signals screenrecord to stop and flush; a job that already hit its own
-        // --time-limit is simply terminal, which is not an error -- the file is still on the device.
+        // Cancelling signals screenrecord to stop and flush. A job that already reached its own
+        // --time-limit is terminal rather than failed, and its file is still on the device.
         val snapshot = context.jobRunner().cancel(jobId)
         if (snapshot.state == JobState.EXPIRED) warnings += "unknown-job"
 
@@ -649,8 +649,8 @@ class DeviceReadToolProvider(
             )
         if (pull.status == ResultStatus.BLOCKED) return context.resultMap(pull)
 
-        // Deleting runs whether or not the pull produced a file: an unretrieved recording of the
-        // user's screen left on shared storage is the worse of the two outcomes.
+        // Deleting runs whether or not the pull produced a file: a lost recording is preferable to
+        // one left behind on the device.
         val remove =
             runAdbText(serial, listOf("rm", "-f", devicePath), "adb-screenrecord-remove", root, timeoutSeconds = 30)
         if (remove.status != ResultStatus.SUCCESS) warnings += "device-file-not-removed"

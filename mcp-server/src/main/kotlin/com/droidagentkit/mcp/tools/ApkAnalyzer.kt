@@ -6,9 +6,8 @@ import java.util.zip.ZipFile
 /**
  * Reports where an APK's size actually goes, and what changed between two of them.
  *
- * "The app got bigger" is one of the most common Android questions and one an agent could not
- * previously answer at all. An APK is a zip, so this reads the central directory with the JDK's own
- * `ZipFile` -- no new dependency, and no need to unpack anything.
+ * An APK is a zip, so this reads the central directory with the JDK's own `ZipFile` -- no new
+ * dependency, and no need to unpack anything.
  *
  * Both compressed and uncompressed totals are reported because they answer different questions:
  * download size is what the user pays for, installed size is what the device pays for, and a change

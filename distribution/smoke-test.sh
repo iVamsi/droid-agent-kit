@@ -145,8 +145,8 @@ resolveJava({
 
 
 echo "smoke: launcher forwards subcommands to the CLI"
-# The launcher used to run serve-mcp and nothing else, so `init`/`audit`/`doctor` needed a
-# hand-written `java -jar`. Assert a forwarded command actually reaches the CLI and answers.
+# Assert a forwarded subcommand actually reaches the CLI and answers, so `init`/`audit`/`doctor`
+# do not need a hand-written `java -jar`.
 out="$(DROIDAGENT_BIN="$CLI" node "$LAUNCHER" inspect --project "$ROOT/samples/basic-compose" --format json)"
 case "$out" in
   *BasicComposeSample*) echo "smoke: subcommand passthrough answered" ;;

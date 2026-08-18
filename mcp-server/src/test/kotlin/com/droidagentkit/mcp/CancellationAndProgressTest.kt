@@ -134,8 +134,8 @@ class CancellationAndProgressTest {
 
     @Test
     fun `the stdio loop answers a cancellation while a call is still running`() {
-        // The end-to-end property: before this, the loop handled one message to completion before
-        // reading the next, so a cancel sent during a long build was not seen until it finished.
+        // The end-to-end property: a cancel sent during a long build has to be read while the build
+        // is still running, not after it finishes.
         val dispatcher = BlockingDispatcher()
         val written = ConcurrentLinkedQueue<String>()
         val server = DroidAgentStdioServer(dispatcher)

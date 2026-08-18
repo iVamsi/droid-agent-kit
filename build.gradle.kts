@@ -56,13 +56,11 @@ subprojects {
         }
     }
 
-    // KGP's ABI-validation compat classpath asks for the *newest* Kotlin build tools rather than the
-    // one this build compiles with, so it currently resolves a 2.4.20 release candidate. No task here
-    // uses ABI validation, and an ordinary build never resolves the configuration -- but
-    // `--write-verification-metadata` (docs/security-posture.md) resolves every resolvable
-    // configuration, so regenerating the trust file would silently pin RC checksums that no build
-    // consumes and that change again with each new prerelease. Pin it to the catalog Kotlin version
-    // so the generated metadata is reproducible.
+    // KGP's ABI-validation compat classpath requests the newest Kotlin build tools rather than the
+    // one this build compiles with, which currently resolves a 2.4.20 release candidate. Nothing here
+    // uses ABI validation and an ordinary build never resolves it, but `--write-verification-metadata`
+    // (docs/security-posture.md) resolves every resolvable configuration, so regenerating the trust
+    // file would pin RC checksums that no build consumes. Pin to the catalog version instead.
     configurations.matching { it.name.startsWith("kotlinAbiValidation") }.configureEach {
         resolutionStrategy.eachDependency {
             if (requested.group == "org.jetbrains.kotlin") {

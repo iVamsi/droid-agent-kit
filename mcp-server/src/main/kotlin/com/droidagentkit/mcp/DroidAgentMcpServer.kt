@@ -172,11 +172,10 @@ class DroidAgentStdioServer(
      * Runs the stdio message loop until [lines] is exhausted.
      *
      * Tool calls execute on a worker pool rather than on the reader thread. That is what makes
-     * cancellation possible at all: the loop previously handled one message to completion before
-     * reading the next, so a `notifications/cancelled` sent during a ten-minute Gradle build was
-     * not read until that build had already finished. Everything else (initialize, tools/list,
-     * the cancellation notification itself) stays on the reader thread, where it is both fast and
-     * correctly ordered.
+     * cancellation possible at all: a reader that handles each message to completion before taking
+     * the next cannot see a `notifications/cancelled` sent during a ten-minute Gradle build until
+     * that build has already finished. Everything else (initialize, tools/list, the cancellation
+     * notification itself) stays on the reader thread, where it is both fast and correctly ordered.
      *
      * Writes are serialized: JSON-RPC frames are newline-delimited, so two threads writing at once
      * would interleave into unparseable output.

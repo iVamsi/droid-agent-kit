@@ -400,8 +400,8 @@ class McpDispatcherTest {
 
     @Test
     fun `test run omits the macrobenchmark key entirely for an ordinary unit test run`() {
-        // An empty macrobenchmark block on every unit-test run would be pure token cost for the
-        // agent reading it, so absence has to mean absence.
+        // Absence means absence: an empty block on every unit-test run is output every caller has
+        // to read and discard.
         val root = Files.createTempDirectory("dak-test-run-no-macro")
         val config =
             DroidAgentConfig.default().copy(

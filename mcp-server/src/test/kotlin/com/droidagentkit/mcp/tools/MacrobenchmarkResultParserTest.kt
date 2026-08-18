@@ -41,7 +41,8 @@ class MacrobenchmarkResultParserTest {
         assertEquals(12.3, frame.percentiles["P90"]!!, 0.001)
         assertEquals(15.0, frame.percentiles["P95"]!!, 0.001)
         assertEquals(22.0, frame.percentiles["P99"]!!, 0.001)
-        // Sampled metrics report percentiles rather than min/median/max; inventing them would be a lie.
+        // Sampled metrics carry percentiles rather than min/median/max, and the parser does not
+        // synthesize the ones that are absent.
         assertNull(frame.median)
     }
 
@@ -68,8 +69,7 @@ class MacrobenchmarkResultParserTest {
 
     @Test
     fun `an unreadable benchmark file is reported rather than dropped in silence`() {
-        // A truncated or half-written JSON file used to be indistinguishable from "no benchmarks
-        // ran". The warning is what lets a caller tell those two apart.
+        // The warning separates a truncated or half-written file from "no benchmarks ran".
         val root = withBenchmarkData("broken-benchmarkData.json", "{ this is not json")
 
         val parsed = MacrobenchmarkResultParser.parse(root)

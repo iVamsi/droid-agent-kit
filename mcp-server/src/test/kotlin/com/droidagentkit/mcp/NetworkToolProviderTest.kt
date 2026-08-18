@@ -302,14 +302,6 @@ class NetworkToolProviderTest {
         qemu: String = "1",
         prior: String = "",
     ): String {
-        // These fakes are POSIX shell scripts, and that is load-bearing rather than incidental:
-        // the `shell` branch re-evaluates joined argv the way a real device's /system/bin/sh does,
-        // which is what lets them exercise shell-injection regressions at all. Reimplementing that
-        // in batch would weaken the coverage it exists to provide, so on Windows these skip.
-        org.junit.Assume.assumeTrue(
-            "requires a POSIX shell for the fake adb/emulator scripts",
-            !System.getProperty("os.name").startsWith("Windows"),
-        )
         val script = root.resolve("fake-net-adb.sh")
         Files.writeString(
             script,
