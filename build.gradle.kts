@@ -23,6 +23,10 @@ dependencies {
     kover(project(":cli"))
 }
 
+// Captured out here so the subproject resolution strategies below close over a plain String rather
+// than the catalog accessor, which keeps them configuration-cache friendly.
+val libsKotlinVersion = libs.versions.kotlin.get()
+
 subprojects {
     group = rootProject.group
     version = rootProject.version
@@ -48,7 +52,22 @@ subprojects {
     // own configurations only; logback is never a runtime/test dependency here.
     configurations.matching { it.name.startsWith("ktlint") }.configureEach {
         resolutionStrategy {
-            force("ch.qos.logback:logback-classic:1.6.0", "ch.qos.logback:logback-core:1.6.0")
+            force("ch.qos.logback:logback-classic:1.6.2", "ch.qos.logback:logback-core:1.6.2")
+        }
+    }
+
+    // KGP's ABI-validation compat classpath asks for the *newest* Kotlin build tools rather than the
+    // one this build compiles with, so it currently resolves a 2.4.20 release candidate. No task here
+    // uses ABI validation, and an ordinary build never resolves the configuration -- but
+    // `--write-verification-metadata` (docs/security-posture.md) resolves every resolvable
+    // configuration, so regenerating the trust file would silently pin RC checksums that no build
+    // consumes and that change again with each new prerelease. Pin it to the catalog Kotlin version
+    // so the generated metadata is reproducible.
+    configurations.matching { it.name.startsWith("kotlinAbiValidation") }.configureEach {
+        resolutionStrategy.eachDependency {
+            if (requested.group == "org.jetbrains.kotlin") {
+                useVersion(libsKotlinVersion)
+            }
         }
     }
 
