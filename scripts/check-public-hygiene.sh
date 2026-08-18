@@ -28,3 +28,16 @@ if [ -n "$binary_sources" ]; then
   echo "Binary-skipping scanners, including the check above, silently ignore these." >&2
   exit 1
 fi
+
+# The codeql-action bundle ships init/analyze/upload-sarif as one versioned unit: the CLI that
+# `init` downloads must match the one `analyze` expects. Dependabot opens a separate PR per
+# sub-action, so merging one without the others leaves the pins skewed and every subsequent
+# CodeQL run fails with "configuration error" rather than a readable diff. Require one SHA.
+codeql_shas="$(git grep -h -oE 'github/codeql-action/[a-z-]+@[0-9a-f]{40}' -- '.github/workflows/*.yml' \
+  | sed 's/.*@//' | sort -u)"
+if [ "$(printf '%s\n' "$codeql_shas" | grep -c .)" -gt 1 ]; then
+  echo "github/codeql-action sub-actions are pinned to different commits:" >&2
+  git grep -n -oE 'github/codeql-action/[a-z-]+@[0-9a-f]{40}' -- '.github/workflows/*.yml' >&2
+  echo "Pin init, analyze, and upload-sarif to the same release SHA." >&2
+  exit 1
+fi
