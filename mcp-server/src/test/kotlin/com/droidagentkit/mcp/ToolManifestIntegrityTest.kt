@@ -58,6 +58,6 @@ class ToolManifestIntegrityTest {
 
     companion object {
         // Generated from the full-group listTools() snapshot; update only with intentional API changes.
-        const val PINNED_MANIFEST_SHA256 = "0faa11bdb9408baa450c9c002f780b19cfe0fe5505709e084e650e726f6c5352"
+        const val PINNED_MANIFEST_SHA256 = "58511ea5b73c7161ac1b23f92057c7cf966e7b3233aec6c8ab7e1072ae9f67ed"
     }
 }

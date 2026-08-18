@@ -304,6 +304,134 @@ class DeviceReadToolProviderTest {
         assertTrue(!Files.exists(marker))
     }
 
+    @Test
+    fun `screen record tools are listed only when the device-read group is exposed`() {
+        val root = Files.createTempDirectory("dak-screenrecord-list")
+
+        val exposed = dispatcher(root).listTools().map { it.name }
+        val hidden = DroidAgentMcpDispatcher(DroidAgentConfig.default(), root).listTools().map { it.name }
+
+        assertTrue(exposed.contains("android_screen_record_start"))
+        assertTrue(exposed.contains("android_screen_record_stop"))
+        assertTrue(!hidden.contains("android_screen_record_start"))
+        assertTrue(!hidden.contains("android_screen_record_stop"))
+    }
+
+    @Test
+    fun `screen record start is blocked without the sensitive diagnostics capability`() {
+        val root = Files.createTempDirectory("dak-screenrecord-cap")
+        val dispatcher = dispatcher(root)
+
+        val result =
+            dispatcher.call(
+                "android_screen_record_start",
+                mapOf("rootPath" to root.toString(), "deviceSerial" to "emulator-5554"),
+            )
+
+        assertEquals("blocked", result["status"])
+        assertTrue((result["warnings"] as List<*>).contains("capability-not-enabled"))
+    }
+
+    @Test
+    fun `screen record start is blocked when device serial is missing`() {
+        val root = Files.createTempDirectory("dak-screenrecord-serial")
+        val dispatcher = dispatcher(root, sensitiveDiagnosticsConfig())
+
+        val result = dispatcher.call("android_screen_record_start", mapOf("rootPath" to root.toString()))
+
+        assertEquals("blocked", result["status"])
+        assertTrue(result["summary"].toString().contains("deviceSerial"))
+    }
+
+    @Test
+    fun `screen record start caps the requested duration at the screenrecord maximum`() {
+        val root = Files.createTempDirectory("dak-screenrecord-cap-duration")
+        val dispatcher = sensitiveDiagnosticsDispatcher(root)
+
+        val start =
+            dispatcher.call(
+                "android_screen_record_start",
+                mapOf("rootPath" to root.toString(), "deviceSerial" to "emulator-5554", "durationSeconds" to 9999),
+            )
+
+        assertEquals("success", start["status"])
+        assertEquals(180L, start["durationSeconds"])
+        val recorded = awaitFile(root.resolve("screenrecord-calls.log"))
+        assertTrue("expected --time-limit 180 in: $recorded", recorded.contains("--time-limit 180"))
+    }
+
+    @Test
+    fun `screen record stop is blocked when job id is missing`() {
+        val root = Files.createTempDirectory("dak-screenrecord-stop-jobid")
+        val dispatcher = sensitiveDiagnosticsDispatcher(root)
+
+        val result =
+            dispatcher.call(
+                "android_screen_record_stop",
+                mapOf("rootPath" to root.toString(), "deviceSerial" to "emulator-5554"),
+            )
+
+        assertEquals("blocked", result["status"])
+        assertTrue((result["warnings"] as List<*>).contains("missing-job-id"))
+    }
+
+    @Test
+    fun `screen record stop pulls the mp4 as a sensitive artifact and clears the device file`() {
+        val root = Files.createTempDirectory("dak-screenrecord-roundtrip")
+        val dispatcher = sensitiveDiagnosticsDispatcher(root)
+
+        val start =
+            dispatcher.call(
+                "android_screen_record_start",
+                mapOf("rootPath" to root.toString(), "deviceSerial" to "emulator-5554", "durationSeconds" to 5),
+            )
+        assertEquals("success", start["status"])
+        val jobId = start["jobId"] as String
+        val devicePath = start["devicePath"] as String
+
+        val stop =
+            dispatcher.call(
+                "android_screen_record_stop",
+                mapOf("rootPath" to root.toString(), "deviceSerial" to "emulator-5554", "jobId" to jobId),
+            )
+
+        assertEquals("success", stop["status"])
+        val artifacts = stop["artifacts"] as List<*>
+        assertTrue("expected a screen-recording artifact in $artifacts", artifacts.any { (it as Map<*, *>)["type"] == "screen_recording" })
+        assertTrue(artifacts.any { (it as Map<*, *>)["sensitivity"] == "sensitive" })
+
+        // The recording is pulled off the device and then deleted: leaving an mp4 of the user's
+        // screen sitting on shared storage is the whole hazard this tool has to avoid.
+        assertTrue(awaitFile(root.resolve("pull-calls.log")).contains(devicePath))
+        assertTrue(awaitFile(root.resolve("rm-calls.log")).contains(devicePath))
+    }
+
+    private fun sensitiveDiagnosticsConfig(): DroidAgentConfig =
+        DroidAgentConfig.default().copy(
+            safety = DroidAgentConfig.default().safety.copy(allowCapabilities = setOf(Capability.SENSITIVE_DIAGNOSTICS)),
+        )
+
+    private fun sensitiveDiagnosticsDispatcher(root: java.nio.file.Path): DroidAgentMcpDispatcher {
+        val base = sensitiveDiagnosticsConfig()
+        return dispatcher(root, base.copy(safety = base.safety.copy(adbPath = fakeAdb(root))))
+    }
+
+    /**
+     * The fake adb writes its log from a child process, so the file appears shortly after the call
+     * returns. Poll for content rather than sleeping a fixed interval, which flakes on a loaded machine.
+     */
+    private fun awaitFile(path: java.nio.file.Path): String {
+        val deadline = System.currentTimeMillis() + 10_000
+        while (System.currentTimeMillis() < deadline) {
+            if (Files.exists(path)) {
+                val text = Files.readString(path)
+                if (text.isNotBlank()) return text
+            }
+            Thread.sleep(10)
+        }
+        return if (Files.exists(path)) Files.readString(path) else ""
+    }
+
     private fun fakeAdb(root: java.nio.file.Path): String {
         // These fakes are POSIX shell scripts, and that is load-bearing rather than incidental:
         // the `shell` branch re-evaluates joined argv the way a real device's /system/bin/sh does,
@@ -327,6 +455,11 @@ class DeviceReadToolProviderTest {
                 printf 'PK\x03\x04fake-zip' > "${'$'}4/bugreport-${'$'}2.zip"
                 echo "Bugreport written to ${'$'}4"
                 ;;
+              pull)
+                # argv: -s serial pull <device-path> <local-path>
+                printf 'fake-mp4-bytes' > "${'$'}5"
+                echo "${'$'}4 -> ${'$'}5" >> "${'$'}(dirname "${'$'}0")/pull-calls.log"
+                ;;
               shell)
                 shift 3
                 dumpsys() {
@@ -338,6 +471,8 @@ class DeviceReadToolProviderTest {
                   esac
                 }
                 pidof() { echo "4242"; }
+                screenrecord() { echo "${'$'}*" >> "${'$'}(dirname "${'$'}0")/screenrecord-calls.log"; }
+                rm() { echo "${'$'}*" >> "${'$'}(dirname "${'$'}0")/rm-calls.log"; }
                 logcat() { echo "log line 1"; echo "log line 2"; }
                 eval "${'$'}@"
                 ;;

@@ -3,6 +3,7 @@ package com.droidagentkit.mcp.tools
 import com.droidagentkit.core.ArtifactSensitivity
 import com.droidagentkit.core.ArtifactType
 import com.droidagentkit.core.AuthorizationDecision
+import com.droidagentkit.core.Capability
 import com.droidagentkit.core.CommandSpec
 import com.droidagentkit.core.JobState
 import com.droidagentkit.core.Json
@@ -35,6 +36,8 @@ class DeviceReadToolProvider(
             "android_battery_summary",
             "android_bugreport",
             "android_logcat_start",
+            "android_screen_record_start",
+            "android_screen_record_stop",
             "android_job_status",
             "android_job_cancel",
         )
@@ -54,6 +57,8 @@ class DeviceReadToolProvider(
             "android_battery_summary" -> batterySummary(arguments)
             "android_bugreport" -> bugreport(arguments)
             "android_logcat_start" -> logcatStart(arguments)
+            "android_screen_record_start" -> screenRecordStart(arguments)
+            "android_screen_record_stop" -> screenRecordStop(arguments)
             "android_job_status" -> jobStatus(arguments)
             "android_job_cancel" -> jobCancel(arguments)
             else -> unsupported(name)
@@ -146,6 +151,44 @@ class DeviceReadToolProvider(
                             "durationSeconds" to num("Capture duration in seconds. Default 30, max 300."),
                         ),
                 ),
+            ),
+            tool(
+                "android_screen_record_start",
+                "Start a bounded screen recording",
+                "Start a bounded managed screenrecord job on a device and return a job id plus the on-device file path. " +
+                    "Recording runs in the background so the agent can drive the UI meanwhile; call android_screen_record_stop " +
+                    "to end it, pull the MP4 into sensitive artifact storage, and delete it from the device. " +
+                    "Requires the sensitive-diagnostics capability.",
+                schema(
+                    "deviceSerial",
+                    props =
+                        mapOf(
+                            "rootPath" to rootPathProp,
+                            "deviceSerial" to str("adb device serial to record."),
+                            "durationSeconds" to
+                                num(
+                                    "Hard time limit in seconds. Default $DEFAULT_RECORD_SECONDS, " +
+                                        "max $MAX_RECORD_SECONDS (the screenrecord ceiling).",
+                                ),
+                        ),
+                ),
+            ),
+            tool(
+                "android_screen_record_stop",
+                "Stop a screen recording and collect it",
+                "Stop a managed screenrecord job, pull the MP4 into sensitive artifact storage, and remove it from the device. " +
+                    "Requires the sensitive-diagnostics capability.",
+                schema(
+                    "deviceSerial",
+                    "jobId",
+                    props =
+                        mapOf(
+                            "rootPath" to rootPathProp,
+                            "deviceSerial" to str("adb device serial the recording was started on."),
+                            "jobId" to str("Job id returned by android_screen_record_start."),
+                        ),
+                ),
+                annotations = mapOf("readOnlyHint" to false, "idempotentHint" to true),
             ),
             tool(
                 "android_job_status",
@@ -353,7 +396,7 @@ class DeviceReadToolProvider(
             context.authorize(
                 OperationRequest(
                     operationId = "android_bugreport",
-                    requiredCapabilities = setOf(com.droidagentkit.core.Capability.SENSITIVE_DIAGNOSTICS),
+                    requiredCapabilities = setOf(Capability.SENSITIVE_DIAGNOSTICS),
                     destructive = false,
                     deviceSerial = serial,
                 ),
@@ -503,6 +546,158 @@ class DeviceReadToolProvider(
         ) + mapOf("jobId" to jobId, "jobState" to jobStatusWire(snapshot.state), "logUri" to logUri)
     }
 
+    private fun screenRecordStart(arguments: Map<String, Any?>): Map<String, Any> {
+        val serial = requireSerial(arguments) ?: return missingSerial("android_screen_record_start")
+        val decision = authorizeScreenRecord("android_screen_record_start", serial)
+        if (decision is AuthorizationDecision.Denied) {
+            return context.resultMap(
+                ToolResult(status = ResultStatus.BLOCKED, summary = decision.reason, warnings = listOf(decision.code)),
+            )
+        }
+        val operation = (decision as AuthorizationDecision.Allowed).operation
+        val root = context.resolveRoot(arguments)
+        val durationSeconds =
+            (arguments["durationSeconds"]?.toString()?.toLongOrNull() ?: DEFAULT_RECORD_SECONDS)
+                .coerceIn(1L, MAX_RECORD_SECONDS)
+        val jobId = "$RECORD_JOB_PREFIX${context.safeId(serial)}-${System.currentTimeMillis()}"
+        val devicePath = devicePathFor(jobId)
+        val spec =
+            CommandSpec(
+                id = jobId,
+                command =
+                    listOf(adbPath, "-s", serial, "shell", "screenrecord", "--time-limit", durationSeconds.toString(), devicePath),
+                workingDirectory = root.toString(),
+                mutatesProject = false,
+                requiresDevice = true,
+                timeoutSeconds = durationSeconds,
+                outputMode = OutputMode.TEXT,
+                sensitivity = ArtifactSensitivity.SENSITIVE,
+            )
+        val snapshot =
+            context.jobRunner().start(
+                ManagedJobSpec(
+                    id = jobId,
+                    operation = operation,
+                    command = spec,
+                    // screenrecord needs a moment past its own --time-limit to finalize the container.
+                    timeoutSeconds = durationSeconds + 5,
+                    cleanup = {},
+                ),
+            )
+        if (snapshot.state == JobState.PENDING) {
+            return context.resultMap(
+                ToolResult(
+                    status = ResultStatus.BLOCKED,
+                    summary = "Job could not start: ${snapshot.warnings.joinToString(", ")}.",
+                    warnings = snapshot.warnings,
+                ),
+            )
+        }
+        return context.resultMap(
+            ToolResult(
+                status = ResultStatus.SUCCESS,
+                summary = "Started screen recording $jobId on $serial for up to ${durationSeconds}s.",
+            ),
+        ) +
+            mapOf(
+                "jobId" to jobId,
+                "jobState" to jobStatusWire(snapshot.state),
+                "devicePath" to devicePath,
+                "durationSeconds" to durationSeconds,
+            )
+    }
+
+    private fun screenRecordStop(arguments: Map<String, Any?>): Map<String, Any> {
+        val serial = requireSerial(arguments) ?: return missingSerial("android_screen_record_stop")
+        val jobId =
+            arguments["jobId"]?.toString()?.takeIf { it.isNotBlank() }
+                ?: return blocked("missing-job-id", "jobId is required for android_screen_record_stop.")
+        // jobId reaches us from the client and is about to become part of a device path, so it is
+        // validated against the exact shape screenRecordStart mints rather than merely escaped.
+        if (!RECORD_JOB_ID.matches(jobId)) {
+            return blocked("invalid-job-id", "jobId '$jobId' is not a screen-recording job id.")
+        }
+        val decision = authorizeScreenRecord("android_screen_record_stop", serial)
+        if (decision is AuthorizationDecision.Denied) {
+            return context.resultMap(
+                ToolResult(status = ResultStatus.BLOCKED, summary = decision.reason, warnings = listOf(decision.code)),
+            )
+        }
+        val root = context.resolveRoot(arguments)
+        val devicePath = devicePathFor(jobId)
+        val warnings = mutableListOf<String>()
+
+        // Cancelling signals screenrecord to stop and flush; a job that already hit its own
+        // --time-limit is simply terminal, which is not an error -- the file is still on the device.
+        val snapshot = context.jobRunner().cancel(jobId)
+        if (snapshot.state == JobState.EXPIRED) warnings += "unknown-job"
+
+        val localPath = context.artifactOutputDir(root).resolve("$jobId.mp4")
+        val pull =
+            context.run(
+                root,
+                CommandSpec(
+                    id = "adb-screenrecord-pull",
+                    command = listOf(adbPath, "-s", serial, "pull", devicePath, localPath.toString()),
+                    workingDirectory = root.toString(),
+                    mutatesProject = false,
+                    requiresDevice = true,
+                    timeoutSeconds = 120,
+                    outputMode = OutputMode.TEXT,
+                    sensitivity = ArtifactSensitivity.SENSITIVE,
+                ),
+            )
+        if (pull.status == ResultStatus.BLOCKED) return context.resultMap(pull)
+
+        // Deleting runs whether or not the pull produced a file: an unretrieved recording of the
+        // user's screen left on shared storage is the worse of the two outcomes.
+        val remove =
+            runAdbText(serial, listOf("rm", "-f", devicePath), "adb-screenrecord-remove", root, timeoutSeconds = 30)
+        if (remove.status != ResultStatus.SUCCESS) warnings += "device-file-not-removed"
+
+        if (!Files.exists(localPath) || Files.size(localPath) == 0L) {
+            return context.resultMap(
+                ToolResult(
+                    status = ResultStatus.PARTIAL,
+                    summary = "Screen recording $jobId stopped but no recording was retrieved from $devicePath.",
+                    warnings = warnings + "no-recording-retrieved",
+                ),
+            ) + mapOf("jobId" to jobId, "jobState" to jobStatusWire(snapshot.state), "devicePath" to devicePath)
+        }
+        val artifact =
+            context.registerExistingArtifact(
+                root,
+                localPath,
+                ArtifactType.SCREEN_RECORDING,
+                "Screen recording captured via adb screenrecord. Sensitive: shows whatever was on the device display.",
+                ArtifactSensitivity.SENSITIVE,
+            )
+        return context.resultMap(
+            ToolResult(
+                status = ResultStatus.SUCCESS,
+                summary = "Stopped screen recording $jobId on $serial (${artifact.sizeBytes} bytes).",
+                artifacts = listOf(artifact),
+                warnings = warnings,
+            ),
+        ) + mapOf("jobId" to jobId, "jobState" to jobStatusWire(snapshot.state), "devicePath" to devicePath)
+    }
+
+    private fun authorizeScreenRecord(
+        operationId: String,
+        serial: String,
+    ): AuthorizationDecision =
+        context.authorize(
+            OperationRequest(
+                operationId = operationId,
+                requiredCapabilities = setOf(Capability.SENSITIVE_DIAGNOSTICS),
+                destructive = false,
+                deviceSerial = serial,
+                mutating = false,
+            ),
+        )
+
+    private fun devicePathFor(jobId: String): String = "$RECORD_DEVICE_DIR/$jobId.mp4"
+
     private fun jobStatus(arguments: Map<String, Any?>): Map<String, Any> {
         val jobId =
             arguments["jobId"]?.toString()?.takeIf { it.isNotBlank() }
@@ -535,6 +730,16 @@ class DeviceReadToolProvider(
             "jobState" to jobStatusWire(snapshot.state),
             "redactedTail" to snapshot.redactedTail,
         )
+
+    private companion object {
+        const val DEFAULT_RECORD_SECONDS = 60L
+
+        /** screenrecord refuses anything longer, so clamping here fails loudly instead of on-device. */
+        const val MAX_RECORD_SECONDS = 180L
+        const val RECORD_JOB_PREFIX = "screenrecord-"
+        const val RECORD_DEVICE_DIR = "/sdcard"
+        val RECORD_JOB_ID = Regex("^$RECORD_JOB_PREFIX[A-Za-z0-9_.-]{1,120}$")
+    }
 
     private fun jobStatusWire(state: JobState): String =
         when (state) {
