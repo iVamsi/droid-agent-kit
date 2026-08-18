@@ -138,6 +138,32 @@ class PerfettoCoreTest {
     }
 
     @Test
+    fun `compose recomposition names the hottest composable and its count`() {
+        val rows =
+            listOf(
+                mapOf("composable_name" to "ProductRow", "recomposition_count" to 412L),
+                mapOf("composable_name" to "PriceLabel", "recomposition_count" to 96L),
+            )
+
+        val result = PerfettoAnalysis.build(PerfettoAnalysisType.COMPOSE_RECOMPOSITION, TraceProcessorQueryResult.Rows(rows))
+
+        assertEquals(PerfettoConfidence.MEDIUM, result.confidence)
+        assertEquals(2, result.rowCount)
+        assertTrue("summary should name the hottest composable: ${result.summary}", result.summary.contains("ProductRow"))
+        assertTrue("summary should carry the count: ${result.summary}", result.summary.contains("412"))
+    }
+
+    @Test
+    fun `compose recomposition reports insufficient when compose tracing was not captured`() {
+        // Compose tracing is opt-in on the app side, so an absent section table is the common case
+        // and has to read as "not measured" rather than as "zero recompositions".
+        val result = PerfettoAnalysis.build(PerfettoAnalysisType.COMPOSE_RECOMPOSITION, TraceProcessorQueryResult.Rows(emptyList()))
+
+        assertEquals(PerfettoConfidence.INSUFFICIENT, result.confidence)
+        assertTrue(result.warnings.contains("no-rows"))
+    }
+
+    @Test
     fun `sql resources load for every analysis type`() {
         PerfettoAnalysisType.entries.forEach { type ->
             val sql = PerfettoSql.load(type)
