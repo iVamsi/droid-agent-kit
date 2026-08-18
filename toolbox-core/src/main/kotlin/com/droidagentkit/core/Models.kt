@@ -8,6 +8,7 @@ enum class ArtifactType(
     LOG("log"),
     REPORT("report"),
     SCREENSHOT("screenshot"),
+    SCREEN_RECORDING("screen_recording"),
     UI_HIERARCHY("ui_hierarchy"),
     JSON("json"),
     MARKDOWN("markdown"),

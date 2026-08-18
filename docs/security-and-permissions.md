@@ -241,6 +241,8 @@ These tools are not listed unless the `device_read` tool group is exposed at ser
 | `android_battery_summary` | Run `dumpsys battery` and return level, status, health, temperature, and voltage as evidence. Read-only. |
 | `android_bugreport` | Run `adb bugreport` and stream the ZIP to sensitive artifact storage. Requires `sensitive_diagnostics`. |
 | `android_logcat_start` | Start a bounded managed logcat job and return a job id plus a concrete log resource URI. Clients poll `android_job_status`. |
+| `android_screen_record_start` | Start a bounded managed `screenrecord` job (default 60s, hard max 180s) and return a job id plus the on-device path. Recording runs in the background so the agent can drive the UI meanwhile. Requires `sensitive_diagnostics`. |
+| `android_screen_record_stop` | Stop the recording, pull the MP4 into sensitive artifact storage, and delete it from the device. The device-side delete runs even when the pull retrieves nothing. Requires `sensitive_diagnostics`. |
 | `android_job_status` | Return the current state and artifact (if any) of a managed job. |
 | `android_job_cancel` | Cancel a running managed job and release its device lock. |
 
