@@ -52,7 +52,7 @@ subprojects {
     // own configurations only; logback is never a runtime/test dependency here.
     configurations.matching { it.name.startsWith("ktlint") }.configureEach {
         resolutionStrategy {
-            force("ch.qos.logback:logback-classic:1.6.2", "ch.qos.logback:logback-core:1.6.2")
+            force("ch.qos.logback:logback-classic:1.6.3", "ch.qos.logback:logback-core:1.6.3")
         }
     }
 
