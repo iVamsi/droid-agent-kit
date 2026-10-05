@@ -3,8 +3,15 @@
 ## Weekly
 
 - Triage Dependabot, CodeQL, and OpenSSF Scorecard alerts (see [SECURITY.md](../SECURITY.md) SLA).
-- Review any open Dependabot PRs; keep `gradle/verification-metadata.xml` updated when deps change
-  (`./gradlew --write-verification-metadata sha256 help`).
+- Review open Dependabot PRs. `.github/workflows/dependabot-auto-merge.yml` regenerates the
+  verification hashes on Gradle updates and turns on auto-merge for patch and minor updates, so
+  those merge once the required checks pass. Major updates wait for you. Auto-merged updates still
+  add new hashes to `gradle/verification-metadata.xml` without a person reading them, so skim the
+  weekly merges.
+- The workflow needs a `DEPENDABOT_AUTOMATION_TOKEN` Dependabot secret: a fine-grained token for
+  this repository only, with read and write access to contents, pull requests, and workflows.
+  Without it, Gradle updates fail CI on missing hashes and nothing auto-merges. To refresh hashes
+  by hand: `./gradlew --write-verification-metadata sha256 help`.
 
 ## Every release
 
