@@ -6,6 +6,8 @@ pre-release convention `0.y.z-alpha` until a stable 1.0 release.
 
 ## Unreleased
 
+## [0.3.1-alpha] - 2026-10-04
+
 ### Added
 
 - `android_screen_record_start` and `android_screen_record_stop` in the `device_read` group, gated
@@ -19,11 +21,16 @@ pre-release convention `0.y.z-alpha` until a stable 1.0 release.
 - `android_test_run` now reports androidx macrobenchmark metrics when a run produced
   `*-benchmarkData.json`. Startup metrics and sampled frame percentiles are kept separate rather
   than merged, since the two are not interchangeable. The key is absent when no benchmark ran.
-- The nightly emulator job covers screen recording end to end and runs the Perfetto SQL through a
-  real Trace Processor, pinned by version and checksum.
+- The nightly emulator job gains steps for screen recording and for running the Perfetto SQL
+  through a real Trace Processor, pinned by version and checksum. These steps don't pass yet: the
+  job times out at the screen-recording step, so neither has run to completion on a device.
 
 ### Changed
 
+- The release workflow publishes to npm only after the GitHub Release exists. Before, the two ran
+  in parallel, so a failed jar build could still ship a launcher whose jar download 404s. The
+  release also runs the test suite first, and starts the shaded jar over stdio before anything
+  is published. The npm upgrade in the publish job is pinned to an exact version.
 - Gradle 9.7.0, shadow 9.6.1, logback 1.6.2, and the GitHub Actions bumped to current majors.
 - Regenerating `gradle/verification-metadata.xml` no longer pins Kotlin release-candidate
   checksums. KGP's ABI-validation classpath asked for the newest build tools, and
