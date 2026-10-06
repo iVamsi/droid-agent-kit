@@ -6,6 +6,19 @@ pre-release convention `0.y.z-alpha` until a stable 1.0 release.
 
 ## Unreleased
 
+### Fixed
+
+- The nightly emulator job drives one server session per run instead of one process per call, so
+  screen-record stop sees the job that start created. Each call times out after 120 seconds, and a
+  failed or timed-out run opens (or comments on) a GitHub issue. It now runs Perfetto capture on
+  every run. The analysis check is opt-in (`DAK_E2E_PERFETTO_ANALYZE=1`) until the analyses work
+  on real traces.
+- `android_perfetto_capture` works on Android 12 and later. The config is piped to `perfetto` on
+  stdin, because SELinux blocks it from reading `/data/local/tmp`. The config also used a field that
+  doesn't exist (`max_file_size_kb`), so Perfetto rejected it on every Android version.
+- `scripts/deprecate-old-registry-listing.sh` uses `mcp-publisher status --all-versions`. It called
+  an `mcp-publisher token` command that doesn't exist, so the request went out with no token.
+
 ## [0.3.1-alpha] - 2026-10-04
 
 ### Added

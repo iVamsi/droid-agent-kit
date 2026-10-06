@@ -52,14 +52,12 @@ echo "Authenticating (GitHub OIDC in CI, or a GitHub token locally)..."
 mcp-publisher login github-oidc 2>/dev/null || mcp-publisher login github
 
 echo "Marking $OLD_NAME deprecated..."
-# The status endpoint updates every version of the server at once, which is what we want -- a
-# per-version deprecation would leave older versions looking current.
-curl -fsSL -X PUT \
-  -H "Authorization: Bearer $(mcp-publisher token 2>/dev/null || echo "${MCP_REGISTRY_TOKEN:-}")" \
-  -H "Content-Type: application/json" \
-  -d "{\"status\":\"deprecated\",\"statusMessage\":\"Renamed to $NEW_NAME so the listing is findable when searching for 'android'. Same project, same npm package (@droidagentkit/launcher) -- no install change needed.\"}" \
-  "$REGISTRY/v0/servers/$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=''))" "$OLD_NAME")/status"
+# --all-versions so no older version is left looking current. `yes` answers the prompt, which
+# --confirm above already covers.
+yes | mcp-publisher status --status deprecated --all-versions \
+  --message "Renamed to $NEW_NAME so the listing is findable when searching for 'android'. Same project, same npm package (@droidagentkit/launcher), no install change needed." \
+  "$OLD_NAME"
 
 echo
 echo "Done. Verify:"
-echo "  curl -s '$REGISTRY/v0/servers?search=droidagent' | python3 -m json.tool | grep -A2 status"
+echo "  curl -s '$REGISTRY/v0/servers/io.github.iVamsi%2Fdroidagentkit/versions' | python3 -m json.tool | grep status"

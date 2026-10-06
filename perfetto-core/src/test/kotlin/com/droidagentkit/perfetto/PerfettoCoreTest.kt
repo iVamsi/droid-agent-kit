@@ -11,8 +11,18 @@ class PerfettoCoreTest {
         val rendered = PerfettoConfigTemplate.render(config)
         assertTrue(rendered.contains("duration_ms: 5000"))
         assertTrue(rendered.contains("size_kb: 4096"))
+        assertTrue(rendered.contains("max_file_size_bytes: 52428800"))
         assertTrue(rendered.contains("name: \"linux.sched\""))
         assertTrue(rendered.contains("name: \"linux.metadata\""))
+    }
+
+    @Test
+    fun `perfetto command reads its config from stdin`() {
+        val cmd = PerfettoCapture.perfettoCommand("adb", "emulator-5554", "/data/local/tmp/s.cfg", "/data/misc/perfetto-traces/t")
+        assertEquals(
+            "adb -s emulator-5554 shell cat /data/local/tmp/s.cfg | perfetto --txt -c - -o /data/misc/perfetto-traces/t",
+            cmd.joinToString(" "),
+        )
     }
 
     @Test(expected = IllegalArgumentException::class)

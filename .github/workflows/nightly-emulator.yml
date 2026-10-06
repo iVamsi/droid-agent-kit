@@ -82,3 +82,28 @@ jobs:
             build/droidagentkit/**
             /tmp/dak-e2e/**
           retention-days: 7
+
+  # A timed-out run shows up as "cancelled" and nobody looks at it. Keep one open issue per
+  # breakage instead: open it on the first bad night, comment on it after that.
+  alert:
+    name: Open or update the failure issue
+    needs: emulator
+    if: ${{ always() && (needs.emulator.result == 'failure' || needs.emulator.result == 'cancelled') }}
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TITLE: Nightly emulator E2E is failing
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      RESULT: ${{ needs.emulator.result }}
+    steps:
+      - run: |
+          number="$(gh issue list --state open --search "\"$TITLE\" in:title" --json number --jq '.[0].number // empty')"
+          body="Run $RUN_URL ended as \`$RESULT\`."
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body "$body"
+          else
+            gh issue create --title "$TITLE" --body "$body"
+          fi
