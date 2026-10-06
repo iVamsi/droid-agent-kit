@@ -178,7 +178,9 @@ assert_status "foreign job id is refused" "$resp" "blocked" || fail=1
 echo "e2e: android_perfetto_capture"
 resp="$(call_tool android_perfetto_capture "{\"deviceSerial\":\"$SERIAL\",\"durationSeconds\":5}")"
 assert_status "perfetto capture" "$resp" "success" || fail=1
-trace="$(find "$ROOT/build/droidagentkit/perfetto" -name '*.perfetto-trace' -size +1k 2>/dev/null | head -n1)"
+# Any non-empty trace counts: with today's default data sources (IMPROVEMENTS item 14) the CI
+# emulators write under 1 KB.
+trace="$(find "$ROOT/build/droidagentkit/perfetto" -name '*.perfetto-trace' -size +0 2>/dev/null | head -n1)"
 [ -n "$trace" ] || { echo "  FAIL no non-empty trace was captured" >&2; fail=1; }
 
 # Opt-in until the analyses work on real traces (docs/IMPROVEMENTS.md item 14). Today every one
