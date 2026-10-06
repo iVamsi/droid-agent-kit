@@ -44,7 +44,7 @@ object PerfettoConfigTemplate {
         buildString {
             appendLine("# DroidAgentKit Perfetto config v$VERSION")
             appendLine("duration_ms: ${config.durationSeconds * 1000}")
-            appendLine("max_file_size_kb: ${config.maxFileSizeBytes / 1024}")
+            appendLine("max_file_size_bytes: ${config.maxFileSizeBytes}")
             appendLine("buffers {")
             appendLine("  size_kb: ${config.bufferSizeKb}")
             appendLine("  fill_policy: DISCARD")
@@ -66,8 +66,8 @@ object PerfettoConfigTemplate {
  * Builds the on-device Perfetto capture invocation. The provider executes these adb commands in
  * order via the allowlisted ProcessRunner; perfetto-core never runs adb itself.
  *
- * Steps: push the rendered config, run `perfetto --txt -c <cfg> -o <trace>`, then the provider pulls
- * the trace and deletes the remote file in cleanup.
+ * Steps: push the rendered config, run `cat <cfg> | perfetto --txt -c - -o <trace>`, then the
+ * provider pulls the trace and deletes the remote file in cleanup.
  */
 object PerfettoCapture {
     const val REMOTE_DIR = "/data/misc/perfetto-traces"
@@ -94,10 +94,15 @@ object PerfettoCapture {
             "-s",
             serial,
             "shell",
+            // Piped rather than `-c <path>`: from Android 12, SELinux stops perfetto reading files in
+            // /data/local/tmp, while the shell user can still cat them.
+            "cat",
+            remoteConfigPath,
+            "|",
             "perfetto",
             "--txt",
             "-c",
-            remoteConfigPath,
+            "-",
             "-o",
             remoteTracePath,
         )
