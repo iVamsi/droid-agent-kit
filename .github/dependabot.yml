@@ -5,8 +5,26 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
+    # Versions that must move together arrive as one PR. Kotlin is pinned in both
+    # settings.gradle.kts and the version catalog, so a bump otherwise comes as three PRs that
+    # each fail on their own.
+    groups:
+      kotlin:
+        patterns:
+          - "org.jetbrains.kotlin*"
+          - "jvm"
+          - "plugin.serialization"
+      logback:
+        patterns:
+          - "ch.qos.logback*"
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      # init, analyze, and upload-sarif ship as one unit, and the hygiene check fails when their
+      # pins differ, so separate PRs can never pass CI.
+      codeql-action:
+        patterns:
+          - "github/codeql-action*"

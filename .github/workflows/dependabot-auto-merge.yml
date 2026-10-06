@@ -1,0 +1,84 @@
+name: Dependabot automation
+
+# For each Dependabot PR: refresh the Gradle dependency-verification hashes, then turn on
+# auto-merge for patch and minor updates. The merge itself still waits for every required check on
+# main, so a failing update never lands. Major updates are left for a person to review.
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependabot-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  dependabot:
+    name: Refresh hashes and enable auto-merge
+    # Also stops this job from re-running on the commit it pushes, which has a different actor.
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      JAVA_TOOL_OPTIONS: -Djava.awt.headless=true
+    steps:
+      - name: Read the update's metadata
+        id: meta
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+
+      # Every new dependency version is missing from gradle/verification-metadata.xml, so a Gradle
+      # update fails CI until its hashes are written.
+      - name: Check out the PR branch
+        if: steps.meta.outputs.package-ecosystem == 'gradle'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.head_ref }}
+          # The Gradle step runs code from the updated dependencies, so it must not be able to
+          # read the push token.
+          persist-credentials: false
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        if: steps.meta.outputs.package-ecosystem == 'gradle'
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Regenerate dependency verification hashes
+        if: steps.meta.outputs.package-ecosystem == 'gradle'
+        run: |
+          chmod +x gradlew
+          ./gradlew --write-verification-metadata sha256 help --no-configuration-cache --stacktrace
+      - name: Push the new hashes
+        if: steps.meta.outputs.package-ecosystem == 'gradle'
+        env:
+          # A push made with the default GITHUB_TOKEN doesn't trigger CI, so the required checks
+          # would never run on the new commit.
+          TOKEN: ${{ secrets.DEPENDABOT_AUTOMATION_TOKEN }}
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- gradle/verification-metadata.xml; then
+            echo "Verification hashes are already up to date."
+            exit 0
+          fi
+          if [ -z "$TOKEN" ]; then
+            echo "::error::Set DEPENDABOT_AUTOMATION_TOKEN as a Dependabot secret to push refreshed hashes."
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # The [dependabot skip] prefix lets Dependabot keep rebasing this PR. It drops this commit
+          # when it rebases, and this job adds it back.
+          git commit -m "[dependabot skip] Update dependency verification hashes" -- gradle/verification-metadata.xml
+          git push "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:${BRANCH}"
+
+      - name: Enable auto-merge for patch and minor updates
+        if: >-
+          steps.meta.outputs.update-type == 'version-update:semver-patch' ||
+          steps.meta.outputs.update-type == 'version-update:semver-minor'
+        env:
+          # Not the default token: merges it makes don't trigger workflows on main, and it can't
+          # merge a PR that changes workflow files.
+          GH_TOKEN: ${{ secrets.DEPENDABOT_AUTOMATION_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr merge --auto --squash "$PR_URL"
