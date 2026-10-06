@@ -1,9 +1,9 @@
 [versions]
-kotlin = "2.4.0"
+kotlin = "2.4.20"
 ktlint = "14.2.0"
 shadow = "9.6.1"
 detekt = "1.23.8"
-kover = "0.9.9"
+kover = "0.9.11"
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
