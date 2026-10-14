@@ -134,7 +134,7 @@ class DoctorChecks(
                     "project config",
                     CheckStatus.FAIL,
                     "$path is invalid: ${result.errors.joinToString("; ") { "line ${it.line}: ${it.key} — ${it.message}" }}",
-                    "Fix the listed lines, or delete the file to fall back to the user policy.",
+                    "The server ignores this file and uses the user policy until these lines are fixed.",
                 )
             is ConfigLoadResult.Loaded ->
                 when {

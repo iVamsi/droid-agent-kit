@@ -12,15 +12,22 @@ import javax.imageio.ImageIO
 
 class DroidAgentCliIntegrationTest {
     @Test
-    fun `run exits non-zero when config is invalid for a command that loads config`() {
-        val root = Files.createTempDirectory("dak-cli-invalid-config")
-        val configFile = root.resolve(".droidagentkit/config.yaml")
-        Files.createDirectories(configFile.parent)
-        Files.writeString(configFile, "schemaVersion: 1\nsafety:\n  maxCommandSeconds: soon\n")
-
-        val exitCode = DroidAgentCli().run(arrayOf("devices", "--project", root.toString()))
-
-        assertEquals(1, exitCode)
+    fun `run exits non-zero when the user policy is invalid`() {
+        val root = Files.createTempDirectory("dak-cli-invalid-policy")
+        val policyPath = Files.createTempFile("dak-cli-policy", ".yaml")
+        Files.writeString(policyPath, "schemaVersion: 1\nsafety:\n  maxCommandSeconds: soon\n")
+        val previous = System.getProperty("droidagentkit.policy")
+        System.setProperty("droidagentkit.policy", policyPath.toString())
+        try {
+            val exitCode = DroidAgentCli().run(arrayOf("devices", "--project", root.toString()))
+            assertEquals(1, exitCode)
+        } finally {
+            if (previous == null) {
+                System.clearProperty("droidagentkit.policy")
+            } else {
+                System.setProperty("droidagentkit.policy", previous)
+            }
+        }
     }
 
     @Test
