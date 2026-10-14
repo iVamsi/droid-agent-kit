@@ -97,8 +97,7 @@ class PerfettoToolProvider(
             props =
                 mapOf(
                     "rootPath" to rootPathProp,
-                    "tracePath" to str("Local path to a Perfetto trace file to analyze."),
-                    "traceProcessorShell" to str("Optional path to trace_processor_shell. Defaults to safety.traceProcessorPath."),
+                    "tracePath" to str("Local path to a Perfetto trace file to analyze. Must stay inside the project."),
                     "analyses" to
                         str(
                             "Comma-separated analysis names (cpu_utilization, main_thread_slices, frame_jank, binder_latency, " +
@@ -167,23 +166,37 @@ class PerfettoToolProvider(
     }
 
     private fun analyze(arguments: Map<String, Any?>): Map<String, Any> {
-        val (_, denied) = authorize("android_perfetto_analyze", setOf(Capability.SENSITIVE_DIAGNOSTICS), false, arguments)
-        if (denied != null) return denied
         val tracePathString =
             arguments["tracePath"]?.toString()?.takeIf { it.isNotBlank() }
                 ?: return blocked("missing-trace-path", "tracePath is required for android_perfetto_analyze.")
-        val tracePath = Path.of(tracePathString)
+        val root = context.resolveRoot(arguments)
+        val tracePath = root.resolve(tracePathString).normalize()
+        val (_, denied) =
+            authorize(
+                "android_perfetto_analyze",
+                setOf(Capability.SENSITIVE_DIAGNOSTICS),
+                false,
+                arguments,
+                hostPaths = listOf(tracePath),
+            )
+        if (denied != null) return denied
         if (!Files.exists(tracePath)) return blocked("missing-trace-file", "Trace file does not exist: $tracePathString")
-        val shellPath =
-            arguments["traceProcessorShell"]?.toString()?.takeIf { it.isNotBlank() }
-                ?: context.config.safety.traceProcessorPath
+        // The binary is a privileged path. It comes only from the user policy, never from the call:
+        // an agent that can name the program can run /bin/bash and pass a script as the trace.
+        val shellPath = context.config.safety.traceProcessorPath
+        val override = arguments["traceProcessorShell"]?.toString()?.takeIf { it.isNotBlank() }
+        if (override != null && override != shellPath) {
+            return blocked(
+                "trace-processor-override-rejected",
+                "traceProcessorShell is not accepted on the call. Set safety.traceProcessorPath in the user policy.",
+            )
+        }
         if (shellPath.isBlank()) {
             return blocked(
                 "trace-processor-not-configured",
                 "trace_processor_shell is not configured. Set safety.traceProcessorPath; DroidAgentKit does not auto-download it.",
             )
         }
-        val root = context.resolveRoot(arguments)
         val analyses = resolveAnalyses(arguments)
         val sqlDir = context.artifactOutputDir(root).resolve("perfetto/sql").also { Files.createDirectories(it) }
         val results = linkedMapOf<PerfettoAnalysisType, TraceProcessorQueryResult>()
@@ -280,6 +293,7 @@ class PerfettoToolProvider(
         capabilities: Set<Capability>,
         destructive: Boolean,
         arguments: Map<String, Any?>,
+        hostPaths: List<Path> = emptyList(),
     ): Pair<AuthorizationDecision, Map<String, Any>?> {
         val serial = requireSerial(arguments)
         val request =
@@ -289,6 +303,7 @@ class PerfettoToolProvider(
                 destructive = destructive,
                 confirmDestructive = arguments["confirmDestructive"] == true,
                 deviceSerial = serial,
+                hostPaths = hostPaths,
                 mutating = false,
             )
         val decision = context.authorize(request)

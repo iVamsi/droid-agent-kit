@@ -230,14 +230,25 @@ object DroidAgentConfigLoader {
     ): ConfigLoadResult {
         val projectResult = load(projectRoot)
         val policyResult = loadUserPolicy(policyPath)
-        if (projectResult is ConfigLoadResult.Invalid) return projectResult
         if (policyResult is ConfigLoadResult.Invalid) {
             return ConfigLoadResult.Invalid(
                 policyResult.errors.map { ConfigError(it.line, it.key, "user policy: ${it.message}") },
             )
         }
-        val project = (projectResult as ConfigLoadResult.Loaded)
-        val policy = (policyResult as ConfigLoadResult.Loaded)
+        val policy = policyResult as ConfigLoadResult.Loaded
+        // A broken project file must not throw away the user policy. serve-mcp treats Invalid as
+        // built-in defaults, which would drop requireInteractiveConfirm and every grant. Ignore
+        // the project file and merge the policy with an empty project config instead.
+        if (projectResult is ConfigLoadResult.Invalid) {
+            val (merged, mergeWarnings) = mergeWithWarnings(DroidAgentConfig.default(), policy.config)
+            val ignored =
+                projectResult.errors.map {
+                    "project config ignored (invalid): line ${it.line}: ${it.key} — ${it.message}"
+                }
+            val warnings = ignored + policy.warnings.map { "user policy: $it" } + mergeWarnings
+            return ConfigLoadResult.Loaded(merged, warnings)
+        }
+        val project = projectResult as ConfigLoadResult.Loaded
         val (merged, mergeWarnings) = mergeWithWarnings(project.config, policy.config)
         val warnings =
             project.warnings +

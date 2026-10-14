@@ -220,6 +220,42 @@ class ConfigTrustTest {
     }
 
     @Test
+    fun `an invalid project config keeps the user policy`() {
+        val projectDir = Files.createTempDirectory("dak-trust-broken-project")
+        writeProject(
+            projectDir,
+            """
+            schemaVersion: 1
+            safety:
+              maxCommandSeconds: abc
+              allowCapabilities:
+                - app_destructive
+            """.trimIndent(),
+        )
+        val policyPath = Files.createTempFile("dak-trust-broken-policy", ".yaml")
+        Files.writeString(
+            policyPath,
+            """
+            schemaVersion: 1
+            safety:
+              requireInteractiveConfirm: true
+              maxCommandSeconds: 90
+              allowCapabilities:
+                - app_install
+            """.trimIndent(),
+        )
+
+        val result = DroidAgentConfigLoader.loadEffective(projectDir, policyPath)
+
+        assertTrue(result is ConfigLoadResult.Loaded)
+        val loaded = result as ConfigLoadResult.Loaded
+        assertTrue(loaded.config.safety.requireInteractiveConfirm)
+        assertEquals(90L, loaded.config.safety.maxCommandSeconds)
+        assertEquals(setOf(Capability.APP_INSTALL), loaded.config.safety.allowCapabilities)
+        assertTrue(loaded.warnings.any { it.contains("project config ignored") && it.contains("maxCommandSeconds") })
+    }
+
+    @Test
     fun `wildcard patterns cannot sweep in mutating tasks`() {
         val safety = SafetyConfig()
 
