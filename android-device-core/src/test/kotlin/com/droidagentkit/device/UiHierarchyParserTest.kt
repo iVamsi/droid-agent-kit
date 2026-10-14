@@ -22,6 +22,16 @@ class UiHierarchyParserTest {
             "selected=\"false\" bounds=\"$bounds\">$children</node>"
 
     @Test
+    fun `a doctype is a parse failure and does not read a local file`() {
+        val xml = """<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><hierarchy>&xxe;</hierarchy>"""
+        val result = UiHierarchyParser.parse(xml)
+
+        assertEquals(0, result.nodeCount)
+        assertTrue(result.findings.isNotEmpty())
+        assertTrue(result.findings.none { it.detail.contains("root:") || it.detail.contains("nobody:") })
+    }
+
+    @Test
     fun `parses a single node into structured map`() {
         val xml = hierarchy(node(0, "android.widget.FrameLayout"))
         val result = UiHierarchyParser.parse(xml)

@@ -1,11 +1,11 @@
 package com.droidagentkit.mcp.tools
 
 import com.droidagentkit.core.DiagnosticFinding
+import com.droidagentkit.core.SecureXml
 import com.droidagentkit.core.Severity
 import org.w3c.dom.Element
 import java.nio.file.Files
 import java.nio.file.Path
-import javax.xml.parsers.DocumentBuilderFactory
 
 data class TestRunSummary(
     val tests: Int,
@@ -35,7 +35,7 @@ object TestResultParser {
         val findings = mutableListOf<DiagnosticFinding>()
 
         reports.forEach { report ->
-            val document = secureFactory().newDocumentBuilder().parse(report.toFile())
+            val document = SecureXml.factory().newDocumentBuilder().parse(report.toFile())
             val suites = document.getElementsByTagName("testsuite")
             for (index in 0 until suites.length) {
                 val suite = suites.item(index) as? Element ?: continue
@@ -91,15 +91,6 @@ object TestResultParser {
         }
         return reports.sortedBy(Path::toString)
     }
-
-    private fun secureFactory(): DocumentBuilderFactory =
-        DocumentBuilderFactory.newInstance().apply {
-            setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
-            setFeature("http://xml.org/sax/features/external-general-entities", false)
-            setFeature("http://xml.org/sax/features/external-parameter-entities", false)
-            isXIncludeAware = false
-            isExpandEntityReferences = false
-        }
 
     private fun Element.intAttribute(name: String): Int = getAttribute(name).toIntOrNull() ?: 0
 

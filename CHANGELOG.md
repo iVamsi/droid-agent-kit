@@ -8,6 +8,8 @@ pre-release convention `0.y.z-alpha` until a stable 1.0 release.
 
 ### Fixed
 
+- Device and app XML is parsed with doctypes and external entities turned off. Accessibility
+  dumps, SharedPreferences, lint reports, and test reports all use the same parser.
 - The nightly emulator job drives one server session per run instead of one process per call, so
   screen-record stop sees the job that start created. Each call times out after 120 seconds, and a
   failed or timed-out run opens (or comments on) a GitHub issue. It now runs Perfetto capture on

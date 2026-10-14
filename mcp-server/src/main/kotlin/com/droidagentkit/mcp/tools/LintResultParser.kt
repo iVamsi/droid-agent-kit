@@ -1,6 +1,7 @@
 package com.droidagentkit.mcp.tools
 
 import com.droidagentkit.core.DiagnosticFinding
+import com.droidagentkit.core.SecureXml
 import com.droidagentkit.core.Severity
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
@@ -8,9 +9,6 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.w3c.dom.Document
 import org.w3c.dom.Element
-import org.xml.sax.InputSource
-import java.io.StringReader
-import javax.xml.parsers.DocumentBuilderFactory
 
 object LintResultParser {
     fun parseAndroidLintXml(xml: String): List<DiagnosticFinding> {
@@ -132,14 +130,7 @@ object LintResultParser {
 
     private fun parseXml(xml: String): Document? =
         try {
-            val factory = DocumentBuilderFactory.newInstance()
-            factory.isNamespaceAware = false
-            factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
-            factory.setFeature("http://xml.org/sax/features/external-general-entities", false)
-            factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false)
-            factory.isXIncludeAware = false
-            factory.isExpandEntityReferences = false
-            factory.newDocumentBuilder().parse(InputSource(StringReader(xml)))
+            SecureXml.parse(xml)
         } catch (error: Exception) {
             null
         }
