@@ -8,6 +8,8 @@ pre-release convention `0.y.z-alpha` until a stable 1.0 release.
 
 ### Fixed
 
+- Device and app XML is parsed with doctypes and external entities turned off. Accessibility
+  dumps, SharedPreferences, lint reports, and test reports all use the same parser.
 - `android_perfetto_analyze` no longer runs a program named by the caller. The Trace Processor
   path comes only from `safety.traceProcessorPath`, and the trace file has to stay inside the
   project.

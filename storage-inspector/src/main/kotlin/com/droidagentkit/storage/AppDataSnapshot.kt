@@ -1,5 +1,6 @@
 package com.droidagentkit.storage
 
+import com.droidagentkit.core.SecureXml
 import com.droidagentkit.core.ShellQuote
 import java.nio.file.Files
 import java.nio.file.Path
@@ -202,11 +203,7 @@ class AppDataSnapshotter(
 object PrefsParser {
     fun parse(xml: String): List<PrefEntry> {
         if (xml.isBlank()) return emptyList()
-        val factory =
-            javax.xml.parsers.DocumentBuilderFactory
-                .newInstance()
-                .apply { isNamespaceAware = false }
-        val doc = factory.newDocumentBuilder().parse(xml.byteInputStream())
+        val doc = SecureXml.parse(xml)
         val entries = mutableListOf<PrefEntry>()
         val nodes = doc.documentElement.childNodes
         for (i in 0 until nodes.length) {

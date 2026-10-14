@@ -1,10 +1,10 @@
 package com.droidagentkit.device
 
 import com.droidagentkit.core.DiagnosticFinding
+import com.droidagentkit.core.SecureXml
 import com.droidagentkit.core.Severity
 import org.w3c.dom.Element
 import org.w3c.dom.Node
-import javax.xml.parsers.DocumentBuilderFactory
 
 data class UiHierarchyParseResult(
     val nodeCount: Int,
@@ -19,7 +19,7 @@ object UiHierarchyParser {
         }
         val document =
             try {
-                DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(xml.byteInputStream())
+                SecureXml.parse(xml)
             } catch (error: Exception) {
                 return UiHierarchyParseResult(0, emptyList(), listOf(malformed(error.message ?: "parse error")))
             }
