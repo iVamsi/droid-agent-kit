@@ -52,7 +52,8 @@ object HarParser {
         for (entry in entries) {
             val req = entry.request
             val res = entry.response
-            val (scheme, host, path) = splitUrl(req?.url)
+            val (scheme, host, rawPath) = splitUrl(req?.url)
+            val path = redactQuery(rawPath, redactor, applied)
             val reqHeaders = redactHeaders(req?.headers ?: emptyList(), redactor, applied) { sensitiveHeaderSeen = true }
             val resHeaders = redactHeaders(res?.headers ?: emptyList(), redactor, applied) { sensitiveHeaderSeen = true }
             val reqBody = bodyText(includeBodies, req?.postData?.text, redactor, applied)
@@ -79,6 +80,18 @@ object HarParser {
         if (pinningSuspected) warnings += "pinning-or-tls-suspected"
         if (flows.isEmpty()) warnings += "no-traffic-captured"
         return CaptureQueryResult(flows, warnings, applied.toList(), pinningSuspected)
+    }
+
+    private fun redactQuery(
+        path: String,
+        redactor: Redactor,
+        applied: MutableSet<String>,
+    ): String {
+        val split = path.indexOf('?')
+        if (split < 0) return path
+        val result = redactor.redact(path.substring(split + 1))
+        if (result.applied.isNotEmpty()) applied.addAll(result.applied)
+        return path.substring(0, split + 1) + result.text
     }
 
     private fun splitUrl(url: String?): Triple<String, String, String> {

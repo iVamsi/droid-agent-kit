@@ -96,7 +96,7 @@ class AppDataSnapshotter(
             runCatching {
                 exec.run(shell(serial, "run-as", packageName, "ls", "shared_prefs"), binary = false)
             }.getOrDefault(ByteArray(0))
-        return String(out).lines().map { it.trim() }.filter { it.endsWith(".xml") }
+        return String(out).lines().map { it.trim() }.filter { isBareFileName(it) && it.endsWith(".xml") }
     }
 
     fun readPrefs(
@@ -105,7 +105,7 @@ class AppDataSnapshotter(
         packageName: String,
         name: String,
     ): ByteArray {
-        if (!name.endsWith(".xml") || name.contains('/') || name.contains("..")) {
+        if (!isBareFileName(name) || !name.endsWith(".xml")) {
             throw StorageException(StorageOutcome.BLOCKED, "invalid-prefs-name", "Prefs name must be a bare .xml filename.")
         }
         return exec.run(listOf(adbPath, "-s", serial, "exec-out", "run-as", packageName, "cat", "shared_prefs/$name"), binary = true)

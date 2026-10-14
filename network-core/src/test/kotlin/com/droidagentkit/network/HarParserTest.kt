@@ -74,6 +74,22 @@ class HarParserTest {
     }
 
     @Test
+    fun `parse redacts secrets in the query string`() {
+        val har =
+            """
+            {"log":{"entries":[
+              {"request":{"method":"GET","url":"https://api.example.com/v1/callback?access_token=supersecret&x=1","headers":[]},
+               "response":{"status":204,"headers":[],"content":{"mimeType":"text/plain"}}}
+            ]}}
+            """.trimIndent()
+
+        val result = HarParser.parse(har, includeBodies = false, redactor)
+
+        assertFalse(result.flows[0].path.contains("supersecret"))
+        assertTrue(result.flows[0].path.contains("[REDACTED]"))
+    }
+
+    @Test
     fun `parse flags pinning suspected when all flows have no response`() {
         val har =
             """

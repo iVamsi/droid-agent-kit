@@ -14,6 +14,13 @@ class AppDataSnapshotterTest {
         assertTrue(snapshotter.isDebuggable(exec, "emulator-5554", "com.example.app"))
     }
 
+    @Test(expected = StorageException::class)
+    fun `readPrefs rejects a name that is not a bare filename`() {
+        val snapshotter = AppDataSnapshotter(adbPath = "adb")
+
+        snapshotter.readPrefs(fakeAdb(emptyMap()), "emulator-5554", "com.example.app", "prefs.xml;id")
+    }
+
     @Test
     fun `isDebuggable returns false when run-as fails`() {
         val exec = fakeAdb(mapOf("id" to "Package 'com.example' is not debuggable".toByteArray()))
