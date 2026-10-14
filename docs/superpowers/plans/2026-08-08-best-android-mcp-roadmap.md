@@ -1,5 +1,9 @@
 # DroidAgentKit "Best Android MCP" Roadmap & Implementation Plan
 
+> **Status:** superseded by [docs/ROADMAP.md](../../ROADMAP.md). Since this plan was written, the
+> registry rename, the MCPB bundle, the Homebrew tap, and WS6-T3/T5/T6 have shipped. WS6-T7 is
+> partly done, and the WS6-T8 viewer spike was never run. The "Deferred" list below is out of date.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Workstreams are independent unless a dependency is stated; execute one workstream per branch/PR.
 
 **Goal:** Make DroidAgentKit the best Android MCP server: zero-friction install, the deepest Android-specific tool surface, verified stability across OSes, a security model that stays ahead of the field, and CI that proves all of it on every PR.

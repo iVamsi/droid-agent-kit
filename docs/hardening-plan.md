@@ -1,5 +1,8 @@
 # DroidAgentKit Hardening & Stabilization Plan
 
+> **Status:** every item here was fixed by 0.2.5-alpha. For the current backlog, see
+> [IMPROVEMENTS.md](IMPROVEMENTS.md).
+
 Findings from a line-by-line review of 13,128 LOC across 66 main-source files, plus build,
 CI, and distribution config. Severity reflects impact under the project's own stated threat
 model: a local agent operating on a repository the developer may not fully trust.
