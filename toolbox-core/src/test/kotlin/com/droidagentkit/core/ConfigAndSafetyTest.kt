@@ -267,7 +267,57 @@ class ConfigAndSafetyTest {
         val result = redactor.redact("-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA...")
 
         assertFalse(result.text.contains("BEGIN RSA PRIVATE KEY"))
+        assertFalse(result.text.contains("MIIEow"))
         assertTrue(result.applied.contains("pem-private-key"))
+    }
+
+    @Test
+    fun `redactor hides quoted json token assignments and the rest of a pem block`() {
+        val redactor = Redactor(DroidAgentConfig.default().redaction)
+        val pem = "-----BEGIN PRIVATE KEY-----\nMIIEsecretbody\n-----END PRIVATE KEY-----"
+
+        val json = redactor.redact(""""access_token": "supersecret"""")
+        val block = redactor.redact(pem)
+
+        assertFalse(json.text.contains("supersecret"))
+        assertTrue(json.text.contains("[REDACTED]"))
+        assertFalse(block.text.contains("MIIEsecretbody"))
+        assertFalse(block.text.contains("END PRIVATE KEY"))
+    }
+
+    @Test
+    fun `redactor hides jwt github oauth slack basic and cookie secrets`() {
+        val redactor = Redactor(DroidAgentConfig.default().redaction)
+        val jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N"
+        val oauth = "gho_" + "C".repeat(36)
+        val slack = "xoxb-1234567890-abcdefghij"
+        val input =
+            """
+            Authorization: Basic dXNlcjpwYXNz
+            Cookie: session=abc123secret
+            $jwt
+            $oauth
+            $slack
+            """.trimIndent()
+
+        val result = redactor.redact(input)
+
+        assertFalse(result.text.contains("dXNlcjpwYXNz"))
+        assertFalse(result.text.contains("abc123secret"))
+        assertFalse(result.text.contains(jwt))
+        assertFalse(result.text.contains(oauth))
+        assertFalse(result.text.contains(slack))
+    }
+
+    @Test
+    fun `a built-in rule that times out withholds the output`() {
+        val redactor = Redactor(DroidAgentConfig.default().redaction, patternBudgetNanos = -1)
+
+        val result = redactor.redact("Authorization: Bearer abc.def.ghi")
+
+        assertFalse(result.text.contains("abc.def.ghi"))
+        assertEquals("[REDACTED]", result.text)
+        assertTrue(result.warnings.any { it == "redaction-output-withheld" })
     }
 
     @Test
@@ -278,6 +328,7 @@ class ConfigAndSafetyTest {
         val result = redactor.redact(input)
 
         assertFalse(result.text.contains("-----BEGIN PRIVATE KEY"))
+        assertFalse(result.text.contains("MIIEvAIBADA"))
         assertTrue(result.applied.contains("firebase-private-key"))
     }
 

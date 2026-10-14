@@ -373,10 +373,12 @@ Artifact ids are opaque, project-scoped, authenticated, and path-contained; read
 
 Built-in redaction covers:
 
-- `Authorization: Bearer ...`
+- `Authorization: Bearer` and `Authorization: Basic`
+- `Cookie` headers
 - Google-style API keys beginning with `AIza`
-- password assignments
-- token and secret assignments
+- password, token, secret, and key assignments, including quoted JSON names
+- PEM private keys, including the key body
+- JWTs, GitHub `ghp_`/`gho_`/`ghs_`/`ghu_`/`ghr_` tokens, and Slack `xox*` tokens
 
 Extra project-specific regexes can be added under `redaction.extraPatterns`.
 

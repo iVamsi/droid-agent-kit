@@ -7,6 +7,7 @@ import com.droidagentkit.core.Capability
 import com.droidagentkit.core.CommandSpec
 import com.droidagentkit.core.OperationRequest
 import com.droidagentkit.core.OutputMode
+import com.droidagentkit.core.Redactor
 import com.droidagentkit.core.ResultStatus
 import com.droidagentkit.core.ToolGroup
 import com.droidagentkit.core.ToolResult
@@ -192,6 +193,8 @@ class StorageToolProvider(
                 ?: return blocked("snapshot-failed", "Could not snapshot app data for ${auth.pkg}.")
         return try {
             val result = inspector.query(snapshot.snapshotDir, database, sql)
+            val redactor = Redactor(context.config.redaction)
+            val rows = result.rows.map { row -> row.map { cell -> cell?.let { redactor.redact(it).text } } }
             context.resultMap(
                 ToolResult(
                     status = ResultStatus.SUCCESS,
@@ -199,7 +202,7 @@ class StorageToolProvider(
                     warnings =
                         snapshot.warnings + result.warnings,
                 ),
-            ) + mapOf("columns" to result.columns, "rows" to result.rows, "truncated" to result.truncated)
+            ) + mapOf("columns" to result.columns, "rows" to rows, "truncated" to result.truncated)
         } catch (e: StorageException) {
             storageExceptionResult(e, snapshot.warnings)
         }
@@ -221,12 +224,21 @@ class StorageToolProvider(
             )
         }
         val entries = mutableListOf<Map<String, Any>>()
+        val redactor = Redactor(context.config.redaction)
         for (name in names) {
             val xml =
                 runCatching { snapshotter.readPrefs(executor, auth.serial, auth.pkg, name) }.getOrNull()
                     ?: continue
             val parsed = PrefsParser.parse(String(xml))
-            entries.add(mapOf("file" to name, "entries" to parsed.map { mapOf("key" to it.key, "type" to it.type, "value" to it.value) }))
+            entries.add(
+                mapOf(
+                    "file" to name,
+                    "entries" to
+                        parsed.map {
+                            mapOf("key" to it.key, "type" to it.type, "value" to redactor.redact(it.value).text)
+                        },
+                ),
+            )
         }
         return context.resultMap(
             ToolResult(status = ResultStatus.SUCCESS, summary = "Dumped ${names.size} SharedPreferences file(s) for ${auth.pkg}."),

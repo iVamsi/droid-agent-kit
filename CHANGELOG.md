@@ -8,6 +8,10 @@ pre-release convention `0.y.z-alpha` until a stable 1.0 release.
 
 ### Fixed
 
+- Redaction covers PEM key bodies, quoted JSON assignments, JWTs, GitHub and Slack tokens,
+  `Authorization: Basic`, and `Cookie` headers. If a built-in rule times out, the output is
+  withheld instead of returned. HAR query strings, database cells, and SharedPreferences values
+  go through the same redaction. SharedPreferences names must be bare filenames.
 - Device and app XML is parsed with doctypes and external entities turned off. Accessibility
   dumps, SharedPreferences, lint reports, and test reports all use the same parser.
 - `android_perfetto_analyze` no longer runs a program named by the caller. The Trace Processor
