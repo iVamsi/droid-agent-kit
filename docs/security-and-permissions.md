@@ -299,7 +299,7 @@ These tools are not listed unless the `perfetto` tool group is exposed at server
 | Tool | Capabilities | Description |
 | ---- | ------------ | ----------- |
 | `android_perfetto_capture` | `sensitive_diagnostics` | Capture a bounded Perfetto trace on a device (duration, data sources, buffer size, and max file size are all configurable with safe defaults), pull it to sensitive artifact storage, and delete the remote file. |
-| `android_perfetto_analyze` | `sensitive_diagnostics` | Run versioned Trace Processor SQL analyses (CPU utilization, main-thread slices, frame jank, binder latency, contention) over a local trace file and return a correlated evidence report. Read-only. Requires a configured `trace_processor_shell` (`safety.traceProcessorPath`, or pass `traceProcessorShell` per call) — there is no bundled or auto-downloaded binary. |
+| `android_perfetto_analyze` | `sensitive_diagnostics` | Run versioned Trace Processor SQL analyses (CPU utilization, main-thread slices, frame jank, binder latency, contention) over a local trace file and return a correlated evidence report. Read-only. Requires `safety.traceProcessorPath` in the user policy — there is no bundled or auto-downloaded binary, and the call cannot name a different program. The trace path must stay inside the project. |
 
 ### Opt-in `visuals` group
 

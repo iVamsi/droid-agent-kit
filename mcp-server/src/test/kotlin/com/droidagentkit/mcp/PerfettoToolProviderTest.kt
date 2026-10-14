@@ -126,6 +126,53 @@ class PerfettoToolProviderTest {
         assertEquals("high", result["confidence"])
     }
 
+    @Test
+    fun `analyze rejects a caller-supplied trace processor`() {
+        val root = Files.createTempDirectory("dak-perfetto-override")
+        val dispatcher = dispatcher(root, config(root))
+        val trace = root.resolve("trace.perfetto-trace")
+        Files.write(trace, byteArrayOf(0x0a))
+
+        val result =
+            dispatcher.call(
+                "android_perfetto_analyze",
+                mapOf(
+                    "rootPath" to root.toString(),
+                    "tracePath" to trace.toString(),
+                    "traceProcessorShell" to "/bin/bash",
+                ),
+            )
+
+        assertEquals("blocked", result["status"])
+        assertTrue((result["warnings"] as List<*>).contains("trace-processor-override-rejected"))
+    }
+
+    @Test
+    fun `analyze rejects a trace outside the project`() {
+        val root = Files.createTempDirectory("dak-perfetto-outside")
+        val dispatcher = dispatcher(root, config(root))
+        val trace = Files.createTempFile("dak-trace", ".perfetto-trace")
+        Files.write(trace, byteArrayOf(0x0a))
+
+        val result =
+            dispatcher.call(
+                "android_perfetto_analyze",
+                mapOf("rootPath" to root.toString(), "tracePath" to trace.toString()),
+            )
+
+        assertEquals("blocked", result["status"])
+        assertTrue((result["warnings"] as List<*>).contains("host-path-denied"))
+    }
+
+    @Test
+    fun `analyze schema does not offer a trace processor override`() {
+        val root = Files.createTempDirectory("dak-perfetto-schema")
+        val tool = dispatcher(root, config(root)).listTools().single { it.name == "android_perfetto_analyze" }
+        val properties = tool.inputSchema["properties"] as Map<*, *>
+
+        assertTrue(!properties.containsKey("traceProcessorShell"))
+    }
+
     private fun fakeAdb(root: java.nio.file.Path): String {
         val script = root.resolve("fake-perfetto-adb.sh")
         Files.writeString(
